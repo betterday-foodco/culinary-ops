@@ -1,7 +1,30 @@
 {
   "permissions": {
     "allow": [
-      "Bash(ls:*)"
+      "Bash(ls:*)",
+      "Bash(npm install:*)",
+      "Bash(npx tsc:*)",
+      "Bash(npx ts-node:*)",
+      "Bash(python -c \":*)",
+      "Bash(head -3 \"/d/culinary-ops/.claude/worktrees/loving-sanderson/NEW Culinary App Database - Sub-Recipe Masterlist \\(1\\).csv\")",
+      "Bash(npx prisma generate)",
+      "Bash(npx prisma db push)",
+      "Bash(npx prisma db push --force-reset)",
+      "Bash(npm run build)",
+      "Bash(timeout 15 npm run start:dev)",
+      "Bash(git add backend/prisma/schema.prisma backend/prisma/import-data.ts backend/prisma/seed.ts backend/src/modules/ingredients/dto/ingredient.dto.ts backend/src/modules/meals/dto/meal.dto.ts)",
+      "Bash(git commit:*)",
+      "Bash(git push origin claude/loving-sanderson)",
+      "Bash(gh pr:*)",
+      "Bash(where gh)",
+      "Bash(winget list --name \"GitHub CLI\")",
+      "Bash(git add backend/src/main.ts)",
+      "Bash(cat \"D:/culinary-ops/.claude/worktrees/loving-sanderson/frontend/app/\\(dashboard\\)/reports/meals/page.tsx\")",
+      "Bash(cat \"D:/culinary-ops/.claude/worktrees/loving-sanderson/frontend/app/\\(dashboard\\)/reports/shopping-list/page.tsx\")",
+      "Bash(cat \"D:/culinary-ops/.claude/worktrees/loving-sanderson/frontend/app/\\(dashboard\\)/meals/page.tsx\")",
+      "Bash(python -:*)",
+      "Bash(git add backend/src/modules/meals/meals.controller.ts backend/src/modules/meals/meals.service.ts backend/src/modules/sub-recipes/sub-recipes.controller.ts backend/src/modules/sub-recipes/sub-recipes.service.ts frontend/app/lib/api.ts frontend/app/\\\\\\(dashboard\\\\\\)/meals/page.tsx frontend/app/\\\\\\(dashboard\\\\\\)/reports/cooking/page.tsx frontend/app/\\\\\\(dashboard\\\\\\)/reports/shopping-list/page.tsx frontend/app/\\\\\\(dashboard\\\\\\)/reports/sub-recipes/page.tsx frontend/app/\\\\\\(dashboard\\\\\\)/sub-recipes/page.tsx)",
+      "Bash(git add .claude/settings.local.json)"
     ]
   }
 }
