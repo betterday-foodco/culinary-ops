@@ -201,7 +201,7 @@ export class MealsService {
         unit: dto.unit,
       },
       include: {
-        ingredient: { select: { id: true, internal_name: true, sku: true, cost_per_unit: true, computed_cost: true } as any },
+        ingredient: { select: { id: true, internal_name: true, sku: true, cost_per_unit: true } },
         sub_recipe: { select: { id: true, name: true, sub_recipe_code: true, station_tag: true, computed_cost: true } },
       },
     });

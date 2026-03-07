@@ -195,6 +195,21 @@ export default function MealDetailPage() {
     } catch (e: any) { alert(e.message); }
   }
 
+  function handleImageFile(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.size > 2 * 1024 * 1024) {
+      alert('Image is too large. Please use an image under 2MB.');
+      e.target.value = '';
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      setImageUrl(ev.target?.result as string);
+    };
+    reader.readAsDataURL(file);
+  }
+
   function addAllergen() {
     const a = allergenInput.trim();
     if (a && !allergenTags.includes(a)) setAllergenTags((prev) => [...prev, a]);
@@ -260,26 +275,39 @@ export default function MealDetailPage() {
       <div className="grid grid-cols-[220px_1fr] gap-6 mb-6">
         {/* Image */}
         <div className="space-y-2">
-          <div className="w-full h-44 rounded-xl border-2 border-dashed border-gray-200 overflow-hidden bg-gray-50 flex items-center justify-center">
-            {imageUrl ? (
-              <img src={imageUrl} alt={meal.display_name} className="w-full h-full object-cover" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
-            ) : (
-              <div className="text-center">
-                <p className="text-2xl mb-1">🍽</p>
-                <p className="text-xs text-gray-400">No image</p>
-              </div>
-            )}
-          </div>
-          <div>
-            <label className="block text-xs font-medium text-gray-600 mb-1">Image URL</label>
+          {/* Clickable image area — opens file picker */}
+          <label className="block cursor-pointer group">
+            <div className="w-full h-44 rounded-xl border-2 border-dashed border-gray-200 overflow-hidden bg-gray-50 flex items-center justify-center group-hover:border-brand-400 transition-colors">
+              {imageUrl ? (
+                <div className="relative w-full h-full">
+                  <img src={imageUrl} alt={meal.display_name} className="w-full h-full object-cover" />
+                  <div className="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
+                    <span className="text-white text-xs font-medium">Change Image</span>
+                  </div>
+                </div>
+              ) : (
+                <div className="text-center">
+                  <p className="text-3xl mb-1">📷</p>
+                  <p className="text-xs text-brand-500 font-medium">Click to upload image</p>
+                  <p className="text-xs text-gray-400 mt-0.5">JPG, PNG, WebP · max 2MB</p>
+                </div>
+              )}
+            </div>
             <input
-              type="text"
-              value={imageUrl}
-              onChange={(e) => setImageUrl(e.target.value)}
-              placeholder="https://..."
-              className="w-full px-2 py-1.5 border border-gray-300 rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-brand-500"
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={handleImageFile}
             />
-          </div>
+          </label>
+          {imageUrl && (
+            <button
+              onClick={() => setImageUrl('')}
+              className="w-full text-xs text-red-400 hover:text-red-600 py-1"
+            >
+              × Remove image
+            </button>
+          )}
         </div>
 
         {/* Toggles + quick fields */}
