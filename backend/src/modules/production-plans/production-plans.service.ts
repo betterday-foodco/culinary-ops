@@ -214,8 +214,16 @@ export class ProductionPlansService {
     }
 
     const rows = Array.from(totals.values()).map(({ subRecipe, total, unit, mealBreakdown }) => {
-      // Scale factor: how many "batches" of this sub-recipe we need
-      const scale = subRecipe.base_yield_weight > 0 ? total / subRecipe.base_yield_weight : 1;
+      // Scale factor: how many "batches" of this sub-recipe we need.
+      // Both total and base_yield_weight must be in the same base unit (grams / mL)
+      // before dividing — otherwise e.g. "7 500 gr needed" / "1.5 Kgs yield" = 5 000
+      // instead of the correct 5.
+      const totalInBase = this.toGrams(total, unit);
+      const yieldInBase = this.toGrams(
+        subRecipe.base_yield_weight,
+        subRecipe.base_yield_unit ?? 'Kgs',
+      );
+      const scale = yieldInBase > 0 ? totalInBase / yieldInBase : 1;
 
       // Build ingredient breakdown scaled to total quantity needed
       const ingredients = (subRecipe.components ?? []).map((comp: any) => {
@@ -363,6 +371,38 @@ export class ProductionPlansService {
 
   // ─── Private helpers ──────────────────────────────────────────────────────
 
+  /**
+   * Normalise a quantity to grams (weight) or mL (volume) so that different
+   * unit representations (e.g. "150 gr" vs "0.15 Kgs") can be compared.
+   * Unitless / count units (un, pcs, …) are returned 1-to-1.
+   */
+  private toGrams(qty: number, unit: string): number {
+    const u = (unit ?? '').toLowerCase().replace(/\s/g, '');
+    switch (u) {
+      case 'kg':
+      case 'kgs':
+      case 'kilogram':
+      case 'kilograms':
+        return qty * 1000;
+      case 'oz':
+        return qty * 28.3495;
+      case 'lb':
+      case 'lbs':
+      case 'pound':
+      case 'pounds':
+        return qty * 453.592;
+      case 'l':
+      case 'liter':
+      case 'litre':
+      case 'liters':
+      case 'litres':
+        return qty * 1000; // treat litres as 1 000 mL for volume parity
+      default:
+        // g, gr, gram, grams, ml, mL, un, pcs, etc. → 1 : 1
+        return qty;
+    }
+  }
+
   private aggregateIngredientsFromMeal(
     meal: any,
     qty: number,
@@ -370,13 +410,27 @@ export class ProductionPlansService {
   ) {
     for (const component of meal.components) {
       if (component.ingredient) {
+        // Direct meal → ingredient: multiply portion quantity by number of portions
         this.addIngredient(totals, component.ingredient, component.quantity * qty, component.unit);
       } else if (component.sub_recipe) {
-        this.aggregateIngredientsFromSubRecipe(component.sub_recipe, component.quantity * qty, totals);
+        // Meal uses N units/grams of a sub-recipe.  We need a dimensionless scale
+        // factor so we can multiply the sub-recipe's own ingredient quantities.
+        // e.g. meal needs 150 gr of a sub-recipe that yields 1.5 Kgs → scale = 0.1
+        const neededInBase = this.toGrams(component.quantity * qty, component.unit);
+        const yieldInBase = this.toGrams(
+          component.sub_recipe.base_yield_weight ?? 1,
+          component.sub_recipe.base_yield_unit ?? 'Kgs',
+        );
+        const scaleFactor = yieldInBase > 0 ? neededInBase / yieldInBase : neededInBase;
+        this.aggregateIngredientsFromSubRecipe(component.sub_recipe, scaleFactor, totals);
       }
     }
   }
 
+  /**
+   * Walk a sub-recipe's component tree and accumulate ingredient quantities.
+   * @param multiplier  dimensionless scale factor (number of batches of this sub-recipe needed)
+   */
   private aggregateIngredientsFromSubRecipe(
     subRecipe: any,
     multiplier: number,
@@ -388,11 +442,19 @@ export class ProductionPlansService {
 
     for (const component of subRecipe.components ?? []) {
       if (component.ingredient) {
+        // component.quantity is "how much of this ingredient per one batch" → scale by multiplier
         this.addIngredient(totals, component.ingredient, component.quantity * multiplier, component.unit);
       } else if (component.child_sub_recipe) {
+        // component.quantity is "how much of the child sub-recipe per one batch of this sub-recipe"
+        const childNeededInBase = this.toGrams(component.quantity * multiplier, component.unit);
+        const childYieldInBase = this.toGrams(
+          component.child_sub_recipe.base_yield_weight ?? 1,
+          component.child_sub_recipe.base_yield_unit ?? 'Kgs',
+        );
+        const childScale = childYieldInBase > 0 ? childNeededInBase / childYieldInBase : childNeededInBase;
         this.aggregateIngredientsFromSubRecipe(
           component.child_sub_recipe,
-          component.quantity * multiplier,
+          childScale,
           totals,
           new Set(visited),
         );
