@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useMemo } from 'react';
+import { useEffect, useState, useMemo, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { api, InventoryReport, InventoryRow } from '../../../lib/api';
 
@@ -24,7 +24,7 @@ interface VendorRow extends InventoryRow {
 
 // ── component ─────────────────────────────────────────────────────────────────
 
-export default function VendorOrdersPage() {
+function VendorOrdersInner() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const planId = searchParams.get('plan_id') ?? '';
@@ -326,5 +326,13 @@ export default function VendorOrdersPage() {
         </div>
       )}
     </div>
+  );
+}
+
+export default function VendorOrdersPage() {
+  return (
+    <Suspense fallback={<div className="p-6 text-gray-400">Loading...</div>}>
+      <VendorOrdersInner />
+    </Suspense>
   );
 }

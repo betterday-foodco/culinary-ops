@@ -12,6 +12,8 @@ import {
   ParseUUIDPipe,
 } from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { RolesGuard } from '../auth/roles.guard';
+import { Roles } from '../auth/roles.decorator';
 import { IngredientsService } from './ingredients.service';
 import {
   CreateIngredientDto,
@@ -19,7 +21,8 @@ import {
   UpdateStockBulkDto,
 } from './dto/ingredient.dto';
 
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, RolesGuard)
+@Roles('admin', 'staff')
 @Controller('ingredients')
 export class IngredientsController {
   constructor(private readonly service: IngredientsService) {}

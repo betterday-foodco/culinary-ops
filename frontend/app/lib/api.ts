@@ -37,16 +37,18 @@ async function request<T>(
 export const api = {
   // Auth
   login: (email: string, password: string) =>
-    request<{ access_token: string; user: { id: string; email: string } }>(
+    request<{ access_token: string; user: AuthUser }>(
       '/auth/login',
       { method: 'POST', body: JSON.stringify({ email, password }) },
     ),
 
   register: (email: string, password: string, role?: string) =>
-    request<{ access_token: string; user: { id: string; email: string } }>(
+    request<{ access_token: string; user: AuthUser }>(
       '/auth/register',
       { method: 'POST', body: JSON.stringify({ email, password, role }) },
     ),
+
+  getMe: () => request<AuthUser>('/auth/me'),
 
   // Ingredients
   getIngredients: (category?: string) =>
@@ -231,6 +233,67 @@ export const api = {
       method: 'PATCH',
       body: JSON.stringify({ updates }),
     }),
+
+  // Kitchen Staff (admin only)
+  getKitchenStaff: () => request<KitchenStaff[]>('/kitchen-staff'),
+
+  createKitchenStaff: (data: CreateKitchenStaffData) =>
+    request<KitchenStaff>('/kitchen-staff', { method: 'POST', body: JSON.stringify(data) }),
+
+  updateKitchenStaff: (id: string, data: Partial<CreateKitchenStaffData>) =>
+    request<KitchenStaff>(`/kitchen-staff/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+
+  deleteKitchenStaff: (id: string) =>
+    request<{ message: string }>(`/kitchen-staff/${id}`, { method: 'DELETE' }),
+
+  // Kitchen Portal (kitchen / admin)
+  getKitchenBoard: () => request<KitchenBoardResponse>('/kitchen-portal/board'),
+
+  upsertProductionLog: (data: {
+    plan_id: string;
+    sub_recipe_id: string;
+    status: 'not_started' | 'in_progress' | 'done';
+    qty_cooked?: number;
+    weight_recorded?: number;
+    notes?: string;
+  }) =>
+    request<KitchenProductionLog>('/kitchen-portal/logs', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+
+  submitKitchenFeedback: (data: {
+    sub_recipe_id: string;
+    plan_id?: string;
+    rating: number;
+    comment?: string;
+  }) =>
+    request<KitchenFeedback>('/kitchen-portal/feedback', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+
+  getStationRequests: () =>
+    request<{ incoming: StationRequest[]; sent: StationRequest[] }>('/kitchen-portal/requests'),
+
+  createStationRequest: (data: {
+    to_station: string;
+    description: string;
+    quantity?: number;
+    unit?: string;
+    sub_recipe_id?: string;
+    plan_id?: string;
+  }) =>
+    request<StationRequest>('/kitchen-portal/requests', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+
+  updateStationRequestStatus: (id: string, status: 'acknowledged' | 'completed') =>
+    request<StationRequest>(`/kitchen-portal/requests/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ status }),
+    }),
 };
 
 // ─── Types ──────────────────────────────────────────────────────────────────
@@ -253,7 +316,10 @@ export interface Ingredient {
   updated_at: string;
 }
 
-export type CreateIngredientData = Omit<Ingredient, 'id' | 'created_at' | 'updated_at'>;
+export type CreateIngredientData = Omit<Ingredient, 'id' | 'created_at' | 'updated_at' | 'stock' | 'unit'> & {
+  unit?: string;   // defaults to "Kgs" on backend
+  stock?: number;  // defaults to 0 on backend
+};
 
 export interface SubRecipeComponent {
   id: string;
@@ -581,4 +647,101 @@ export interface InventoryReport {
   total_cost_all: number;
   total_cost_buffered_all: number;
   items_needing_order: number;
+}
+
+// ─── Auth User ────────────────────────────────────────────────────────────────
+
+export interface AuthUser {
+  id: string;
+  email: string;
+  role: string;
+  name: string | null;
+  station: string | null;
+}
+
+// ─── Kitchen Staff types ──────────────────────────────────────────────────────
+
+export interface KitchenStaff {
+  id: string;
+  email: string;
+  name: string | null;
+  station: string | null;
+  role: string;
+  created_at: string;
+}
+
+export interface CreateKitchenStaffData {
+  name: string;
+  email: string;
+  password: string;
+  station: string;
+}
+
+// ─── Kitchen Portal types ─────────────────────────────────────────────────────
+
+export interface KitchenProductionLog {
+  id: string;
+  plan_id: string;
+  sub_recipe_id: string;
+  user_id: string;
+  status: 'not_started' | 'in_progress' | 'done';
+  qty_cooked: number | null;
+  weight_recorded: number | null;
+  notes: string | null;
+  logged_at: string;
+  updated_at: string;
+}
+
+export interface KitchenFeedback {
+  id: string;
+  sub_recipe_id: string;
+  user_id: string;
+  plan_id: string | null;
+  rating: number;
+  comment: string | null;
+  created_at: string;
+}
+
+export interface StationRequest {
+  id: string;
+  from_user_id: string;
+  to_station: string;
+  plan_id: string | null;
+  sub_recipe_id: string | null;
+  description: string;
+  quantity: number | null;
+  unit: string | null;
+  status: 'pending' | 'acknowledged' | 'completed';
+  created_at: string;
+  updated_at: string;
+  from_user?: { id: string; name: string | null; station: string | null };
+  sub_recipe?: { id: string; name: string; display_name: string | null } | null;
+}
+
+export interface KitchenTask {
+  sub_recipe_id: string;
+  name: string;
+  display_name: string | null;
+  sub_recipe_code: string;
+  station_tag: string | null;
+  priority: number;
+  instructions: string | null;
+  base_yield_weight: number;
+  base_yield_unit: string;
+  total_quantity: number;
+  unit: string;
+  scale_factor: number;
+  ingredients: PlanSubRecipeIngredient[];
+  log: {
+    status: 'not_started' | 'in_progress' | 'done';
+    qty_cooked: number | null;
+    weight_recorded: number | null;
+    notes: string | null;
+  };
+}
+
+export interface KitchenBoardResponse {
+  plan: { id: string; week_label: string; week_start: string } | null;
+  tasks: KitchenTask[];
+  pendingRequests: StationRequest[];
 }

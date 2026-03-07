@@ -29,6 +29,7 @@ export default function DashboardLayout({
   const router = useRouter();
   const pathname = usePathname();
   const [othersOpen, setOthersOpen] = useState(false);
+  const [userRole, setUserRole] = useState<string>('');
 
   // Auto-open Others if current page lives there
   useEffect(() => {
@@ -38,11 +39,18 @@ export default function DashboardLayout({
 
   useEffect(() => {
     const token = localStorage.getItem('access_token');
-    if (!token) router.push('/login');
+    if (!token) { router.push('/login'); return; }
+    const role = localStorage.getItem('user_role') ?? '';
+    setUserRole(role);
+    // Kitchen users don't belong in the admin dashboard
+    if (role === 'kitchen') { router.replace('/kitchen'); return; }
   }, [router]);
 
   function handleLogout() {
     localStorage.removeItem('access_token');
+    localStorage.removeItem('user_role');
+    localStorage.removeItem('user_station');
+    localStorage.removeItem('user_name');
     router.push('/login');
   }
 
@@ -98,6 +106,21 @@ export default function DashboardLayout({
             <span className="text-base leading-none">⚙</span>
             Settings
           </Link>
+
+          {/* Kitchen Staff link — admin only */}
+          {userRole === 'admin' && (
+            <Link
+              href="/settings/staff"
+              className={`flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm transition-colors ${
+                isActive('/settings/staff')
+                  ? 'bg-brand-50 text-brand-700 font-medium'
+                  : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'
+              }`}
+            >
+              <span className="text-base leading-none">👨‍🍳</span>
+              Kitchen Staff
+            </Link>
+          )}
 
           {/* Others (collapsible) */}
           <div className="mt-1">

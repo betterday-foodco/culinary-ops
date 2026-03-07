@@ -18,7 +18,10 @@ export default function LoginPage() {
     try {
       const res = await api.login(email, password);
       localStorage.setItem('access_token', res.access_token);
-      router.push('/dashboard');
+      localStorage.setItem('user_role', res.user.role);
+      localStorage.setItem('user_station', res.user.station ?? '');
+      localStorage.setItem('user_name', res.user.name ?? '');
+      router.push(res.user.role === 'kitchen' ? '/kitchen' : '/dashboard');
     } catch (err: any) {
       setError(err.message ?? 'Login failed');
     } finally {

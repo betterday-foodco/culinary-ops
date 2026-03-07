@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { api, Ingredient } from '../../../lib/api';
+import { api, Ingredient, IngredientRequirement } from '../../../lib/api';
 import { format } from 'date-fns';
 
 // The shopping list can work in two modes:
@@ -12,7 +12,7 @@ export default function ShoppingListPage() {
   const [startDate, setStartDate] = useState(format(new Date(), 'yyyy-MM-dd'));
   const [endDate, setEndDate] = useState(format(new Date(), 'yyyy-MM-dd'));
   const [mode, setMode] = useState<'orders' | 'master'>('master');
-  const [items, setItems] = useState<any[]>([]);
+  const [items, setItems] = useState<IngredientRequirement[]>([]);
   const [allIngredients, setAllIngredients] = useState<Ingredient[]>([]);
   const [loading, setLoading] = useState(false);
   const [loaded, setLoaded] = useState(false);
@@ -64,7 +64,7 @@ export default function ShoppingListPage() {
     if (!acc[key]) acc[key] = [];
     acc[key].push(item);
     return acc;
-  }, {} as Record<string, typeof items>);
+  }, {} as Record<string, IngredientRequirement[]>);
 
   return (
     <div className="p-8">
@@ -223,7 +223,7 @@ export default function ShoppingListPage() {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-100">
-                      {catItems.map((item: any) => (
+                      {catItems.map((item) => (
                         <tr key={item.id} className="hover:bg-gray-50">
                           <td className="px-4 py-2.5 font-medium text-gray-900">{item.internal_name}</td>
                           <td className="px-4 py-2.5 font-mono text-xs text-gray-500">{item.sku}</td>

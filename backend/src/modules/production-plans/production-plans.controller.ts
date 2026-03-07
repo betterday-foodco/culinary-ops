@@ -9,10 +9,13 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { RolesGuard } from '../auth/roles.guard';
+import { Roles } from '../auth/roles.decorator';
 import { ProductionPlansService } from './production-plans.service';
 import { CreateProductionPlanDto, UpdateProductionPlanDto } from './dto/production-plan.dto';
 
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, RolesGuard)
+@Roles('admin', 'staff')
 @Controller('production-plans')
 export class ProductionPlansController {
   constructor(private readonly service: ProductionPlansService) {}

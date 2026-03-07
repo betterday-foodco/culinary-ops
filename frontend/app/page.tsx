@@ -10,7 +10,8 @@ export default function RootPage() {
     // Check if user has token, redirect accordingly
     const token = localStorage.getItem('access_token');
     if (token) {
-      router.replace('/dashboard');
+      const role = localStorage.getItem('user_role');
+      router.replace(role === 'kitchen' ? '/kitchen' : '/dashboard');
     } else {
       router.replace('/login');
     }

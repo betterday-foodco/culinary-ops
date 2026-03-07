@@ -5,13 +5,16 @@ import { api } from '../../../lib/api';
 import { format } from 'date-fns';
 
 interface ShoppingItem {
-  ingredient_id: string;
-  ingredient_name: string;
+  id: string;
+  internal_name: string;
+  display_name: string;
   sku: string;
   category: string;
   total_quantity: number;
   unit: string;
   supplier_name: string | null;
+  location: string | null;
+  allergen_tags: string[];
 }
 
 export default function InventoryReportPage() {
@@ -84,8 +87,8 @@ export default function InventoryReportPage() {
             </thead>
             <tbody className="divide-y divide-gray-100">
               {items.map((item) => (
-                <tr key={item.ingredient_id} className="hover:bg-gray-50">
-                  <td className="px-4 py-3 font-medium text-gray-900">{item.ingredient_name}</td>
+                <tr key={item.id} className="hover:bg-gray-50">
+                  <td className="px-4 py-3 font-medium text-gray-900">{item.display_name || item.internal_name}</td>
                   <td className="px-4 py-3 text-gray-600">{item.sku}</td>
                   <td className="px-4 py-3">
                     <span className="px-2 py-0.5 rounded-md text-xs font-medium bg-blue-50 text-blue-700">

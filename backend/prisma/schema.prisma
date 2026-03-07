@@ -11,8 +11,14 @@ model User {
   id            String   @id @default(uuid())
   email         String   @unique
   password_hash String
-  role          String   @default("staff")
+  role          String   @default("staff")  // "admin" | "staff" | "kitchen"
+  name          String?                      // display name, required for kitchen staff
+  station       String?                      // kitchen role only — one of the 6 fixed station names
   created_at    DateTime @default(now())
+
+  production_logs  KitchenProductionLog[]
+  feedback_entries KitchenFeedback[]
+  station_requests StationRequest[]
 }
 
 model Ingredient {
@@ -60,6 +66,9 @@ model SubRecipe {
   components        SubRecipeComponent[] @relation("SubRecipeComponents")
   parent_components SubRecipeComponent[] @relation("ChildSubRecipe")
   meal_components   MealComponent[]
+  kitchen_logs      KitchenProductionLog[]
+  feedback          KitchenFeedback[]
+  station_requests  StationRequest[]
 
   @@index([sub_recipe_code])
   @@index([station_tag])
@@ -146,7 +155,9 @@ model ProductionPlan {
   created_at DateTime @default(now())
   updated_at DateTime @updatedAt
 
-  items ProductionPlanItem[]
+  items            ProductionPlanItem[]
+  kitchen_logs     KitchenProductionLog[]
+  station_requests StationRequest[]
 
   @@index([week_start])
 }
@@ -161,4 +172,60 @@ model ProductionPlanItem {
   meal MealRecipe     @relation(fields: [meal_id], references: [id])
 
   @@unique([plan_id, meal_id])
+}
+
+model KitchenProductionLog {
+  id              String   @id @default(uuid())
+  plan_id         String
+  sub_recipe_id   String
+  user_id         String
+  status          String   @default("not_started") // not_started | in_progress | done
+  qty_cooked      Float?
+  weight_recorded Float?
+  notes           String?
+  logged_at       DateTime @default(now())
+  updated_at      DateTime @updatedAt
+
+  plan       ProductionPlan @relation(fields: [plan_id], references: [id])
+  sub_recipe SubRecipe      @relation(fields: [sub_recipe_id], references: [id])
+  user       User           @relation(fields: [user_id], references: [id])
+
+  @@unique([plan_id, sub_recipe_id, user_id])
+  @@index([plan_id])
+}
+
+model KitchenFeedback {
+  id            String   @id @default(uuid())
+  sub_recipe_id String
+  user_id       String
+  plan_id       String?
+  rating        Int      // 1–5
+  comment       String?
+  created_at    DateTime @default(now())
+
+  sub_recipe SubRecipe @relation(fields: [sub_recipe_id], references: [id])
+  user       User      @relation(fields: [user_id], references: [id])
+
+  @@index([sub_recipe_id])
+}
+
+model StationRequest {
+  id            String   @id @default(uuid())
+  from_user_id  String
+  to_station    String   // target station, e.g. "Sauce Station"
+  plan_id       String?
+  sub_recipe_id String?
+  description   String
+  quantity      Float?
+  unit          String?
+  status        String   @default("pending")  // pending | acknowledged | completed
+  created_at    DateTime @default(now())
+  updated_at    DateTime @updatedAt
+
+  from_user  User            @relation(fields: [from_user_id], references: [id])
+  plan       ProductionPlan? @relation(fields: [plan_id], references: [id])
+  sub_recipe SubRecipe?      @relation(fields: [sub_recipe_id], references: [id])
+
+  @@index([to_station])
+  @@index([plan_id])
 }

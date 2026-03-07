@@ -8,6 +8,8 @@ import { MealsModule } from './modules/meals/meals.module';
 import { OrdersModule } from './modules/orders/orders.module';
 import { ProductionModule } from './modules/production/production.module';
 import { ProductionPlansModule } from './modules/production-plans/production-plans.module';
+import { KitchenStaffModule } from './modules/kitchen-staff/kitchen-staff.module';
+import { KitchenPortalModule } from './modules/kitchen-portal/kitchen-portal.module';
 import { ShopifyWebhookController } from './webhooks/shopify.controller';
 import { CostEngineService } from './services/cost-engine.service';
 import { ProductionEngineService } from './services/production-engine.service';
@@ -23,6 +25,8 @@ import { ProductionEngineService } from './services/production-engine.service';
     OrdersModule,
     ProductionModule,
     ProductionPlansModule,
+    KitchenStaffModule,
+    KitchenPortalModule,
   ],
   controllers: [ShopifyWebhookController],
   providers: [CostEngineService, ProductionEngineService],

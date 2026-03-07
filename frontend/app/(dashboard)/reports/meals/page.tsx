@@ -1,21 +1,13 @@
 'use client';
 
 import { useState } from 'react';
-import { api } from '../../../lib/api';
+import { api, MealRequirement } from '../../../lib/api';
 import { format } from 'date-fns';
-
-interface MealReport {
-  meal_id: string;
-  meal_name: string;
-  total_quantity: number;
-  unit_cost: number;
-  total_cost: number;
-}
 
 export default function MealsReportPage() {
   const [startDate, setStartDate] = useState(format(new Date(), 'yyyy-MM-dd'));
   const [endDate, setEndDate] = useState(format(new Date(), 'yyyy-MM-dd'));
-  const [report, setReport] = useState<MealReport[]>([]);
+  const [report, setReport] = useState<MealRequirement[]>([]);
   const [loading, setLoading] = useState(false);
 
   async function loadReport() {
@@ -30,7 +22,6 @@ export default function MealsReportPage() {
     }
   }
 
-  const totalCost = report.reduce((sum, m) => sum + m.total_cost, 0);
   const totalQuantity = report.reduce((sum, m) => sum + m.total_quantity, 0);
 
   return (
@@ -73,20 +64,14 @@ export default function MealsReportPage() {
 
       {report.length > 0 && (
         <>
-          <div className="grid grid-cols-3 gap-4 mb-6">
+          <div className="grid grid-cols-2 gap-4 mb-6">
             <div className="bg-white rounded-xl border border-gray-200 p-5">
               <p className="text-sm text-gray-500 mb-1">Total Meals</p>
               <p className="text-2xl font-bold text-gray-900">{totalQuantity}</p>
             </div>
             <div className="bg-white rounded-xl border border-gray-200 p-5">
-              <p className="text-sm text-gray-500 mb-1">Total Cost</p>
-              <p className="text-2xl font-bold text-gray-900">${totalCost.toFixed(2)}</p>
-            </div>
-            <div className="bg-white rounded-xl border border-gray-200 p-5">
-              <p className="text-sm text-gray-500 mb-1">Avg Cost per Meal</p>
-              <p className="text-2xl font-bold text-gray-900">
-                ${totalQuantity > 0 ? (totalCost / totalQuantity).toFixed(2) : '0.00'}
-              </p>
+              <p className="text-sm text-gray-500 mb-1">Distinct Meal Types</p>
+              <p className="text-2xl font-bold text-gray-900">{report.length}</p>
             </div>
           </div>
 
@@ -95,18 +80,16 @@ export default function MealsReportPage() {
               <thead className="bg-gray-50 border-b border-gray-200">
                 <tr>
                   <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Meal Name</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Display Name</th>
                   <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Quantity</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Unit Cost</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Total Cost</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
                 {report.map((meal) => (
                   <tr key={meal.meal_id} className="hover:bg-gray-50">
                     <td className="px-4 py-3 font-medium text-gray-900">{meal.meal_name}</td>
+                    <td className="px-4 py-3 text-gray-600">{meal.display_name}</td>
                     <td className="px-4 py-3 text-gray-600">{meal.total_quantity}</td>
-                    <td className="px-4 py-3 text-gray-600">${meal.unit_cost.toFixed(2)}</td>
-                    <td className="px-4 py-3 font-medium text-gray-900">${meal.total_cost.toFixed(2)}</td>
                   </tr>
                 ))}
               </tbody>

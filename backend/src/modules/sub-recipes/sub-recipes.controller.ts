@@ -12,6 +12,8 @@ import {
   ParseUUIDPipe,
 } from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { RolesGuard } from '../auth/roles.guard';
+import { Roles } from '../auth/roles.decorator';
 import { SubRecipesService } from './sub-recipes.service';
 import {
   CreateSubRecipeDto,
@@ -20,7 +22,8 @@ import {
   UpdateSubRecipeComponentDto,
 } from './dto/sub-recipe.dto';
 
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, RolesGuard)
+@Roles('admin', 'staff')
 @Controller('sub-recipes')
 export class SubRecipesController {
   constructor(private readonly service: SubRecipesService) {}
