@@ -32,6 +32,8 @@ export class MealsService {
     const meal = await this.prisma.mealRecipe.findUnique({
       where: { id },
       include: {
+        linked_meal: { select: { id: true, name: true, display_name: true, category: true } },
+        variant_meals: { select: { id: true, name: true, display_name: true, category: true } },
         components: {
           include: {
             ingredient: true,

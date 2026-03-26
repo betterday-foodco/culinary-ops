@@ -30,59 +30,108 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-brand-50 to-gray-100">
-      <div className="w-full max-w-sm bg-white rounded-2xl shadow-lg border border-gray-200 p-8">
-        <div className="mb-8 text-center">
-          <div className="w-16 h-16 bg-brand-500 rounded-2xl mx-auto mb-4 flex items-center justify-center shadow-md">
-            <span className="text-white text-xl font-black tracking-tight">BD</span>
+    <div
+      className="min-h-screen flex items-center justify-center relative overflow-hidden"
+      style={{
+        backgroundImage: 'url(/login-hero.jpg)',
+        backgroundSize: 'cover',
+        backgroundPosition: 'center',
+      }}
+    >
+      {/* Dark overlay */}
+      <div className="absolute inset-0 bg-gradient-to-br from-[#0e3a6e]/55 via-[#1B6DB5]/40 to-[#0e3a6e]/55" />
+
+      {/* Decorative blobs */}
+      <div className="absolute top-[-80px] right-[-80px] w-72 h-72 bg-[#F5C400]/20 rounded-full blur-3xl pointer-events-none" />
+      <div className="absolute bottom-[-60px] left-[-60px] w-64 h-64 bg-brand-500/20 rounded-full blur-3xl pointer-events-none" />
+
+      {/* Card */}
+      <div className="relative z-10 w-full max-w-md mx-4">
+
+        {/* Logo + brand */}
+        <div className="text-center mb-8">
+          <div className="inline-flex items-center justify-center w-16 h-16 bg-[#F5C400] rounded-2xl shadow-xl mb-4">
+            <span className="text-[#1B6DB5] font-black text-xl tracking-tight">BD</span>
           </div>
-          <h1 className="text-2xl font-bold text-gray-900">BetterDay Kitchen</h1>
-          <p className="text-sm text-gray-500 mt-1">Production operations system</p>
+          <h1 className="text-3xl font-black text-white tracking-tight">BetterDay Kitchen</h1>
+          <p className="text-white/60 text-sm mt-1 tracking-wide uppercase">Production Operations System</p>
         </div>
 
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Email
-            </label>
-            <input
-              type="email"
-              required
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent"
-              placeholder="team@company.com"
-            />
+        {/* Form card */}
+        <div className="bg-white/10 backdrop-blur-xl border border-white/20 rounded-3xl p-8 shadow-2xl">
+          <div className="mb-6">
+            <h2 className="text-xl font-bold text-white">Welcome back</h2>
+            <p className="text-white/60 text-sm mt-0.5">Sign in to your kitchen portal</p>
           </div>
 
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Password
-            </label>
-            <input
-              type="password"
-              required
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent"
-              placeholder="••••••••"
-            />
-          </div>
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <div>
+              <label className="block text-sm font-semibold text-white/80 mb-1.5">
+                Email
+              </label>
+              <input
+                type="email"
+                required
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                className="w-full px-4 py-3 bg-white/10 border border-white/25 rounded-xl text-white text-sm placeholder:text-white/40 focus:outline-none focus:ring-2 focus:ring-[#F5C400] focus:border-transparent transition-all"
+                placeholder="team@eatbetterday.ca"
+              />
+            </div>
 
-          {error && (
-            <p className="text-sm text-red-600 bg-red-50 px-3 py-2 rounded-lg">
-              {error}
-            </p>
-          )}
+            <div>
+              <label className="block text-sm font-semibold text-white/80 mb-1.5">
+                Password
+              </label>
+              <input
+                type="password"
+                required
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                className="w-full px-4 py-3 bg-white/10 border border-white/25 rounded-xl text-white text-sm placeholder:text-white/40 focus:outline-none focus:ring-2 focus:ring-[#F5C400] focus:border-transparent transition-all"
+                placeholder="••••••••"
+              />
+            </div>
 
-          <button
-            type="submit"
-            disabled={loading}
-            className="w-full py-2.5 bg-brand-500 hover:bg-brand-600 disabled:opacity-50 text-white font-semibold rounded-lg text-sm transition-colors"
-          >
-            {loading ? 'Signing in...' : 'Sign in'}
-          </button>
-        </form>
+            {error && (
+              <div className="flex items-center gap-2.5 bg-red-500/20 border border-red-400/40 text-red-200 px-4 py-3 rounded-xl text-sm">
+                <span>⚠️</span>
+                <span>{error}</span>
+              </div>
+            )}
+
+            <button
+              type="submit"
+              disabled={loading}
+              className="w-full py-3.5 bg-[#F5C400] hover:bg-yellow-400 active:scale-[0.98] disabled:opacity-60 text-[#1B3A6B] font-black rounded-xl text-sm transition-all shadow-lg shadow-yellow-500/30 flex items-center justify-center gap-2 mt-2"
+            >
+              {loading ? (
+                <>
+                  <span className="w-4 h-4 border-2 border-[#1B3A6B]/40 border-t-[#1B3A6B] rounded-full animate-spin" />
+                  Signing in…
+                </>
+              ) : (
+                'Sign in →'
+              )}
+            </button>
+          </form>
+        </div>
+
+        {/* Feature pills */}
+        <div className="flex flex-wrap justify-center gap-2 mt-6">
+          {['Station Board', 'Cooking Reports', 'Inventory Lists', 'Production Logs'].map((f) => (
+            <span
+              key={f}
+              className="px-3 py-1 bg-white/10 backdrop-blur-sm text-white/70 text-xs font-medium rounded-full border border-white/15"
+            >
+              {f}
+            </span>
+          ))}
+        </div>
+
+        <p className="text-center text-white/30 text-xs mt-5">
+          BetterDay Food Co. · Kitchen Operations
+        </p>
       </div>
     </div>
   );

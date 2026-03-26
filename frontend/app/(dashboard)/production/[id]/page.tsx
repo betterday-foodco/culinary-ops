@@ -9,9 +9,10 @@ import {
   PlanSubRecipeRow,
   PlanShoppingListReport,
   MealRecipe,
+  StationTask,
 } from '../../../lib/api';
 
-type Tab = 'plan' | 'sub-recipes' | 'shopping';
+type Tab = 'plan' | 'sub-recipes' | 'shopping' | 'tasks';
 
 const STATUS_OPTIONS = ['draft', 'confirmed', 'completed'];
 const STATUS_STYLES: Record<string, string> = {
@@ -47,6 +48,7 @@ export default function ProductionPlanPage() {
   const [loading, setLoading] = useState(true);
   const [reportLoading, setReportLoading] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [publishing, setPublishing] = useState(false);
 
   // Local edits
   const [quantities, setQuantities] = useState<Record<string, number>>({});
@@ -56,6 +58,14 @@ export default function ProductionPlanPage() {
   const [search, setSearch] = useState('');
   const [expandedStations, setExpandedStations] = useState<Set<string>>(new Set());
   const [expandedIngredients, setExpandedIngredients] = useState<Set<string>>(new Set());
+
+  // Station tasks
+  const [stationTasks, setStationTasks] = useState<StationTask[]>([]);
+  const [taskTitle, setTaskTitle] = useState('');
+  const [taskDesc, setTaskDesc] = useState('');
+  const [taskStation, setTaskStation] = useState('');
+  const [taskAssignee, setTaskAssignee] = useState('');
+  const [addingTask, setAddingTask] = useState(false);
 
   async function loadPlan() {
     setLoading(true);
@@ -94,11 +104,19 @@ export default function ProductionPlanPage() {
 
   useEffect(() => { loadPlan(); }, [id]);
 
+  const loadStationTasks = useCallback(async () => {
+    try {
+      const data = await api.listStationTasks(id);
+      setStationTasks(data);
+    } catch { /* silent */ }
+  }, [id]);
+
   // Auto-load report for whichever tab was opened initially (from dashboard ?tab= param)
   useEffect(() => {
     if (!loading) {
       if (tab === 'sub-recipes' && !subRecipeReport) loadSubRecipeReport();
       if (tab === 'shopping' && !shoppingList) loadShoppingList();
+      if (tab === 'tasks') loadStationTasks();
     }
   }, [loading]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -106,6 +124,23 @@ export default function ProductionPlanPage() {
     setTab(t);
     if (t === 'sub-recipes' && !subRecipeReport) loadSubRecipeReport();
     if (t === 'shopping' && !shoppingList) loadShoppingList();
+    if (t === 'tasks') loadStationTasks();
+  }
+
+  async function handleAddTask() {
+    if (!taskTitle.trim()) return;
+    setAddingTask(true);
+    try {
+      await api.createStationTask({ title: taskTitle, description: taskDesc || undefined, station: taskStation || undefined, plan_id: id });
+      setTaskTitle(''); setTaskDesc(''); setTaskStation(''); setTaskAssignee('');
+      await loadStationTasks();
+    } catch (e: any) { alert(e.message); }
+    finally { setAddingTask(false); }
+  }
+
+  async function handleDeleteTask(taskId: string) {
+    if (!confirm('Delete this task?')) return;
+    try { await api.deleteStationTask(taskId); await loadStationTasks(); } catch (e: any) { alert(e.message); }
   }
 
   function toggleIngredients(rowId: string) {
@@ -114,6 +149,15 @@ export default function ProductionPlanPage() {
       next.has(rowId) ? next.delete(rowId) : next.add(rowId);
       return next;
     });
+  }
+
+  async function handlePublish(publish: boolean) {
+    setPublishing(true);
+    try {
+      await api.publishProductionPlan(id, publish);
+      await loadPlan();
+    } catch (e: any) { alert(e.message); }
+    finally { setPublishing(false); }
   }
 
   async function handleSave() {
@@ -194,12 +238,33 @@ export default function ProductionPlanPage() {
             </span>
           </div>
         </div>
-        <button
-          onClick={() => window.print()}
-          className="px-3 py-1.5 text-xs border border-gray-300 text-gray-600 rounded-lg hover:bg-gray-50"
-        >
-          Print
-        </button>
+        <div className="flex items-center gap-2">
+          {plan.published_to_kitchen ? (
+            <button
+              onClick={() => handlePublish(false)}
+              disabled={publishing}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-green-50 border border-green-300 text-green-700 rounded-lg hover:bg-green-100 disabled:opacity-50 transition-colors font-medium"
+            >
+              <span>✓</span>
+              {publishing ? 'Updating...' : 'Published to Kitchen'}
+            </button>
+          ) : (
+            <button
+              onClick={() => handlePublish(true)}
+              disabled={publishing}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-bd-yellow border border-yellow-400 text-brand-700 rounded-lg hover:bg-yellow-300 disabled:opacity-50 transition-colors font-medium"
+            >
+              <span>📋</span>
+              {publishing ? 'Publishing...' : 'Publish to Kitchen'}
+            </button>
+          )}
+          <button
+            onClick={() => window.print()}
+            className="px-3 py-1.5 text-xs border border-gray-300 text-gray-600 rounded-lg hover:bg-gray-50"
+          >
+            Print
+          </button>
+        </div>
       </div>
 
       {/* Tabs */}
@@ -209,6 +274,7 @@ export default function ProductionPlanPage() {
             ['plan', '📋 Plan Items'],
             ['sub-recipes', '🍳 Sub-Recipe Report'],
             ['shopping', '🛒 Shopping List'],
+            ['tasks', '✅ Station Tasks'],
           ] as const
         ).map(([key, label]) => (
           <button
@@ -635,6 +701,73 @@ export default function ProductionPlanPage() {
                   No ingredients found — make sure meals have quantities &gt; 0
                 </div>
               )}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ── Tab: Station Tasks ── */}
+      {tab === 'tasks' && (
+        <div className="space-y-4">
+          {/* Add task form */}
+          <div className="bg-white rounded-xl border border-gray-200 p-4">
+            <h3 className="text-sm font-semibold text-gray-700 mb-3">Add Station Task</h3>
+            <div className="space-y-2">
+              <input
+                value={taskTitle}
+                onChange={(e) => setTaskTitle(e.target.value)}
+                placeholder="Task title (required)"
+                className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-brand-400"
+              />
+              <input
+                value={taskDesc}
+                onChange={(e) => setTaskDesc(e.target.value)}
+                placeholder="Description (optional)"
+                className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-brand-400"
+              />
+              <div className="flex gap-2">
+                <select
+                  value={taskStation}
+                  onChange={(e) => setTaskStation(e.target.value)}
+                  className="flex-1 px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-brand-400"
+                >
+                  <option value="">All Stations</option>
+                  {['Veg Station', 'Protein Station', 'Sauce Station', 'Oven Station', 'Breakfast + Sides Station', 'Batch Station', 'Packaging Station'].map((s) => (
+                    <option key={s} value={s}>{s}</option>
+                  ))}
+                </select>
+                <button
+                  onClick={handleAddTask}
+                  disabled={addingTask || !taskTitle.trim()}
+                  className="px-4 py-2 bg-brand-500 text-white text-sm rounded-lg hover:bg-brand-600 disabled:opacity-50"
+                >
+                  {addingTask ? 'Adding...' : '+ Add Task'}
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {/* Task list */}
+          {stationTasks.length === 0 ? (
+            <div className="text-center py-12 text-gray-400 text-sm">No station tasks yet. Add one above.</div>
+          ) : (
+            <div className="bg-white rounded-xl border border-gray-200 divide-y divide-gray-100">
+              {stationTasks.map((t) => (
+                <div key={t.id} className="flex items-start gap-3 px-4 py-3">
+                  <div className={`mt-0.5 w-5 h-5 rounded-full flex items-center justify-center flex-shrink-0 text-xs ${t.completed_at ? 'bg-green-100 text-green-600' : 'bg-gray-100 text-gray-400'}`}>
+                    {t.completed_at ? '✓' : '○'}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className={`text-sm font-medium ${t.completed_at ? 'line-through text-gray-400' : 'text-gray-900'}`}>{t.title}</p>
+                    {t.description && <p className="text-xs text-gray-500 mt-0.5">{t.description}</p>}
+                    <div className="flex flex-wrap gap-2 mt-1">
+                      {t.station && <span className="text-xs bg-brand-50 text-brand-700 px-2 py-0.5 rounded-full">{t.station}</span>}
+                      {t.completed_by && <span className="text-xs text-green-600">✓ Done by {t.completed_by.name}</span>}
+                    </div>
+                  </div>
+                  <button onClick={() => handleDeleteTask(t.id)} className="text-gray-300 hover:text-red-400 text-sm flex-shrink-0">✕</button>
+                </div>
+              ))}
             </div>
           )}
         </div>

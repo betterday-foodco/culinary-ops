@@ -106,6 +106,14 @@ export class ProductionPlansService {
     return this.prisma.productionPlan.delete({ where: { id } });
   }
 
+  async publishToKitchen(id: string, publish: boolean) {
+    await this.findOne(id);
+    return this.prisma.productionPlan.update({
+      where: { id },
+      data: { published_to_kitchen: publish },
+    });
+  }
+
   /** Return the production plan whose week_start falls in the current ISO week (Mon–Sun) */
   async getCurrentPlan() {
     const now = new Date();
@@ -146,38 +154,7 @@ export class ProductionPlansService {
             meal: {
               include: {
                 components: {
-                  include: {
-                    sub_recipe: {
-                      select: {
-                        id: true,
-                        name: true,
-                        sub_recipe_code: true,
-                        station_tag: true,
-                        production_day: true,
-                        priority: true,
-                        instructions: true,
-                        base_yield_weight: true,
-                        base_yield_unit: true,
-                        // Include the sub-recipe's own components for ingredient breakdown
-                        components: {
-                          include: {
-                            ingredient: {
-                              select: {
-                                id: true,
-                                internal_name: true,
-                                display_name: true,
-                                sku: true,
-                                unit: true,
-                              },
-                            },
-                            child_sub_recipe: {
-                              select: { id: true, name: true, sub_recipe_code: true },
-                            },
-                          },
-                        },
-                      },
-                    },
-                  },
+                  include: { sub_recipe: { select: { id: true } } },
                 },
               },
             },
@@ -187,57 +164,104 @@ export class ProductionPlansService {
     });
     if (!plan) throw new NotFoundException('Production plan not found');
 
-    // Aggregate sub-recipe totals
-    const totals = new Map<
-      string,
-      { subRecipe: any; total: number; unit: string; mealBreakdown: { meal: string; qty: number }[] }
-    >();
+    // Pre-load ALL sub-recipes with their full component trees in one query
+    const allSubRecipes = await this.prisma.subRecipe.findMany({
+      select: {
+        id: true, name: true, display_name: true, sub_recipe_code: true,
+        station_tag: true, production_day: true, priority: true,
+        instructions: true, base_yield_weight: true, base_yield_unit: true,
+        components: {
+          include: {
+            ingredient: { select: { id: true, internal_name: true, display_name: true, sku: true, unit: true } },
+            child_sub_recipe: { select: { id: true, name: true, sub_recipe_code: true, station_tag: true, production_day: true, priority: true } },
+          },
+        },
+      },
+    });
+    const srById = new Map(allSubRecipes.map((sr) => [sr.id, sr]));
 
+    // totals: srId → { subRecipe, total quantity needed, unit, mealBreakdown }
+    const totals = new Map<string, { subRecipe: any; total: number; unit: string; mealBreakdown: { meal: string; qty: number }[] }>();
+
+    // Seed totals with direct meal components — normalize everything to GRAMS internally
     for (const item of plan.items) {
       for (const component of item.meal.components) {
-        if (!component.sub_recipe) continue;
-        const key = component.sub_recipe.id;
-        const portionQty = component.quantity * item.quantity;
-        const existing = totals.get(key);
+        if (!component.sub_recipe?.id) continue;
+        const sr = srById.get(component.sub_recipe.id);
+        if (!sr) continue;
+        // Meal components are per-serving (mostly in 'gr'). Convert to grams then multiply by portions.
+        const portionQtyGrams = this.toGrams(component.quantity, component.unit || 'gr') * item.quantity;
+        const existing = totals.get(sr.id);
         if (existing) {
-          existing.total += portionQty;
-          existing.mealBreakdown.push({ meal: item.meal.display_name, qty: portionQty });
+          existing.total += portionQtyGrams;
+          existing.mealBreakdown.push({ meal: item.meal.display_name, qty: portionQtyGrams });
         } else {
-          totals.set(key, {
-            subRecipe: component.sub_recipe,
-            total: portionQty,
-            unit: component.unit,
-            mealBreakdown: [{ meal: item.meal.display_name, qty: portionQty }],
-          });
+          totals.set(sr.id, { subRecipe: sr, total: portionQtyGrams, unit: 'g', mealBreakdown: [{ meal: item.meal.display_name, qty: portionQtyGrams }] });
         }
       }
     }
 
-    const rows = Array.from(totals.values()).map(({ subRecipe, total, unit, mealBreakdown }) => {
-      // Scale factor: how many "batches" of this sub-recipe we need.
-      // Both total and base_yield_weight must be in the same base unit (grams / mL)
-      // before dividing — otherwise e.g. "7 500 gr needed" / "1.5 Kgs yield" = 5 000
-      // instead of the correct 5.
-      const totalInBase = this.toGrams(total, unit);
-      const yieldInBase = this.toGrams(
-        subRecipe.base_yield_weight,
-        subRecipe.base_yield_unit ?? 'Kgs',
-      );
-      const scale = yieldInBase > 0 ? totalInBase / yieldInBase : 1;
+    // BFS: recursively expand child sub-recipes — all quantities in GRAMS throughout
+    const visited = new Set<string>();
+    const queue: { srId: string; qtyNeeded: number }[] = []; // qtyNeeded always in grams
 
-      // Build ingredient breakdown scaled to total quantity needed
+    // Seed queue with children of top-level sub-recipes
+    for (const [, { subRecipe, total }] of totals) {
+      const yieldBase = this.toGrams(subRecipe.base_yield_weight ?? 1, subRecipe.base_yield_unit ?? 'Kgs');
+      const scale = yieldBase > 0 ? total / yieldBase : 1;
+      for (const comp of subRecipe.components ?? []) {
+        if (comp.child_sub_recipe?.id) {
+          // Sub-recipe components use 'Kgs' → convert to grams
+          const childGrams = this.toGrams(comp.quantity * scale, comp.unit ?? 'Kgs');
+          queue.push({ srId: comp.child_sub_recipe.id, qtyNeeded: childGrams });
+        }
+      }
+      visited.add(subRecipe.id);
+    }
+
+    while (queue.length > 0) {
+      const { srId, qtyNeeded } = queue.shift()!;
+      const sr = srById.get(srId);
+      if (!sr) continue;
+
+      const existing = totals.get(srId);
+      if (existing) {
+        existing.total += qtyNeeded;
+      } else {
+        totals.set(srId, { subRecipe: sr, total: qtyNeeded, unit: 'g', mealBreakdown: [] });
+      }
+
+      if (!visited.has(srId)) {
+        visited.add(srId);
+        const yieldBase = this.toGrams(sr.base_yield_weight ?? 1, sr.base_yield_unit ?? 'Kgs');
+        const scale = yieldBase > 0 ? qtyNeeded / yieldBase : 1;
+        for (const comp of sr.components ?? []) {
+          if (comp.child_sub_recipe?.id) {
+            const childGrams = this.toGrams(comp.quantity * scale, comp.unit ?? 'Kgs');
+            queue.push({ srId: comp.child_sub_recipe.id, qtyNeeded: childGrams });
+          }
+        }
+      }
+    }
+
+    const rows = Array.from(totals.values()).map(({ subRecipe, total, mealBreakdown }) => {
+      // total is in grams — convert to Kgs for display
+      const totalGrams = total;
+      const yieldInBase = this.toGrams(subRecipe.base_yield_weight ?? 1, subRecipe.base_yield_unit ?? 'Kgs');
+      const scale = yieldInBase > 0 ? totalGrams / yieldInBase : 1;
+      const baseUnitRaw = subRecipe.base_yield_unit ?? 'Kgs';
+      const buLower = baseUnitRaw.toLowerCase().trim();
+      const isCountUnit = ['un', 'pcs', 'piece', 'pieces', 'portion', 'portions', 'ea', 'each'].includes(buLower);
+      const unit = isCountUnit ? 'un' : 'Kgs';
+      const totalKgs = isCountUnit
+        ? parseFloat(totalGrams.toFixed(1))
+        : parseFloat((totalGrams / 1000).toFixed(3));
+
+      // Build ingredient breakdown scaled to quantity needed
       const ingredients = (subRecipe.components ?? []).map((comp: any) => {
         const scaledQty = parseFloat((comp.quantity * scale).toFixed(3));
         if (comp.ingredient) {
-          return {
-            id: comp.ingredient.id,
-            name: comp.ingredient.internal_name,
-            display_name: comp.ingredient.display_name,
-            sku: comp.ingredient.sku,
-            quantity: scaledQty,
-            unit: comp.unit,
-            type: 'ingredient' as const,
-          };
+          return { id: comp.ingredient.id, name: comp.ingredient.internal_name, display_name: comp.ingredient.display_name, sku: comp.ingredient.sku, quantity: scaledQty, unit: comp.unit, type: 'ingredient' as const };
         } else if (comp.child_sub_recipe) {
           return {
             id: comp.child_sub_recipe.id,
@@ -247,6 +271,9 @@ export class ProductionPlansService {
             quantity: scaledQty,
             unit: comp.unit,
             type: 'sub_recipe' as const,
+            station_tag: comp.child_sub_recipe.station_tag ?? null,
+            production_day: comp.child_sub_recipe.production_day ?? null,
+            priority: comp.child_sub_recipe.priority ?? null,
           };
         }
         return null;
@@ -255,6 +282,7 @@ export class ProductionPlansService {
       return {
         id: subRecipe.id,
         name: subRecipe.name,
+        display_name: subRecipe.display_name ?? subRecipe.name,
         sub_recipe_code: subRecipe.sub_recipe_code,
         station_tag: subRecipe.station_tag,
         production_day: subRecipe.production_day,
@@ -262,7 +290,7 @@ export class ProductionPlansService {
         instructions: subRecipe.instructions,
         base_yield_weight: subRecipe.base_yield_weight,
         base_yield_unit: subRecipe.base_yield_unit,
-        total_quantity: parseFloat(total.toFixed(3)),
+        total_quantity: totalKgs,
         scale_factor: parseFloat(scale.toFixed(3)),
         unit,
         meal_breakdown: mealBreakdown,

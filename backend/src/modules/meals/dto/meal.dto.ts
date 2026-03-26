@@ -113,6 +113,64 @@ export class CreateMealDto {
   net_weight_kg?: number;
 
   @IsOptional()
+  @IsUUID()
+  linked_meal_id?: string | null;
+
+  @IsOptional()
+  @IsNumber()
+  calories?: number;
+
+  @IsOptional()
+  @IsNumber()
+  protein_g?: number;
+
+  @IsOptional()
+  @IsNumber()
+  carbs_g?: number;
+
+  @IsOptional()
+  @IsNumber()
+  fat_g?: number;
+
+  @IsOptional()
+  @IsNumber()
+  fiber_g?: number;
+
+  @IsOptional()
+  @IsNumber()
+  shelf_life_days?: number;
+
+  @IsOptional()
+  @IsString()
+  label_ingredients?: string;
+
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  protein_types?: string[];
+
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  dietary_tags?: string[];
+
+  @IsOptional()
+  @IsString()
+  starch_type?: string;
+
+  @IsOptional()
+  @IsString()
+  container_type?: string;
+
+  @IsOptional()
+  @IsNumber()
+  portion_score?: number;
+
+  @IsOptional()
+  @IsString()
+  short_description?: string;
+
+  @IsOptional()
   @IsBoolean()
   is_active?: boolean;
 

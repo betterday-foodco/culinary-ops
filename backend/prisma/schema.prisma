@@ -17,9 +17,15 @@ model User {
   station       String?                      // kitchen role only — one of the 6 fixed station names
   created_at    DateTime @default(now())
 
-  production_logs  KitchenProductionLog[]
-  feedback_entries KitchenFeedback[]
-  station_requests StationRequest[]
+  production_logs    KitchenProductionLog[]
+  feedback_entries   KitchenFeedback[]
+  station_requests   StationRequest[]
+  created_tasks      StationTask[]  @relation("CreatedStationTasks")
+  assigned_tasks     StationTask[]  @relation("AssignedStationTasks")
+  completed_tasks    StationTask[]  @relation("CompletedStationTasks")
+  sent_messages      KitchenMessage[] @relation("SentMessages")
+  received_messages  KitchenMessage[] @relation("ReceivedMessages")
+  approved_shortages KitchenProductionLog[] @relation("ApprovedShortages")
 }
 
 model Ingredient {
@@ -95,6 +101,7 @@ model MealRecipe {
   name                  String
   display_name          String
   category              String?
+  linked_meal_id        String?  // points to the meat/vegan counterpart
   final_yield_weight    Float    @default(0)
   pricing_override      Float?
   computed_cost         Float    @default(0)
@@ -111,16 +118,28 @@ model MealRecipe {
   protein_g              Float?
   carbs_g                Float?
   fat_g                  Float?
+  fiber_g                Float?
+  shelf_life_days        Int?
+  label_ingredients      String?  // comma-separated label text for product label
+  protein_types          String[] // e.g. ["Chicken", "Turkey"]
+  dietary_tags           String[] // e.g. ["Gluten Friendly", "High Protein", "Vegan"]
+  starch_type            String?  // "Rice" | "Pasta" | "Potato" | "Quinoa" | "Other" | "None"
+  container_type         String?  // "Meal Tray" | "Salad Container"
+  portion_score          Int?     // 1–4 scale
   is_active              Boolean  @default(true)
   created_at            DateTime @default(now())
   updated_at            DateTime @updatedAt
 
+  linked_meal           MealRecipe?  @relation("MealVariants", fields: [linked_meal_id], references: [id], onDelete: SetNull)
+  variant_meals         MealRecipe[] @relation("MealVariants")
   components            MealComponent[]
   orders                Order[]
   production_plan_items ProductionPlanItem[]
+  menu_queue_items      MenuQueueItem[]
 
   @@index([name])
   @@index([category])
+  @@index([linked_meal_id])
 }
 
 model MealComponent {
@@ -153,17 +172,19 @@ model Order {
 }
 
 model ProductionPlan {
-  id         String   @id @default(uuid())
-  week_label String
-  week_start DateTime
-  status     String   @default("draft")
-  notes      String?
-  created_at DateTime @default(now())
-  updated_at DateTime @updatedAt
+  id                   String   @id @default(uuid())
+  week_label           String
+  week_start           DateTime
+  status               String   @default("draft")
+  notes                String?
+  published_to_kitchen Boolean  @default(false)
+  created_at           DateTime @default(now())
+  updated_at           DateTime @updatedAt
 
   items            ProductionPlanItem[]
   kitchen_logs     KitchenProductionLog[]
   station_requests StationRequest[]
+  station_tasks    StationTask[]
 
   @@index([week_start])
 }
@@ -185,16 +206,22 @@ model KitchenProductionLog {
   plan_id         String
   sub_recipe_id   String
   user_id         String
-  status          String   @default("not_started") // not_started | in_progress | done
+  status          String   @default("not_started") // not_started | in_progress | done | short
   qty_cooked      Float?
   weight_recorded Float?
+  have_on_hand    Float?   // qty already available (reduces required cook amount)
   notes           String?
+  cooked_by       String?   // freetext: who actually cooked it
+  shortage_approved         Boolean   @default(false)
+  shortage_approved_by_id   String?
+  shortage_approved_at      DateTime?
   logged_at       DateTime @default(now())
   updated_at      DateTime @updatedAt
 
-  plan       ProductionPlan @relation(fields: [plan_id], references: [id])
-  sub_recipe SubRecipe      @relation(fields: [sub_recipe_id], references: [id])
-  user       User           @relation(fields: [user_id], references: [id])
+  plan                    ProductionPlan @relation(fields: [plan_id], references: [id])
+  sub_recipe              SubRecipe      @relation(fields: [sub_recipe_id], references: [id])
+  user                    User           @relation(fields: [user_id], references: [id])
+  shortage_approved_by    User?          @relation("ApprovedShortages", fields: [shortage_approved_by_id], references: [id])
 
   @@unique([plan_id, sub_recipe_id, user_id])
   @@index([plan_id])
@@ -207,7 +234,10 @@ model KitchenFeedback {
   plan_id       String?
   rating        Int      // 1–5
   comment       String?
+  admin_notes   String?  // chef/admin notes after reviewing feedback
+  is_fixed      Boolean  @default(false)  // admin marks recipe as fixed
   created_at    DateTime @default(now())
+  updated_at    DateTime @default(now()) @updatedAt
 
   sub_recipe SubRecipe @relation(fields: [sub_recipe_id], references: [id])
   user       User      @relation(fields: [user_id], references: [id])
@@ -234,4 +264,66 @@ model StationRequest {
 
   @@index([to_station])
   @@index([plan_id])
+}
+
+model MenuQueueItem {
+  id              String   @id @default(uuid())
+  column_id       String   // "meat_1".."meat_5", "omni_1".."omni_6", "vegan_1"
+  meal_id         String
+  position        Int      @default(0) // sort order within column; 0 = this week
+  repeat_weeks    Int      @default(4) // after serving, goes back to end with this many weeks gap
+  weeks_remaining Int      @default(0) // display only — 0 = on menu this week
+  created_at      DateTime @default(now())
+  updated_at      DateTime @updatedAt
+
+  meal MealRecipe @relation(fields: [meal_id], references: [id], onDelete: Cascade)
+
+  @@unique([column_id, meal_id])
+  @@index([column_id])
+}
+
+model MenuAdvanceLog {
+  id          String   @id @default(uuid())
+  advanced_at DateTime @default(now())
+  week_label  String?
+  notes       String?
+}
+
+model StationTask {
+  id               String    @id @default(uuid())
+  plan_id          String?
+  title            String
+  description      String?
+  station          String?          // null = show on all stations
+  assigned_user_id String?          // null = all staff on that station
+  completed_by_id  String?
+  completed_at     DateTime?
+  created_by_id    String
+  created_at       DateTime  @default(now())
+  updated_at       DateTime  @updatedAt
+
+  plan          ProductionPlan? @relation(fields: [plan_id], references: [id], onDelete: Cascade)
+  assigned_user User?           @relation("AssignedStationTasks", fields: [assigned_user_id], references: [id])
+  completed_by  User?           @relation("CompletedStationTasks", fields: [completed_by_id], references: [id])
+  created_by    User            @relation("CreatedStationTasks", fields: [created_by_id], references: [id])
+
+  @@index([station])
+  @@index([plan_id])
+}
+
+model KitchenMessage {
+  id           String   @id @default(uuid())
+  from_user_id String
+  to_station   String?   // null = broadcast to all kitchen; specific = to that station only
+  to_user_id   String?   // direct message to a specific user (e.g. chef)
+  body         String
+  is_read      Boolean  @default(false)
+  created_at   DateTime @default(now())
+
+  from_user User  @relation("SentMessages",     fields: [from_user_id], references: [id])
+  to_user   User? @relation("ReceivedMessages", fields: [to_user_id],   references: [id])
+
+  @@index([to_station])
+  @@index([to_user_id])
+  @@index([from_user_id])
 }

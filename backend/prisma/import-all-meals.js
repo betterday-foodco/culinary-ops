@@ -114,7 +114,7 @@ async function importAllMeals() {
   console.log(`  menu_items.csv: ${menuMap.size} entries`);
 
   // ── 2. Parse Dish Masterlist ─────────────────────────────────────────────────
-  const dishRows = parseCSV(fs.readFileSync('D:\\NEW Culinary App Database - Dish Masterlist.csv', 'utf-8'));
+  const dishRows = parseCSV(fs.readFileSync('D:\\NEW Culinary App Database - Dish Masterlist (1).csv', 'utf-8'));
   // Columns: DishID, URL, Category, DishName, SubRecipeID, SubRecipeName, PortionQty, Unit, Price
   const dishMealMap  = new Map(); // dishId → {name, category, price}
   const dishSRMap    = new Map(); // dishId → [{srNumId, qty, unit}]

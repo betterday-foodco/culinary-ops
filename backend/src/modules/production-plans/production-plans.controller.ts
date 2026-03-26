@@ -7,6 +7,8 @@ import {
   Body,
   Param,
   UseGuards,
+  ParseBoolPipe,
+  Query,
 } from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { RolesGuard } from '../auth/roles.guard';
@@ -49,6 +51,11 @@ export class ProductionPlansController {
   @Delete(':id')
   remove(@Param('id') id: string) {
     return this.service.remove(id);
+  }
+
+  @Patch(':id/publish')
+  publish(@Param('id') id: string, @Body('publish') publish: boolean) {
+    return this.service.publishToKitchen(id, publish);
   }
 
   @Get(':id/sub-recipe-report')

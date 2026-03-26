@@ -5,12 +5,17 @@ import { useRouter, usePathname } from 'next/navigation';
 import Link from 'next/link';
 
 const PRIMARY_NAV = [
-  { href: '/dashboard',   label: 'Dashboard',        icon: '⊞' },
-  { href: '/production',  label: 'Production Plans',  icon: '📅' },
-  { href: '/inventory',   label: 'Inventory',         icon: '📦' },
-  { href: '/meals',       label: 'Meal Recipes',      icon: '🍽' },
-  { href: '/sub-recipes', label: 'Sub-Recipes',       icon: '🍲' },
-  { href: '/ingredients', label: 'Ingredients',       icon: '🥦' },
+  { href: '/dashboard',          label: 'Dashboard',          icon: '⊞' },
+  { href: '/production',         label: 'Production Plans',   icon: '📅' },
+  { href: '/inventory',          label: 'Inventory',          icon: '📦' },
+  { href: '/meals',              label: 'Meal Recipes',       icon: '🍽' },
+  { href: '/menu-builder',       label: 'Menu Builder',       icon: '📋' },
+  { href: '/sub-recipes',        label: 'Sub-Recipes',        icon: '🍲' },
+  { href: '/ingredients',        label: 'Ingredients',        icon: '🥦' },
+  { href: '/feedback',           label: 'Recipe Feedback',    icon: '💬' },
+  { href: '/station-assignment', label: 'Station Assignment', icon: '📍' },
+  { href: '/kitchen-messages',   label: 'Kitchen Messages',   icon: '💬' },
+  { href: '/shortages',          label: 'Shortages',          icon: '⚠️' },
 ];
 
 const OTHER_NAV = [
@@ -65,7 +70,7 @@ export default function DashboardLayout({
       <aside className="w-60 bg-white border-r border-gray-200 flex flex-col">
         {/* Logo */}
         <div className="h-14 flex items-center px-5 border-b border-gray-200">
-          <span className="w-8 h-8 bg-brand-500 rounded-lg flex items-center justify-center text-white font-black text-xs mr-2.5 tracking-tight shadow-sm">
+          <span className="w-8 h-8 bg-bd-yellow rounded-lg flex items-center justify-center text-brand-700 font-black text-xs mr-2.5 tracking-tight shadow-sm">
             BD
           </span>
           <span className="font-semibold text-gray-900 text-sm">BetterDay Kitchen</span>

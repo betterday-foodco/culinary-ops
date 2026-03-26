@@ -16,7 +16,7 @@ export class UpsertProductionLogDto {
   @IsUUID()
   sub_recipe_id: string;
 
-  @IsEnum(['not_started', 'in_progress', 'done'])
+  @IsEnum(['not_started', 'in_progress', 'done', 'short'])
   status: string;
 
   @IsOptional()
@@ -30,8 +30,31 @@ export class UpsertProductionLogDto {
   weight_recorded?: number;
 
   @IsOptional()
+  @IsNumber()
+  @Min(0)
+  have_on_hand?: number;
+
+  @IsOptional()
   @IsString()
   notes?: string;
+
+  @IsOptional()
+  @IsString()
+  cooked_by?: string;
+}
+
+export class SendMessageDto {
+  @IsNotEmpty()
+  @IsString()
+  body: string;
+
+  @IsOptional()
+  @IsString()
+  to_station?: string; // null = broadcast to all kitchen
+
+  @IsOptional()
+  @IsUUID()
+  to_user_id?: string; // direct message to a specific user
 }
 
 export class SubmitFeedbackDto {
