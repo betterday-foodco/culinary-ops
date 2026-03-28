@@ -9,6 +9,8 @@ export default function MealPricingPage() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editPrice, setEditPrice] = useState('');
   const [saving, setSaving] = useState(false);
+  const [recalculating, setRecalculating] = useState(false);
+  const [recalcMsg, setRecalcMsg] = useState('');
 
   async function load() {
     setLoading(true);
@@ -36,13 +38,39 @@ export default function MealPricingPage() {
     }
   }
 
+  async function recalculate() {
+    setRecalculating(true);
+    setRecalcMsg('');
+    try {
+      const result = await api.recalculateCosts();
+      setRecalcMsg(`✓ Recalculated ${result.subRecipes} sub-recipes and ${result.meals} meals.`);
+      load();
+    } catch (e: any) {
+      setRecalcMsg('Failed: ' + (e.message ?? 'Unknown error'));
+    } finally {
+      setRecalculating(false);
+    }
+  }
+
   return (
     <div className="p-8">
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold text-gray-900">Meal Pricing</h1>
-        <p className="text-sm text-gray-500 mt-1">
-          View computed costs and set sell price overrides.
-        </p>
+      <div className="mb-6 flex items-start justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900">Meal Pricing</h1>
+          <p className="text-sm text-gray-500 mt-1">
+            View computed costs and set sell price overrides.
+          </p>
+          {recalcMsg && (
+            <p className={`text-xs mt-2 font-medium ${recalcMsg.startsWith('✓') ? 'text-green-600' : 'text-red-500'}`}>{recalcMsg}</p>
+          )}
+        </div>
+        <button
+          onClick={recalculate}
+          disabled={recalculating}
+          className="flex-shrink-0 px-4 py-2 bg-brand-600 hover:bg-brand-700 disabled:opacity-50 text-white text-sm font-semibold rounded-lg transition-colors"
+        >
+          {recalculating ? 'Recalculating…' : '↺ Recalculate All Costs'}
+        </button>
       </div>
 
       <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">

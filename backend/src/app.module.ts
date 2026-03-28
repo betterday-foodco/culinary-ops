@@ -12,6 +12,8 @@ import { KitchenStaffModule } from './modules/kitchen-staff/kitchen-staff.module
 import { KitchenPortalModule } from './modules/kitchen-portal/kitchen-portal.module';
 import { StationTasksModule } from './modules/station-tasks/station-tasks.module';
 import { MenuQueueModule } from './modules/menu-queue/menu-queue.module';
+import { PortionSpecsModule } from './modules/portion-specs/portion-specs.module';
+import { PlanTastingModule } from './modules/plan-tasting/plan-tasting.module';
 import { ShopifyWebhookController } from './webhooks/shopify.controller';
 import { CostEngineService } from './services/cost-engine.service';
 import { ProductionEngineService } from './services/production-engine.service';
@@ -31,6 +33,8 @@ import { ProductionEngineService } from './services/production-engine.service';
     KitchenPortalModule,
     StationTasksModule,
     MenuQueueModule,
+    PortionSpecsModule,
+    PlanTastingModule,
   ],
   controllers: [ShopifyWebhookController],
   providers: [CostEngineService, ProductionEngineService],

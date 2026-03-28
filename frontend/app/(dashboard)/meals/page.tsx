@@ -27,6 +27,14 @@ export default function MealsPage() {
 
   useEffect(() => { load(); }, []);
 
+  async function handleBackfillCodes() {
+    try {
+      const r = await api.backfillMealCodes();
+      if (r.updated > 0) { alert(`Assigned codes to ${r.updated} meals.`); load(); }
+      else { alert('All meals already have codes.'); }
+    } catch (e: any) { alert(e.message); }
+  }
+
   async function handleDelete(id: string) {
     if (!confirm('Delete this meal?')) return;
     try {
@@ -38,7 +46,8 @@ export default function MealsPage() {
   const filtered = meals.filter((m) => {
     const matchSearch =
       m.name.toLowerCase().includes(search.toLowerCase()) ||
-      m.display_name.toLowerCase().includes(search.toLowerCase());
+      m.display_name.toLowerCase().includes(search.toLowerCase()) ||
+      ((m as any).meal_code ?? '').toLowerCase().includes(search.toLowerCase());
     const matchCat = !filterCategory || (m as any).category === filterCategory;
     return matchSearch && matchCat;
   });
@@ -61,9 +70,67 @@ export default function MealsPage() {
           <p className="text-sm text-gray-500 mt-0.5">{meals.length} total meals</p>
         </div>
         <div className="flex gap-2">
+          {!loading && meals.some((m) => !(m as any).meal_code) && (
+            <button onClick={handleBackfillCodes} className="px-4 py-2 border border-gray-300 text-gray-600 text-sm font-medium rounded-lg hover:bg-gray-50 transition-colors">
+              Assign Codes
+            </button>
+          )}
           <Link href="/meals/pricing" className="px-4 py-2 border border-gray-300 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-50 transition-colors">
             Pricing Editor
           </Link>
+          {/* Export JSON */}
+          <button
+            onClick={async () => {
+              const token = localStorage.getItem('token');
+              const res = await fetch('http://localhost:3002/api/meals/export', {
+                headers: { Authorization: `Bearer ${token}` }
+              });
+              const blob = await res.blob();
+              const url = URL.createObjectURL(blob);
+              const a = document.createElement('a');
+              a.href = url;
+              a.download = `betterday-meals-${new Date().toISOString().slice(0,10)}.json`;
+              a.click();
+              URL.revokeObjectURL(url);
+            }}
+            className="px-4 py-2 border border-gray-300 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-50 transition-colors flex items-center gap-1.5"
+          >
+            Export JSON
+          </button>
+          {/* Export CSV - client side */}
+          <button
+            onClick={() => {
+              const headers = ['BD Code','Name','Category','Description','Calories','Protein(g)','Carbs(g)','Fat(g)','Fiber(g)','Net Weight(g)','Cost($)','Sell Price($)','Allergens','Dietary Tags','Image URL'];
+              const rows = filtered.map(m => [
+                (m as any).meal_code ?? '',
+                m.display_name,
+                (m as any).category ?? '',
+                m.short_description ?? '',
+                m.calories ?? '',
+                m.protein_g ?? '',
+                m.carbs_g ?? '',
+                m.fat_g ?? '',
+                (m as any).fiber_g ?? '',
+                m.final_yield_weight ?? '',
+                m.computed_cost?.toFixed(2) ?? '',
+                m.pricing_override?.toFixed(2) ?? '',
+                ((m as any).allergen_tags as string[] ?? []).join('; '),
+                ((m as any).dietary_tags as string[] ?? []).join('; '),
+                m.image_url ?? '',
+              ]);
+              const csv = [headers, ...rows].map(r => r.map(v => `"${String(v).replace(/"/g,'""')}"`).join(',')).join('\n');
+              const blob = new Blob([csv], { type: 'text/csv' });
+              const url = URL.createObjectURL(blob);
+              const a = document.createElement('a');
+              a.href = url;
+              a.download = `betterday-meals-${new Date().toISOString().slice(0,10)}.csv`;
+              a.click();
+              URL.revokeObjectURL(url);
+            }}
+            className="px-4 py-2 border border-gray-300 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-50 transition-colors flex items-center gap-1.5"
+          >
+            Export CSV
+          </button>
           <Link href="/meals/new" className="px-4 py-2 bg-brand-500 text-white text-sm font-medium rounded-lg hover:bg-brand-600 transition-colors">
             + New Meal
           </Link>
@@ -105,16 +172,16 @@ export default function MealsPage() {
         <table className="w-full text-sm">
           <thead className="bg-gray-50 border-b border-gray-200">
             <tr>
-              {['Meal Name', 'Category', 'Components', 'Prod. Cost', 'Sell Price', 'Margin', ''].map((h) => (
+              {['Meal Name', 'Category', 'Components', 'Net Weight', 'Prod. Cost', 'Sell Price', 'Margin', ''].map((h) => (
                 <th key={h} className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">{h}</th>
               ))}
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-100">
             {loading ? (
-              <tr><td colSpan={7} className="px-4 py-10 text-center text-gray-400">Loading...</td></tr>
+              <tr><td colSpan={8} className="px-4 py-10 text-center text-gray-400">Loading...</td></tr>
             ) : filtered.length === 0 ? (
-              <tr><td colSpan={7} className="px-4 py-10 text-center text-gray-400">No meals found</td></tr>
+              <tr><td colSpan={8} className="px-4 py-10 text-center text-gray-400">No meals found</td></tr>
             ) : (
               filtered.map((meal) => {
                 const cost = meal.computed_cost;
@@ -130,7 +197,12 @@ export default function MealsPage() {
                           <img src={meal.image_url} alt="" className="w-9 h-9 rounded-lg object-cover flex-shrink-0 mt-0.5" />
                         )}
                         <div>
-                          <div className="font-medium text-gray-900">{meal.display_name}</div>
+                          <div className="flex items-center gap-2">
+                            <span className="font-medium text-gray-900">{meal.display_name}</span>
+                            {(meal as any).meal_code && (
+                              <span className="px-1.5 py-0 bg-gray-100 text-gray-500 rounded text-xs font-mono">{(meal as any).meal_code}</span>
+                            )}
+                          </div>
                           {meal.short_description && (
                             <div className="text-xs text-gray-400 mt-0.5 line-clamp-1">{meal.short_description}</div>
                           )}
@@ -159,6 +231,11 @@ export default function MealsPage() {
                       ) : <span className="text-gray-400">—</span>}
                     </td>
                     <td className="px-4 py-3 text-gray-600">{meal.components.length}</td>
+                    <td className="px-4 py-3 text-gray-600">
+                      {meal.final_yield_weight > 0 ? (
+                        <span className="text-xs font-medium text-slate-700">{meal.final_yield_weight}g</span>
+                      ) : <span className="text-gray-400">—</span>}
+                    </td>
                     <td className="px-4 py-3">
                       {cost > 0 ? (
                         <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-purple-50 text-purple-800 rounded font-bold text-sm">

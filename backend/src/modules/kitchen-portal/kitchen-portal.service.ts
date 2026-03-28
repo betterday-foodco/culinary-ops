@@ -52,9 +52,13 @@ export class KitchenPortalService {
       select: {
         id: true, plan_id: true, sub_recipe_id: true, user_id: true,
         status: true, qty_cooked: true, weight_recorded: true, have_on_hand: true,
-        notes: true, cooked_by: true,
+        notes: true, cooked_by: true, started_at: true,
         shortage_approved: true, shortage_approved_at: true,
         shortage_approved_by: { select: { id: true, name: true } },
+        bulk_reason: true, bulk_approved: true, bulk_approved_at: true,
+        bulk_approved_by: { select: { id: true, name: true } },
+        assigned_to_id: true, lead_approved: true, lead_approved_at: true,
+        assigned_to: { select: { id: true, name: true } },
         user: { select: { id: true, name: true } },
       },
     });
@@ -101,8 +105,12 @@ export class KitchenPortalService {
               shortage_approved: myLog.shortage_approved,
               shortage_approved_at: myLog.shortage_approved_at,
               shortage_approved_by: myLog.shortage_approved_by,
+              assigned_to_id: myLog.assigned_to_id,
+              assigned_to: myLog.assigned_to,
+              lead_approved: myLog.lead_approved,
+              lead_approved_at: myLog.lead_approved_at,
             }
-          : { status: 'not_started', qty_cooked: null, weight_recorded: null, have_on_hand: null, notes: null, shortage_approved: false },
+          : { status: 'not_started', qty_cooked: null, weight_recorded: null, have_on_hand: null, notes: null, shortage_approved: false, assigned_to_id: null, assigned_to: null, lead_approved: false },
       };
     });
 
@@ -194,6 +202,10 @@ export class KitchenPortalService {
         have_on_hand: dto.have_on_hand ?? null,
         notes: dto.notes ?? null,
         cooked_by: dto.cooked_by ?? null,
+        bulk_reason: dto.bulk_reason ?? null,
+        ...(dto.status === 'in_progress' && dto.started_at
+          ? { started_at: new Date(dto.started_at) }
+          : {}),
       },
       create: {
         plan_id: dto.plan_id,
@@ -205,6 +217,8 @@ export class KitchenPortalService {
         have_on_hand: dto.have_on_hand ?? null,
         notes: dto.notes ?? null,
         cooked_by: dto.cooked_by ?? null,
+        bulk_reason: dto.bulk_reason ?? null,
+        ...(dto.status === 'in_progress' ? { started_at: new Date() } : {}),
       },
     });
   }
@@ -387,8 +401,95 @@ export class KitchenPortalService {
   async getAllKitchenStaffWithStation() {
     return this.prisma.user.findMany({
       where: { role: 'kitchen' },
-      select: { id: true, name: true, station: true },
+      select: { id: true, name: true, station: true, station_role: true },
       orderBy: [{ station: 'asc' }, { name: 'asc' }],
+    });
+  }
+
+  async assignStationRole(staffId: string, station_role: string | null) {
+    const user = await this.prisma.user.findUnique({ where: { id: staffId } });
+    if (!user) throw new NotFoundException('User not found');
+    if (user.role !== 'kitchen') throw new ForbiddenException('Can only assign role to kitchen staff');
+    return this.prisma.user.update({
+      where: { id: staffId },
+      data: { station_role: station_role ?? null },
+      select: { id: true, name: true, station: true, station_role: true },
+    });
+  }
+
+  // ── Admin: all messages ────────────────────────────────────────────────────
+
+  async getAllMessages() {
+    return (this.prisma.kitchenMessage as any).findMany({
+      include: {
+        from_user: { select: { id: true, name: true, station: true, role: true } },
+        to_user:   { select: { id: true, name: true, station: true } },
+      },
+      orderBy: { created_at: 'asc' },
+      take: 200,
+    });
+  }
+
+  // ── Bulk Cooking Approval ─────────────────────────────────────────────────
+
+  async getPendingBulk() {
+    return this.prisma.kitchenProductionLog.findMany({
+      where: { status: 'bulk', bulk_approved: false },
+      include: {
+        sub_recipe: { select: { id: true, name: true, display_name: true, station_tag: true } },
+        user: { select: { id: true, name: true, station: true } },
+        plan: { select: { id: true, week_label: true } },
+      },
+      orderBy: { logged_at: 'desc' },
+    });
+  }
+
+  async approveBulk(logId: string, adminId: string) {
+    const log = await this.prisma.kitchenProductionLog.findUnique({ where: { id: logId } });
+    if (!log) throw new NotFoundException('Log not found');
+    return this.prisma.kitchenProductionLog.update({
+      where: { id: logId },
+      data: {
+        bulk_approved: true,
+        bulk_approved_by_id: adminId,
+        bulk_approved_at: new Date(),
+      },
+    });
+  }
+
+  // ── Station Lead: assign task + lead approval ─────────────────────────────
+
+  /** Get prep cooks for a given station (for the assignment dropdown) */
+  async getStationPrepCooks(station: string) {
+    return this.prisma.user.findMany({
+      where: { role: 'kitchen', station },
+      select: { id: true, name: true, station_role: true },
+      orderBy: { name: 'asc' },
+    });
+  }
+
+  /** Station lead assigns a task to a prep cook */
+  async assignTask(planId: string, subRecipeId: string, assignedToId: string | null) {
+    return this.prisma.kitchenProductionLog.updateMany({
+      where: { plan_id: planId, sub_recipe_id: subRecipeId },
+      data: { assigned_to_id: assignedToId },
+    });
+  }
+
+  /** Station lead approves a prep cook's completed task */
+  async leadApproveTask(planId: string, subRecipeId: string, leadId: string) {
+    return this.prisma.kitchenProductionLog.updateMany({
+      where: { plan_id: planId, sub_recipe_id: subRecipeId },
+      data: { lead_approved: true, lead_approved_at: new Date() },
+    });
+  }
+
+  /** Update sub-recipe priority (used from production plan page) */
+  async updateSubRecipePriority(subRecipeId: string, priority: number) {
+    return this.prisma.subRecipe.update({
+      where: { id: subRecipeId },
+      data: { priority },
+      select: { id: true, priority: true },
     });
   }
 }

@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { api, Ingredient, SubRecipe } from '../../../lib/api';
+import { api, Ingredient, SubRecipe, PortionSpec, PortionSpecComponent } from '../../../lib/api';
 
 // ─── Reference constants (from BetterDay reference design) ────────────────────
 const ALLERGEN_OPTIONS = ['Coconut','Dairy','Eggs','Fish','Gluten','Mustard','Peanuts','Sesame','Shellfish','Soy','Sulphites','Tree Nuts','Wheat'];
@@ -16,7 +16,7 @@ const CATEGORIES = ['Meat','Vegan','Vegetarian','Fish & Seafood','Breakfast','Sn
 interface MealVariant { id: string; name: string; display_name: string; category: string | null; }
 
 interface MealDetail {
-  id: string; name: string; display_name: string; category: string | null;
+  id: string; meal_code: string | null; name: string; display_name: string; category: string | null;
   linked_meal_id: string | null; linked_meal: MealVariant | null; variant_meals: MealVariant[];
   final_yield_weight: number; pricing_override: number | null; computed_cost: number;
   allergen_tags: string[]; dislikes: string[]; dietary_tags: string[]; protein_types: string[];
@@ -31,12 +31,58 @@ interface MealDetail {
 
 interface ComponentDetail {
   id: string; quantity: number; unit: string;
+  sort_order: number; portioning_notes: string | null;
   ingredient_id: string | null; sub_recipe_id: string | null;
   ingredient: { id: string; internal_name: string; display_name: string; sku: string; cost_per_unit: number; unit: string; } | null;
-  sub_recipe: { id: string; name: string; sub_recipe_code: string; station_tag: string | null; computed_cost: number; priority: number; } | null;
+  sub_recipe: { id: string; name: string; sub_recipe_code: string; station_tag: string | null; computed_cost: number; priority: number; base_yield_weight: number; base_yield_unit: string; } | null;
 }
 
-type Tab = 'details' | 'components' | 'label' | 'pricing';
+type Tab = 'details' | 'components' | 'portioning' | 'label' | 'pricing' | 'portion-specs';
+
+// ─── Unit normalisation (mirrors cost-engine.service.ts) ──────────────────────
+function normalizeQty(quantity: number, fromUnit: string, toUnit: string): number {
+  const from = (fromUnit ?? '').trim().toLowerCase();
+  const to   = (toUnit   ?? '').trim().toLowerCase();
+  if (from === to) return quantity;
+  const toGrams = (qty: number, u: string): number | null => {
+    switch (u) {
+      case 'g': case 'gr': case 'gram': case 'grams': return qty;
+      case 'kg': case 'kgs': case 'kilo': case 'kilos': case 'kilogram': case 'kilograms': return qty * 1000;
+      case 'lb': case 'lbs': case 'pound': case 'pounds': return qty * 453.592;
+      case 'oz': case 'ounce': case 'ounces': return qty * 28.3495;
+      default: return null;
+    }
+  };
+  const toMl = (qty: number, u: string): number | null => {
+    switch (u) {
+      case 'ml': case 'milliliter': case 'milliliters': return qty;
+      case 'l': case 'liter': case 'liters': case 'litre': case 'litres': return qty * 1000;
+      case 'cup': case 'cups': return qty * 240;
+      case 'tbsp': case 'tablespoon': case 'tablespoons': return qty * 15;
+      case 'tsp': case 'teaspoon': case 'teaspoons': return qty * 5;
+      default: return null;
+    }
+  };
+  const fg = toGrams(quantity, from); const tgt = fg !== null ? toGrams(1, to) : null;
+  if (fg !== null && tgt !== null && tgt > 0) return fg / tgt;
+  const fm = toMl(quantity, from); const tgtm = fm !== null ? toMl(1, to) : null;
+  if (fm !== null && tgtm !== null && tgtm > 0) return fm / tgtm;
+  return quantity;
+}
+
+/** Cost a single meal component the same way the backend engine does. */
+function componentCost(c: ComponentDetail): number {
+  if (c.ingredient) {
+    const norm = normalizeQty(c.quantity, c.unit, c.ingredient.unit);
+    return c.ingredient.cost_per_unit * norm;
+  }
+  if (c.sub_recipe) {
+    const batchInCompUnit = normalizeQty(c.sub_recipe.base_yield_weight, c.sub_recipe.base_yield_unit, c.unit);
+    const fraction = batchInCompUnit > 0 ? c.quantity / batchInCompUnit : 0;
+    return c.sub_recipe.computed_cost * fraction;
+  }
+  return 0;
+}
 
 // ─── Pill picker helper ────────────────────────────────────────────────────────
 function PillPicker({ options, selected, onToggle, color = 'brand' }: {
@@ -119,9 +165,29 @@ export default function MealDetailPage() {
   const [addQty, setAddQty] = useState('1');
   const [addUnit, setAddUnit] = useState('gr');
   const [addSearch, setAddSearch] = useState('');
+  const [addDropdownOpen, setAddDropdownOpen] = useState(false);
   const [editingComponent, setEditingComponent] = useState<string | null>(null);
+  // Portioning state — local notes per component id
+  const [portNotes, setPortNotes] = useState<Record<string, string>>({});
+  const [portSaving, setPortSaving] = useState<Record<string, boolean>>({});
+  // Pricing — custom margin
+  const [customMargin, setCustomMargin] = useState('');
   const [editQty, setEditQty] = useState('');
   const [editUnit, setEditUnit] = useState('');
+
+  // Portion spec state
+  const [portionSpec, setPortionSpec] = useState<PortionSpec | null>(null);
+  const [portionSpecLoaded, setPortionSpecLoaded] = useState(false);
+  const [psContainerType, setPsContainerType] = useState('');
+  const [psWeightMin, setPsWeightMin] = useState('');
+  const [psWeightMax, setPsWeightMax] = useState('');
+  const [psGeneralNotes, setPsGeneralNotes] = useState('');
+  const [psTastingNotes, setPsTastingNotes] = useState('');
+  const [psComponents, setPsComponents] = useState<Array<{
+    ingredient_name: string; portion_min: string; portion_max: string;
+    portion_unit: string; tool: string; notes: string; sort_order: number;
+  }>>([]);
+  const [psSaving, setPsSaving] = useState(false);
 
   const loadMeal = useCallback(async () => {
     setLoading(true);
@@ -156,6 +222,10 @@ export default function MealDetailPage() {
       setShelfLifeDays(data.shelf_life_days?.toString() ?? '');
       setLabelIngredients(data.label_ingredients ?? '');
       setLinkedMealId(data.linked_meal_id ?? null);
+      // init portioning notes from saved data
+      const notes: Record<string, string> = {};
+      data.components.forEach((c) => { notes[c.id] = c.portioning_notes ?? ''; });
+      setPortNotes(notes);
     } finally {
       setLoading(false);
     }
@@ -169,6 +239,85 @@ export default function MealDetailPage() {
       setAllMeals(m as MealVariant[]);
     });
   }, [loadMeal]);
+
+  const loadPortionSpec = useCallback(async () => {
+    if (portionSpecLoaded) return;
+    const spec = await api.getPortionSpecByMeal(id);
+    setPortionSpec(spec);
+    setPortionSpecLoaded(true);
+    if (spec) {
+      setPsContainerType(spec.container_type ?? '');
+      setPsWeightMin(spec.total_weight_min?.toString() ?? '');
+      setPsWeightMax(spec.total_weight_max?.toString() ?? '');
+      setPsGeneralNotes(spec.general_notes ?? '');
+      setPsTastingNotes(spec.tasting_notes ?? '');
+      setPsComponents(spec.components.map(c => ({
+        ingredient_name: c.ingredient_name,
+        portion_min: c.portion_min?.toString() ?? '',
+        portion_max: c.portion_max?.toString() ?? '',
+        portion_unit: c.portion_unit ?? 'g',
+        tool: c.tool ?? '',
+        notes: c.notes ?? '',
+        sort_order: c.sort_order,
+      })));
+    } else {
+      setPsComponents([]);
+    }
+  }, [id, portionSpecLoaded]);
+
+  async function handleSavePortionSpec() {
+    setPsSaving(true);
+    try {
+      const data = {
+        meal_id: id,
+        container_type: psContainerType || undefined,
+        total_weight_min: psWeightMin ? parseFloat(psWeightMin) : undefined,
+        total_weight_max: psWeightMax ? parseFloat(psWeightMax) : undefined,
+        general_notes: psGeneralNotes || undefined,
+        tasting_notes: psTastingNotes || undefined,
+        components: psComponents.map((c, idx) => ({
+          ingredient_name: c.ingredient_name,
+          portion_min: c.portion_min ? parseFloat(c.portion_min) : undefined,
+          portion_max: c.portion_max ? parseFloat(c.portion_max) : undefined,
+          portion_unit: c.portion_unit || 'g',
+          tool: c.tool || undefined,
+          notes: c.notes || undefined,
+          sort_order: idx,
+        })),
+      };
+      const saved = await api.upsertPortionSpec(data);
+      setPortionSpec(saved);
+    } catch (e: any) {
+      alert(e.message);
+    } finally {
+      setPsSaving(false);
+    }
+  }
+
+  function addPsComponent() {
+    setPsComponents(prev => [...prev, {
+      ingredient_name: '', portion_min: '', portion_max: '',
+      portion_unit: 'g', tool: '', notes: '', sort_order: prev.length,
+    }]);
+  }
+
+  function removePsComponent(idx: number) {
+    setPsComponents(prev => prev.filter((_, i) => i !== idx));
+  }
+
+  function updatePsComponent(idx: number, field: string, value: string) {
+    setPsComponents(prev => prev.map((c, i) => i === idx ? { ...c, [field]: value } : c));
+  }
+
+  function movePsComponent(idx: number, dir: 'up' | 'down') {
+    setPsComponents(prev => {
+      const arr = [...prev];
+      const swapIdx = dir === 'up' ? idx - 1 : idx + 1;
+      if (swapIdx < 0 || swapIdx >= arr.length) return arr;
+      [arr[idx], arr[swapIdx]] = [arr[swapIdx], arr[idx]];
+      return arr;
+    });
+  }
 
   async function handleSave() {
     setSaving(true);
@@ -268,13 +417,10 @@ export default function MealDetailPage() {
   }
 
   const filteredAddList = addType === 'sub_recipe'
-    ? allSubRecipes.filter((s) => !addSearch || s.name.toLowerCase().includes(addSearch.toLowerCase()) || s.sub_recipe_code.toLowerCase().includes(addSearch.toLowerCase()))
-    : allIngredients.filter((i) => !addSearch || i.internal_name.toLowerCase().includes(addSearch.toLowerCase()) || i.sku.toLowerCase().includes(addSearch.toLowerCase()));
+    ? allSubRecipes.filter((s) => !addSearch || s.name.toLowerCase().includes(addSearch.toLowerCase()) || s.sub_recipe_code.toLowerCase().includes(addSearch.toLowerCase()) || ((s as any).station_tag ?? '').toLowerCase().includes(addSearch.toLowerCase()))
+    : allIngredients.filter((i) => !addSearch || i.internal_name.toLowerCase().includes(addSearch.toLowerCase()) || i.sku.toLowerCase().includes(addSearch.toLowerCase()) || (i.display_name ?? '').toLowerCase().includes(addSearch.toLowerCase()));
 
-  const totalComponentCost = meal?.components.reduce((sum, c) => {
-    const unitCost = c.sub_recipe ? c.sub_recipe.computed_cost : (c.ingredient ? c.ingredient.cost_per_unit : 0);
-    return sum + unitCost * c.quantity;
-  }, 0) ?? 0;
+  const totalComponentCost = meal?.components.reduce((sum, c) => sum + componentCost(c), 0) ?? 0;
 
   if (loading) return <div className="p-8 text-center text-gray-400">Loading meal...</div>;
   if (!meal) return <div className="p-8 text-center text-gray-400">Meal not found</div>;
@@ -291,6 +437,9 @@ export default function MealDetailPage() {
           <button onClick={() => router.push('/meals')} className="text-gray-400 hover:text-gray-600 text-sm">← Meal Recipes</button>
           <div>
             <div className="flex items-center gap-2">
+              {meal.meal_code && (
+                <span className="px-2 py-0.5 bg-gray-900 text-white rounded text-xs font-mono font-bold">{meal.meal_code}</span>
+              )}
               <h1 className="text-lg font-semibold text-gray-900">{meal.display_name}</h1>
               <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${isActive ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-400'}`}>
                 {isActive ? 'Active' : 'Inactive'}
@@ -400,12 +549,14 @@ export default function MealDetailPage() {
           {/* Tabs */}
           <div className="bg-white border-b border-gray-200 px-6 flex gap-1 flex-shrink-0">
             {([
-              ['details',    'Details & Tags'],
-              ['components', `Components (${meal.components.length})`],
-              ['label',      'Label & Macros'],
-              ['pricing',    'Pricing'],
+              ['details',     'Details & Tags'],
+              ['components',  `Ingredients (${meal.components.length})`],
+              ['portioning',    'Portioning'],
+              ['portion-specs', 'Portion Specs'],
+              ['label',         'Label & Macros'],
+              ['pricing',       'Pricing'],
             ] as [Tab, string][]).map(([key, label]) => (
-              <button key={key} onClick={() => setTab(key)}
+              <button key={key} onClick={() => { setTab(key); if (key === 'portion-specs') loadPortionSpec(); }}
                 className={`px-4 py-3 text-sm font-medium border-b-2 -mb-px transition-colors ${tab === key ? 'border-brand-500 text-brand-700' : 'border-transparent text-gray-500 hover:text-gray-700'}`}>
                 {label}
               </button>
@@ -605,9 +756,7 @@ export default function MealDetailPage() {
                             )}
                           </td>
                           <td className="px-4 py-3 text-right text-gray-500 text-xs">
-                            {(c.sub_recipe?.computed_cost ?? c.ingredient?.cost_per_unit ?? 0) > 0
-                              ? `$${((c.sub_recipe?.computed_cost ?? c.ingredient?.cost_per_unit ?? 0) * c.quantity).toFixed(3)}`
-                              : '—'}
+                            {componentCost(c) > 0 ? `$${componentCost(c).toFixed(3)}` : '—'}
                           </td>
                           <td className="px-4 py-3">
                             <div className="flex items-center gap-2 justify-end">
@@ -647,34 +796,78 @@ export default function MealDetailPage() {
                 <div className="bg-white rounded-xl border border-gray-200 p-5">
                   <h3 className="text-sm font-semibold text-gray-700 mb-4">Add Component</h3>
                   <div className="flex gap-3 items-end flex-wrap">
+                    {/* Type toggle */}
                     <div>
                       <label className="block text-xs text-gray-500 mb-1">Type</label>
-                      <select value={addType} onChange={(e) => { setAddType(e.target.value as any); setAddRefId(''); setAddSearch(''); }}
-                        className="px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white">
-                        <option value="sub_recipe">Sub-Recipe</option>
-                        <option value="ingredient">Ingredient</option>
-                      </select>
+                      <div className="flex rounded-lg border border-gray-200 overflow-hidden text-xs font-semibold">
+                        <button type="button"
+                          onClick={() => { setAddType('sub_recipe'); setAddRefId(''); setAddSearch(''); setAddDropdownOpen(false); }}
+                          className={`px-3 py-2 transition-colors ${addType === 'sub_recipe' ? 'bg-brand-600 text-white' : 'bg-white text-gray-500 hover:bg-gray-50'}`}>
+                          Sub-Recipe
+                        </button>
+                        <button type="button"
+                          onClick={() => { setAddType('ingredient'); setAddRefId(''); setAddSearch(''); setAddDropdownOpen(false); }}
+                          className={`px-3 py-2 border-l border-gray-200 transition-colors ${addType === 'ingredient' ? 'bg-brand-600 text-white' : 'bg-white text-gray-500 hover:bg-gray-50'}`}>
+                          Ingredient
+                        </button>
+                      </div>
                     </div>
-                    <div className="flex-1 min-w-48">
-                      <label className="block text-xs text-gray-500 mb-1">Search & Select</label>
+
+                    {/* Live search */}
+                    <div className="flex-1 min-w-60">
+                      <label className="block text-xs text-gray-500 mb-1">
+                        {addRefId ? '✓ Selected' : `Search ${addType === 'sub_recipe' ? 'sub-recipes' : 'ingredients'} (${filteredAddList.length} available)`}
+                      </label>
                       <div className="relative">
-                        <input type="text" placeholder={`Search ${addType === 'sub_recipe' ? 'sub-recipes' : 'ingredients'}…`}
-                          value={addSearch} onChange={(e) => { setAddSearch(e.target.value); setAddRefId(''); }}
-                          className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm" />
-                        {addSearch && !addRefId && filteredAddList.length > 0 && (
-                          <div className="absolute top-full left-0 right-0 bg-white border border-gray-200 rounded-lg shadow-lg z-10 max-h-48 overflow-y-auto mt-1">
-                            {filteredAddList.slice(0, 10).map((item) => (
-                              <button key={item.id}
-                                onClick={() => { setAddRefId(item.id); setAddSearch(addType === 'sub_recipe' ? (item as any).name : (item as any).internal_name); }}
-                                className="w-full text-left px-3 py-2 hover:bg-gray-50 text-sm">
-                                <span className="font-medium">{addType === 'sub_recipe' ? (item as any).name : (item as any).internal_name}</span>
-                                <span className="ml-2 text-xs text-gray-400 font-mono">{addType === 'sub_recipe' ? (item as any).sub_recipe_code : (item as any).sku}</span>
+                        <input type="text"
+                          placeholder={`Type to search or click to browse all…`}
+                          value={addSearch}
+                          onChange={(e) => { setAddSearch(e.target.value); setAddRefId(''); setAddDropdownOpen(true); }}
+                          onFocus={() => setAddDropdownOpen(true)}
+                          onBlur={() => setTimeout(() => setAddDropdownOpen(false), 150)}
+                          className={`w-full px-3 py-2 border rounded-lg text-sm transition-colors ${addRefId ? 'border-brand-400 bg-brand-50 text-brand-800 font-medium' : 'border-gray-200'}`}
+                        />
+                        {addRefId && (
+                          <button
+                            type="button"
+                            onClick={() => { setAddRefId(''); setAddSearch(''); setAddDropdownOpen(true); }}
+                            className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 text-xs px-1"
+                          >✕</button>
+                        )}
+                        {addDropdownOpen && !addRefId && filteredAddList.length > 0 && (
+                          <div className="absolute top-full left-0 right-0 bg-white border border-gray-200 rounded-lg shadow-lg z-20 max-h-56 overflow-y-auto mt-1">
+                            {filteredAddList.slice(0, 20).map((item) => (
+                              <button key={item.id} type="button"
+                                onMouseDown={() => { setAddRefId(item.id); setAddSearch(addType === 'sub_recipe' ? (item as any).name : (item as any).internal_name); setAddDropdownOpen(false); }}
+                                className="w-full text-left px-3 py-2 hover:bg-gray-50 text-sm border-b border-gray-50 last:border-0">
+                                <div className="flex items-center justify-between gap-2">
+                                  <span className="font-medium text-gray-900 truncate">
+                                    {addType === 'sub_recipe' ? (item as any).name : (item as any).internal_name}
+                                  </span>
+                                  <div className="flex items-center gap-1.5 flex-shrink-0">
+                                    {addType === 'sub_recipe' && (item as any).station_tag && (
+                                      <span className="text-[10px] bg-blue-50 text-blue-600 px-1.5 py-0.5 rounded-full">{(item as any).station_tag}</span>
+                                    )}
+                                    {addType === 'sub_recipe' && (item as any).computed_cost > 0 && (
+                                      <span className="text-[10px] text-green-600 font-medium">${(item as any).computed_cost.toFixed(2)}</span>
+                                    )}
+                                    <span className="text-[10px] text-gray-400 font-mono">
+                                      {addType === 'sub_recipe' ? (item as any).sub_recipe_code : (item as any).sku}
+                                    </span>
+                                  </div>
+                                </div>
                               </button>
                             ))}
+                            {filteredAddList.length > 20 && (
+                              <div className="px-3 py-2 text-xs text-gray-400 text-center">
+                                {filteredAddList.length - 20} more — type to narrow results
+                              </div>
+                            )}
                           </div>
                         )}
                       </div>
                     </div>
+
                     <div className="w-24">
                       <label className="block text-xs text-gray-500 mb-1">Qty</label>
                       <input type="number" min="0" step="0.1" value={addQty} onChange={(e) => setAddQty(e.target.value)}
@@ -684,16 +877,128 @@ export default function MealDetailPage() {
                       <label className="block text-xs text-gray-500 mb-1">Unit</label>
                       <select value={addUnit} onChange={(e) => setAddUnit(e.target.value)}
                         className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white">
-                        {['gr','un','ml','kg','Kgs'].map((u) => <option key={u} value={u}>{u}</option>)}
+                        {['gr','kg','Kgs','ml','L','un','pcs'].map((u) => <option key={u} value={u}>{u}</option>)}
                       </select>
                     </div>
                     <button onClick={handleAddComponent} disabled={!addRefId}
-                      className="px-4 py-2 bg-brand-600 text-white text-sm rounded-lg hover:bg-brand-700 disabled:opacity-40">
+                      className="px-5 py-2 bg-brand-600 text-white text-sm font-semibold rounded-lg hover:bg-brand-700 disabled:opacity-40 transition-colors">
                       + Add
                     </button>
                   </div>
                 </div>
               </>
+            )}
+
+            {/* ══ TAB: Portioning ══════════════════════════════════════════════ */}
+            {tab === 'portioning' && (
+              <div className="space-y-5">
+                {/* Header */}
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h2 className="text-base font-semibold text-gray-900">Portioning Instructions</h2>
+                    <p className="text-xs text-gray-400 mt-0.5">Step-by-step plating guide for kitchen staff. Add portioning notes per component.</p>
+                  </div>
+                  <div className="text-xs text-gray-400 bg-gray-50 border border-gray-200 rounded-lg px-3 py-1.5">
+                    {meal.components.length} component{meal.components.length !== 1 ? 's' : ''}
+                  </div>
+                </div>
+
+                {/* Column headers */}
+                <div className="hidden md:grid grid-cols-[40px_1fr_80px_1fr_90px] gap-3 px-4 py-2 bg-gray-50 rounded-lg text-xs font-semibold text-gray-500 uppercase tracking-wide">
+                  <div>Step</div>
+                  <div>Sub-Recipe</div>
+                  <div className="text-center">Target Qty</div>
+                  <div>Portioning Notes</div>
+                  <div></div>
+                </div>
+
+                {/* Portioning rows */}
+                {meal.components.length === 0 ? (
+                  <div className="text-center py-12 text-gray-400 bg-white rounded-xl border border-gray-200">
+                    No components yet. Add sub-recipes in the Ingredients tab first.
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    {[...meal.components]
+                      .sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0))
+                      .map((comp, idx) => {
+                        const name = comp.sub_recipe?.name ?? comp.ingredient?.internal_name ?? 'Unknown';
+                        const code = comp.sub_recipe?.sub_recipe_code ?? comp.ingredient?.sku ?? '';
+                        const station = comp.sub_recipe?.station_tag;
+                        const saving = portSaving[comp.id];
+
+                        return (
+                          <div key={comp.id} className="bg-white rounded-xl border border-gray-200 p-4 grid grid-cols-[40px_1fr_80px_1fr_90px] gap-3 items-start">
+                            {/* Step number */}
+                            <div className="flex items-center justify-center">
+                              <span className="w-7 h-7 rounded-full bg-brand-100 text-brand-700 text-xs font-bold flex items-center justify-center">
+                                {idx + 1}
+                              </span>
+                            </div>
+
+                            {/* Sub-recipe info */}
+                            <div>
+                              <p className="font-medium text-gray-900 text-sm">{name}</p>
+                              <div className="flex items-center gap-2 mt-0.5">
+                                <span className="text-xs text-gray-400 font-mono">{code}</span>
+                                {station && (
+                                  <span className="text-[10px] bg-blue-50 text-blue-600 px-1.5 py-0.5 rounded-full">{station}</span>
+                                )}
+                              </div>
+                            </div>
+
+                            {/* Target qty */}
+                            <div className="text-center">
+                              <span className="text-sm font-bold text-gray-900">{comp.quantity}</span>
+                              <span className="text-xs text-gray-400 ml-0.5">{comp.unit}</span>
+                              <div className="text-[10px] text-gray-400 mt-0.5">
+                                ≈{Math.round(comp.quantity * 0.9)}–{Math.round(comp.quantity * 1.1)} acceptable
+                              </div>
+                            </div>
+
+                            {/* Notes input */}
+                            <textarea
+                              value={portNotes[comp.id] ?? ''}
+                              onChange={(e) => setPortNotes(n => ({ ...n, [comp.id]: e.target.value }))}
+                              placeholder="e.g. Spread evenly across base, layer first…"
+                              rows={2}
+                              className="w-full text-xs px-2.5 py-2 border border-gray-200 rounded-lg resize-none focus:outline-none focus:ring-2 focus:ring-brand-400 text-gray-700"
+                            />
+
+                            {/* Save notes button */}
+                            <div className="flex items-start pt-0.5">
+                              <button
+                                disabled={saving}
+                                onClick={async () => {
+                                  setPortSaving(s => ({ ...s, [comp.id]: true }));
+                                  try {
+                                    await api.updateMealComponent(id, comp.id, {
+                                      portioning_notes: portNotes[comp.id] || undefined,
+                                    } as any);
+                                  } catch (e: any) { alert(e.message); }
+                                  finally { setPortSaving(s => ({ ...s, [comp.id]: false })); }
+                                }}
+                                className="w-full px-3 py-1.5 bg-brand-600 text-white text-xs font-medium rounded-lg hover:bg-brand-700 disabled:opacity-50 transition-colors"
+                              >
+                                {saving ? '...' : 'Save'}
+                              </button>
+                            </div>
+                          </div>
+                        );
+                      })}
+                  </div>
+                )}
+
+                {/* Portioning tips */}
+                <div className="bg-amber-50 border border-amber-200 rounded-xl p-4">
+                  <p className="text-xs font-semibold text-amber-800 mb-1">📐 Portioning Tips</p>
+                  <ul className="text-xs text-amber-700 space-y-0.5 list-disc list-inside">
+                    <li>The ±10% range shown is a guideline — adjust based on your portion spec sheets.</li>
+                    <li>Notes are saved individually per component — click Save after each edit.</li>
+                    <li>Reorder components in the Ingredients tab (sort by priority).</li>
+                  </ul>
+                </div>
+              </div>
             )}
 
             {/* ══ TAB: Label & Macros ══════════════════════════════════════════ */}
@@ -762,75 +1067,103 @@ export default function MealDetailPage() {
 
                 {/* Right: live label preview */}
                 <div className="space-y-3">
-                  <div className="bg-white rounded-xl border border-gray-200 p-4 sticky top-0">
-                    <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">Label Preview</h3>
-                    <div className="border-2 border-gray-800 rounded-lg p-3 text-xs space-y-2 bg-white">
-                      {/* Title */}
-                      <div>
-                        <p className="font-bold text-gray-900 text-sm leading-tight">{displayName || meal.display_name}</p>
-                        {shortDescription && <p className="text-gray-500 text-xs mt-0.5 italic">{shortDescription}</p>}
+                  <div className="bg-white rounded-xl border border-gray-200 p-4 sticky top-4">
+                    <div className="flex items-center justify-between mb-3">
+                      <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wide">📋 Label Preview</h3>
+                      <span className="text-[10px] text-gray-400 bg-gray-50 border border-gray-200 rounded px-1.5 py-0.5">Live</span>
+                    </div>
+
+                    {/* Label mock-up */}
+                    <div className="border-2 border-gray-900 rounded-xl overflow-hidden bg-white shadow-sm" style={{fontFamily:'system-ui,sans-serif'}}>
+                      {/* Header band */}
+                      <div className="bg-gray-900 px-3 py-1.5 flex items-center justify-between">
+                        <span className="text-white text-[10px] font-bold tracking-widest uppercase">BetterDay Food Co.</span>
+                        {meal.meal_code && <span className="text-gray-400 text-[9px] font-mono">{meal.meal_code}</span>}
                       </div>
 
-                      {/* Tags */}
-                      {dietaryTags.length > 0 && (
-                        <div className="flex flex-wrap gap-1">
-                          {dietaryTags.slice(0, 4).map((t) => (
-                            <span key={t} className="px-1.5 py-0.5 bg-green-100 text-green-700 rounded text-xs font-medium">{t}</span>
-                          ))}
+                      {/* Meal image if available */}
+                      {imageUrl && (
+                        <div className="h-28 overflow-hidden">
+                          <img src={imageUrl} alt="" className="w-full h-full object-cover" />
                         </div>
                       )}
 
-                      <hr className="border-gray-300" />
-
-                      {/* Macros */}
-                      {(calories || proteinG || carbsG || fatG) && (
-                        <div className="grid grid-cols-4 gap-1 text-center">
-                          {[['Cal', calories],['Pro', proteinG ? proteinG+'g' : ''],['Carb', carbsG ? carbsG+'g' : ''],['Fat', fatG ? fatG+'g' : '']].map(([l,v]) => (
-                            <div key={l} className="bg-gray-50 rounded p-1">
-                              <p className="text-gray-400 text-xs">{l}</p>
-                              <p className="font-bold text-gray-800">{v || '—'}</p>
-                            </div>
-                          ))}
+                      <div className="p-3 space-y-2">
+                        {/* Meal name */}
+                        <div className="border-b border-gray-200 pb-2">
+                          <p className="font-black text-gray-900 text-sm leading-tight">{displayName || meal.display_name}</p>
+                          {shortDescription && <p className="text-gray-500 text-[10px] mt-0.5 italic leading-tight">{shortDescription}</p>}
                         </div>
-                      )}
 
-                      {/* Heating */}
-                      {heatingInstructions && (
-                        <>
-                          <hr className="border-gray-200" />
-                          <div>
-                            <p className="font-semibold text-gray-700 mb-0.5">How to Heat</p>
-                            <p className="text-gray-600 leading-tight">{heatingInstructions}</p>
+                        {/* Dietary badges */}
+                        {dietaryTags.length > 0 && (
+                          <div className="flex flex-wrap gap-1 pb-1">
+                            {dietaryTags.filter(t => ['Gluten Friendly','Dairy Free','Freezable','High Protein'].includes(t)).map((t) => (
+                              <span key={t} className="px-1.5 py-0.5 bg-green-700 text-white rounded-sm text-[9px] font-bold uppercase tracking-wide">{t}</span>
+                            ))}
                           </div>
-                        </>
-                      )}
+                        )}
 
-                      {/* Allergens */}
-                      {allergenTags.length > 0 && (
-                        <>
-                          <hr className="border-gray-200" />
-                          <p className="text-gray-600"><span className="font-semibold">Contains: </span>{allergenTags.join(', ')}</p>
-                        </>
-                      )}
+                        {/* Macros bar */}
+                        {(calories || proteinG || carbsG || fatG) && (
+                          <div className="grid grid-cols-4 gap-1 text-center border border-gray-200 rounded-lg overflow-hidden">
+                            {[
+                              {label:'Cal',   val: calories, unit: '', bg: 'bg-orange-50'},
+                              {label:'Protein', val: proteinG, unit: 'g', bg: 'bg-blue-50'},
+                              {label:'Carbs',  val: carbsG,  unit: 'g', bg: 'bg-yellow-50'},
+                              {label:'Fat',    val: fatG,    unit: 'g', bg: 'bg-purple-50'},
+                            ].map(({label, val, unit: u, bg}) => (
+                              <div key={label} className={`${bg} py-1.5 px-1`}>
+                                <p className="text-gray-500 text-[8px] font-semibold uppercase leading-none">{label}</p>
+                                <p className="font-black text-gray-900 text-xs mt-0.5">{val || '—'}{u}</p>
+                              </div>
+                            ))}
+                          </div>
+                        )}
 
-                      {/* Shelf life */}
-                      {shelfLifeDays && (
-                        <p className="text-gray-500">Best before: +{shelfLifeDays} days</p>
-                      )}
+                        {/* Heating instructions */}
+                        {heatingInstructions && (
+                          <div className="border-t border-gray-100 pt-2">
+                            <p className="text-[9px] font-bold text-gray-700 uppercase tracking-wide mb-0.5">🔥 How to Heat</p>
+                            <p className="text-[10px] text-gray-600 leading-tight">{heatingInstructions}</p>
+                          </div>
+                        )}
 
-                      {/* Ingredient list */}
-                      {labelIngredients && (
-                        <>
-                          <hr className="border-gray-200" />
-                          <p className="text-gray-500 leading-tight"><span className="font-semibold text-gray-700">Ingredients: </span>{labelIngredients}</p>
-                        </>
-                      )}
+                        {/* Allergens */}
+                        {allergenTags.length > 0 && (
+                          <div className="bg-amber-50 border border-amber-200 rounded px-2 py-1">
+                            <p className="text-[10px] text-amber-800"><span className="font-bold">⚠ Contains: </span>{allergenTags.join(', ')}</p>
+                          </div>
+                        )}
 
-                      {/* Net weight */}
-                      {netWeightKg && parseFloat(netWeightKg) > 0 && (
-                        <p className="text-gray-400 text-xs text-right">Net Wt: {(parseFloat(netWeightKg) * 1000).toFixed(0)}g</p>
-                      )}
+                        {/* Shelf life + net weight */}
+                        <div className="border-t border-gray-100 pt-1.5 flex items-center justify-between">
+                          {shelfLifeDays ? (
+                            <p className="text-[9px] text-gray-500">Best by: delivery date + {shelfLifeDays} days</p>
+                          ) : <span />}
+                          {netWeightKg && parseFloat(netWeightKg) > 0 && (
+                            <p className="text-[9px] text-gray-400 font-mono">Net {(parseFloat(netWeightKg) * 1000).toFixed(0)}g</p>
+                          )}
+                        </div>
+
+                        {/* Ingredient list */}
+                        {labelIngredients && (
+                          <div className="border-t border-gray-100 pt-1.5">
+                            <p className="text-[9px] text-gray-500 leading-tight">
+                              <span className="font-bold text-gray-700">INGREDIENTS: </span>{labelIngredients}
+                            </p>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Footer */}
+                      <div className="bg-gray-50 border-t border-gray-200 px-3 py-1.5 flex items-center justify-between">
+                        <span className="text-[9px] text-gray-400">eatbetterday.ca</span>
+                        <span className="text-[9px] text-gray-400">Made in Canada 🍁</span>
+                      </div>
                     </div>
+
+                    <p className="text-[10px] text-gray-400 mt-2 text-center">Preview updates as you type</p>
                   </div>
                 </div>
               </div>
@@ -839,58 +1172,343 @@ export default function MealDetailPage() {
             {/* ══ TAB: Pricing ═════════════════════════════════════════════════ */}
             {tab === 'pricing' && (
               <div className="grid grid-cols-2 gap-5">
-                <div className="bg-white rounded-xl border border-gray-200 p-5 space-y-4">
-                  <h2 className="text-sm font-semibold text-gray-700">Pricing</h2>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-xs font-medium text-gray-500 mb-1">Sell Price ($)</label>
-                      <input type="number" min="0" step="0.01" value={pricingOverride}
-                        onChange={(e) => setPricingOverride(e.target.value)} placeholder="16.99"
-                        className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-400" />
-                    </div>
-                    <div>
-                      <label className="block text-xs font-medium text-gray-500 mb-1">Production Cost</label>
-                      <p className="px-3 py-2 bg-gray-50 rounded-lg text-sm font-semibold text-gray-800">${cost.toFixed(3)}</p>
-                    </div>
+
+                {/* Left: Ingredient cost breakdown */}
+                <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+                  <div className="px-5 py-3 border-b border-gray-100 flex items-center justify-between">
+                    <h2 className="text-sm font-semibold text-gray-700">Ingredients / Sub-recipes</h2>
+                    <span className="text-xs font-semibold text-gray-500">Prod. Price <span className="text-gray-900">${totalComponentCost.toFixed(2)}</span></span>
                   </div>
-                  {profit !== null && (
-                    <div className="p-4 bg-green-50 border border-green-200 rounded-lg">
-                      <div className="flex justify-between items-center">
-                        <span className="text-sm text-green-700 font-medium">Gross Profit</span>
-                        <span className="text-lg font-bold text-green-700">${profit.toFixed(2)}</span>
-                      </div>
-                      <div className="flex justify-between items-center mt-1">
-                        <span className="text-xs text-green-600">Markup</span>
-                        <span className="text-sm font-semibold text-green-600">{((profit / cost) * 100).toFixed(1)}%</span>
-                      </div>
+                  {meal.components.length === 0 ? (
+                    <p className="text-sm text-gray-400 p-5">No components added yet.</p>
+                  ) : (
+                    <div className="divide-y divide-gray-50">
+                      {meal.components.map((c) => {
+                        const lineCost = componentCost(c);
+                        const code = c.sub_recipe?.sub_recipe_code ?? c.ingredient?.sku ?? '';
+                        const num = code.replace(/^SR-|^ING-/i, '');
+                        const name = c.sub_recipe?.name ?? c.ingredient?.internal_name ?? '';
+                        const station = c.sub_recipe?.station_tag;
+                        return (
+                          <div key={c.id} className="flex items-center gap-3 px-4 py-3 hover:bg-gray-50">
+                            {/* Avatar icon */}
+                            <div className="w-9 h-9 rounded-full bg-brand-500 flex items-center justify-center flex-shrink-0">
+                              <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+                                <circle cx="12" cy="12" r="10" fill="#f59e0b" opacity="0.9"/>
+                                <path d="M8 12l3 3 5-5" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                              </svg>
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <p className="text-sm font-medium text-gray-800 leading-tight">
+                                {num && <span className="text-gray-400 mr-1">#{num}</span>}
+                                {name}
+                                {station && <span className="text-[10px] text-gray-400 ml-1">({station})</span>}
+                              </p>
+                              <p className="text-xs text-gray-400">{c.quantity.toFixed(2)} {c.unit}</p>
+                            </div>
+                            <div className="text-right flex-shrink-0">
+                              <p className="text-sm font-bold text-gray-900">${lineCost.toFixed(2)}</p>
+                              <p className="text-[10px] text-gray-400">Prod. Price</p>
+                            </div>
+                          </div>
+                        );
+                      })}
                     </div>
                   )}
                 </div>
 
-                <div className="bg-white rounded-xl border border-gray-200 p-5">
-                  <h2 className="text-sm font-semibold text-gray-700 mb-4">Cost Breakdown</h2>
-                  {meal.components.length === 0 ? (
-                    <p className="text-sm text-gray-400">No components added yet.</p>
-                  ) : (
-                    <div className="space-y-2">
-                      {meal.components.map((c) => {
-                        const unitCost = c.sub_recipe ? c.sub_recipe.computed_cost : (c.ingredient?.cost_per_unit ?? 0);
-                        const lineCost = unitCost * c.quantity;
+                {/* Right: Sell price + profit + margin analysis */}
+                <div className="space-y-4">
+                  {/* Production price + profit summary */}
+                  <div className="bg-white rounded-xl border border-gray-200 p-5 space-y-4">
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-full bg-orange-100 flex items-center justify-center text-lg">🔥</div>
+                        <div>
+                          <p className="text-xs text-gray-500 font-medium">Production Price</p>
+                          <p className="text-xl font-bold text-gray-900">${cost.toFixed(2)}</p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-full bg-green-100 flex items-center justify-center text-lg">💵</div>
+                        <div>
+                          <p className="text-xs text-gray-500 font-medium">Profit</p>
+                          <p className="text-xl font-bold text-green-700">{profit !== null ? `$${profit.toFixed(2)}` : '—'}</p>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Sell price input */}
+                    <div>
+                      <label className="block text-xs font-medium text-gray-500 mb-1">Sell Price ($)</label>
+                      <input type="number" min="0" step="0.01" value={pricingOverride}
+                        onChange={(e) => setPricingOverride(e.target.value)} placeholder="e.g. 16.99"
+                        className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-400" />
+                    </div>
+
+                    {profit !== null && (
+                      <div className="p-3 bg-green-50 border border-green-200 rounded-lg flex justify-between items-center">
+                        <span className="text-sm text-green-700 font-medium">Gross Profit</span>
+                        <div className="text-right">
+                          <span className="text-lg font-bold text-green-700">${profit.toFixed(2)}</span>
+                          <span className="text-xs text-green-600 ml-2">{((profit / cost) * 100).toFixed(1)}% markup</span>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Margin recommendations */}
+                  <div className="bg-white rounded-xl border border-gray-200 p-5 space-y-3">
+                    <h3 className="text-sm font-semibold text-gray-700">Selling Price recommendations at Various Margins</h3>
+                    <div className="space-y-1.5">
+                      {[20, 25, 30, 35].map((pct) => {
+                        const suggested = cost > 0 ? cost / (1 - pct / 100) : 0;
                         return (
-                          <div key={c.id} className="flex justify-between text-sm">
-                            <span className="text-gray-600 truncate flex-1">{c.sub_recipe?.name ?? c.ingredient?.internal_name}</span>
-                            <span className="text-gray-500 ml-2">{c.quantity}{c.unit}</span>
-                            <span className="text-gray-800 font-medium ml-3">${lineCost.toFixed(3)}</span>
+                          <div key={pct} className="flex items-center justify-between text-sm">
+                            <span className="text-gray-500">{pct}%</span>
+                            <button onClick={() => setPricingOverride(suggested.toFixed(2))}
+                              className="font-semibold text-brand-600 hover:text-brand-800 hover:underline">
+                              ${suggested.toFixed(2)}
+                            </button>
                           </div>
                         );
                       })}
-                      <div className="border-t border-gray-200 pt-2 flex justify-between text-sm font-semibold">
-                        <span className="text-gray-700">Total</span>
-                        <span className="text-gray-900">${totalComponentCost.toFixed(3)}</span>
+                    </div>
+
+                    {/* Custom margin */}
+                    <div className="border-t border-gray-100 pt-3 space-y-2">
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm text-gray-500">Custom Margin:</span>
+                        <div className="flex items-center border border-gray-200 rounded-lg overflow-hidden">
+                          <span className="px-2 py-1.5 bg-gray-50 text-xs text-gray-500 border-r border-gray-200">%</span>
+                          <input type="number" min="0" max="99" step="0.1" value={customMargin}
+                            onChange={(e) => setCustomMargin(e.target.value)} placeholder="e.g. 40"
+                            className="w-24 px-2 py-1.5 text-sm focus:outline-none" />
+                        </div>
                       </div>
+                      {customMargin && parseFloat(customMargin) > 0 && parseFloat(customMargin) < 100 && cost > 0 && (
+                        <p className="text-sm text-gray-600">
+                          Suggested selling price at <span className="font-semibold">{parseFloat(customMargin).toFixed(2)}%</span> margin is:{' '}
+                          <button onClick={() => setPricingOverride((cost / (1 - parseFloat(customMargin) / 100)).toFixed(2))}
+                            className="font-bold text-brand-700 hover:underline">
+                            ${(cost / (1 - parseFloat(customMargin) / 100)).toFixed(2)}
+                          </button>
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* ══ TAB: Portion Specs ═══════════════════════════════════════════ */}
+            {tab === 'portion-specs' && (
+              <div className="space-y-5">
+
+                {/* Meal Photo Upload */}
+                <div className="bg-white rounded-xl border border-gray-200 p-5">
+                  <h2 className="text-sm font-semibold text-gray-700 mb-3">Meal Photo</h2>
+                  <div className="flex items-start gap-4">
+                    <div className="w-32 h-32 rounded-xl overflow-hidden border border-gray-200 bg-gray-50 flex-shrink-0">
+                      {imageUrl ? (
+                        <img src={imageUrl} alt={meal.display_name} className="w-full h-full object-cover" />
+                      ) : (
+                        <div className="w-full h-full flex items-center justify-center text-3xl">🍽️</div>
+                      )}
+                    </div>
+                    <div className="flex flex-col gap-2">
+                      <label className="px-4 py-2 bg-brand-500 text-white text-sm font-medium rounded-lg hover:bg-brand-600 cursor-pointer transition-colors inline-block">
+                        {imageUrl ? 'Change Photo' : 'Upload Photo'}
+                        <input
+                          type="file"
+                          accept="image/*"
+                          className="hidden"
+                          onChange={async (e) => {
+                            const file = e.target.files?.[0];
+                            if (!file) return;
+                            try {
+                              const result = await api.uploadMealPhoto(meal.id, file);
+                              setImageUrl(result.image_url);
+                              setMeal(prev => prev ? { ...prev, image_url: result.image_url } : prev);
+                            } catch (err: any) {
+                              alert('Upload failed: ' + err.message);
+                            }
+                          }}
+                        />
+                      </label>
+                      {imageUrl && (
+                        <p className="text-xs text-gray-400">Photo will appear on production plan portion specs cards.</p>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Header info */}
+                <div className="bg-white rounded-xl border border-gray-200 p-5 space-y-4">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h2 className="text-sm font-semibold text-gray-700">Portion Specifications</h2>
+                      <p className="text-xs text-gray-400 mt-0.5">Step-by-step portioning guide for kitchen staff — how much of each component goes in the container.</p>
+                    </div>
+                    {portionSpec && (
+                      <span className="text-xs bg-green-100 text-green-700 px-2 py-1 rounded-full font-medium">Spec saved</span>
+                    )}
+                  </div>
+
+                  <div className="grid grid-cols-3 gap-4">
+                    <div>
+                      <label className="block text-xs font-medium text-gray-500 mb-1">Container Type</label>
+                      <select value={psContainerType} onChange={e => setPsContainerType(e.target.value)}
+                        className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-400">
+                        <option value="">— select —</option>
+                        <option>Regular Meal Container</option>
+                        <option>Salad Container</option>
+                        <option>Soup Container</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-gray-500 mb-1">Min Total Weight (g)</label>
+                      <input type="number" value={psWeightMin} onChange={e => setPsWeightMin(e.target.value)}
+                        placeholder="e.g. 425"
+                        className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-400" />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-gray-500 mb-1">Max Total Weight (g)</label>
+                      <input type="number" value={psWeightMax} onChange={e => setPsWeightMax(e.target.value)}
+                        placeholder="e.g. 460"
+                        className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-400" />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-xs font-medium text-gray-500 mb-1">General Portioning Notes</label>
+                      <textarea value={psGeneralNotes} onChange={e => setPsGeneralNotes(e.target.value)} rows={2}
+                        placeholder="e.g. Be careful not to get food on the rim of the container..."
+                        className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-400 resize-none" />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-gray-500 mb-1">Tasting Checklist Notes</label>
+                      <textarea value={psTastingNotes} onChange={e => setPsTastingNotes(e.target.value)} rows={2}
+                        placeholder="e.g. Check seasoning, ensure sauce is evenly distributed..."
+                        className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-400 resize-none" />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Components table */}
+                <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+                  <div className="px-5 py-3 border-b border-gray-100 flex items-center justify-between">
+                    <h2 className="text-sm font-semibold text-gray-700">Portioning Components ({psComponents.length})</h2>
+                    <button onClick={addPsComponent}
+                      className="text-xs bg-brand-500 text-white px-3 py-1.5 rounded-lg hover:bg-brand-600 font-medium">
+                      + Add Row
+                    </button>
+                  </div>
+
+                  {psComponents.length === 0 ? (
+                    <div className="p-8 text-center text-sm text-gray-400">
+                      No components yet. Click "+ Add Row" to start building the portioning guide.
+                    </div>
+                  ) : (
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-sm">
+                        <thead className="bg-gray-50 border-b border-gray-100">
+                          <tr>
+                            <th className="px-4 py-2.5 text-left text-xs font-semibold text-gray-500 w-8">#</th>
+                            <th className="px-4 py-2.5 text-left text-xs font-semibold text-gray-500">Ingredient / Component</th>
+                            <th className="px-4 py-2.5 text-left text-xs font-semibold text-gray-500 w-24">Min</th>
+                            <th className="px-4 py-2.5 text-left text-xs font-semibold text-gray-500 w-24">Max</th>
+                            <th className="px-4 py-2.5 text-left text-xs font-semibold text-gray-500 w-20">Unit</th>
+                            <th className="px-4 py-2.5 text-left text-xs font-semibold text-gray-500 w-32">Tool</th>
+                            <th className="px-4 py-2.5 text-left text-xs font-semibold text-gray-500">Placement Notes</th>
+                            <th className="px-4 py-2.5 w-20"></th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-gray-50">
+                          {psComponents.map((comp, idx) => (
+                            <tr key={idx} className="hover:bg-gray-50/50">
+                              <td className="px-4 py-2 text-xs text-gray-400">
+                                <div className="flex flex-col gap-0.5">
+                                  <button onClick={() => movePsComponent(idx, 'up')} disabled={idx === 0}
+                                    className="text-gray-300 hover:text-gray-600 disabled:opacity-20 leading-none">▲</button>
+                                  <button onClick={() => movePsComponent(idx, 'down')} disabled={idx === psComponents.length - 1}
+                                    className="text-gray-300 hover:text-gray-600 disabled:opacity-20 leading-none">▼</button>
+                                </div>
+                              </td>
+                              <td className="px-4 py-2">
+                                <input value={comp.ingredient_name}
+                                  onChange={e => updatePsComponent(idx, 'ingredient_name', e.target.value)}
+                                  placeholder="e.g. Vegan Butter Chickn Curry"
+                                  className="w-full px-2 py-1 border border-gray-200 rounded text-xs focus:outline-none focus:ring-1 focus:ring-brand-400" />
+                              </td>
+                              <td className="px-4 py-2">
+                                <input type="number" value={comp.portion_min}
+                                  onChange={e => updatePsComponent(idx, 'portion_min', e.target.value)}
+                                  placeholder="300"
+                                  className="w-full px-2 py-1 border border-gray-200 rounded text-xs focus:outline-none focus:ring-1 focus:ring-brand-400" />
+                              </td>
+                              <td className="px-4 py-2">
+                                <input type="number" value={comp.portion_max}
+                                  onChange={e => updatePsComponent(idx, 'portion_max', e.target.value)}
+                                  placeholder="310"
+                                  className="w-full px-2 py-1 border border-gray-200 rounded text-xs focus:outline-none focus:ring-1 focus:ring-brand-400" />
+                              </td>
+                              <td className="px-4 py-2">
+                                <select value={comp.portion_unit}
+                                  onChange={e => updatePsComponent(idx, 'portion_unit', e.target.value)}
+                                  className="w-full px-2 py-1 border border-gray-200 rounded text-xs focus:outline-none focus:ring-1 focus:ring-brand-400">
+                                  <option value="g">g</option>
+                                  <option value="oz">oz</option>
+                                  <option value="ml">ml</option>
+                                  <option value="un">un</option>
+                                  <option value="pcs">pcs</option>
+                                </select>
+                              </td>
+                              <td className="px-4 py-2">
+                                <input value={comp.tool}
+                                  onChange={e => updatePsComponent(idx, 'tool', e.target.value)}
+                                  placeholder="e.g. Orange Scoop"
+                                  className="w-full px-2 py-1 border border-gray-200 rounded text-xs focus:outline-none focus:ring-1 focus:ring-brand-400" />
+                              </td>
+                              <td className="px-4 py-2">
+                                <input value={comp.notes}
+                                  onChange={e => updatePsComponent(idx, 'notes', e.target.value)}
+                                  placeholder="e.g. Place on the left side as the base"
+                                  className="w-full px-2 py-1 border border-gray-200 rounded text-xs focus:outline-none focus:ring-1 focus:ring-brand-400" />
+                              </td>
+                              <td className="px-4 py-2 text-right">
+                                <button onClick={() => removePsComponent(idx)}
+                                  className="text-red-400 hover:text-red-600 text-xs px-2 py-1 rounded hover:bg-red-50">
+                                  Remove
+                                </button>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                        {(psWeightMin || psWeightMax) && (
+                          <tfoot className="bg-gray-50 border-t border-gray-200">
+                            <tr>
+                              <td colSpan={2} className="px-4 py-2.5 text-xs font-semibold text-gray-700">Total Weight Range</td>
+                              <td colSpan={6} className="px-4 py-2.5 text-xs font-semibold text-gray-900">
+                                {psWeightMin && psWeightMax ? `${psWeightMin} – ${psWeightMax} g` : psWeightMin ? `${psWeightMin} g` : `${psWeightMax} g`}
+                              </td>
+                            </tr>
+                          </tfoot>
+                        )}
+                      </table>
                     </div>
                   )}
                 </div>
+
+                {/* Save button */}
+                <div className="flex justify-end">
+                  <button onClick={handleSavePortionSpec} disabled={psSaving}
+                    className="px-5 py-2 bg-brand-500 text-white rounded-lg text-sm font-medium hover:bg-brand-600 disabled:opacity-50">
+                    {psSaving ? 'Saving…' : portionSpec ? 'Update Portion Spec' : 'Save Portion Spec'}
+                  </button>
+                </div>
+
               </div>
             )}
 

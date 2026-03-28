@@ -41,7 +41,6 @@ export default function KitchenLayout({ children }: { children: React.ReactNode 
 
   const tabs = [
     { href: '/kitchen',           label: 'Cooking',     icon: '🍳' },
-    { href: '/kitchen/prep',      label: 'Prep List',   icon: '📋' },
     { href: '/kitchen/tasks',     label: 'Daily Tasks', icon: '✅' },
     { href: '/kitchen/requests',  label: 'Requests',    icon: '🔔' },
     { href: '/kitchen/messages',  label: 'Messages',    icon: '💬', badge: unread },

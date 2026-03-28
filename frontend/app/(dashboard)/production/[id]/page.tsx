@@ -10,9 +10,10 @@ import {
   PlanShoppingListReport,
   MealRecipe,
   StationTask,
+  PortionSpec,
 } from '../../../lib/api';
 
-type Tab = 'plan' | 'sub-recipes' | 'shopping' | 'tasks';
+type Tab = 'plan' | 'sub-recipes' | 'shopping' | 'tasks' | 'portion-specs';
 
 const STATUS_OPTIONS = ['draft', 'confirmed', 'completed'];
 const STATUS_STYLES: Record<string, string> = {
@@ -58,6 +59,18 @@ export default function ProductionPlanPage() {
   const [search, setSearch] = useState('');
   const [expandedStations, setExpandedStations] = useState<Set<string>>(new Set());
   const [expandedIngredients, setExpandedIngredients] = useState<Set<string>>(new Set());
+
+  // Portion specs
+  const [portionSpecs, setPortionSpecs] = useState<PortionSpec[]>([]);
+  const [portionSpecsLoaded, setPortionSpecsLoaded] = useState(false);
+  const [psExpandedId, setPsExpandedId] = useState<string | null>(null);
+  const [psFilter, setPsFilter] = useState<'all' | 'vegan' | 'meat'>('all');
+
+  // Tasting sessions
+  const [tastingSessions, setTastingSessions] = useState<Record<string, { taster_name?: string; tasting_notes?: string; checked_steps?: number[] }>>({});
+  const [weekNoteHeading, setWeekNoteHeading] = useState('');
+  const [weekNoteNotes, setWeekNoteNotes] = useState('');
+  const [weekNoteSaving, setWeekNoteSaving] = useState(false);
 
   // Station tasks
   const [stationTasks, setStationTasks] = useState<StationTask[]>([]);
@@ -111,6 +124,29 @@ export default function ProductionPlanPage() {
     } catch { /* silent */ }
   }, [id]);
 
+  const loadPortionSpecs = useCallback(async () => {
+    if (portionSpecsLoaded) return;
+    try {
+      const [specs, sessions, note] = await Promise.all([
+        api.getPortionSpecsByPlan(id),
+        api.getTastingSessions(id).catch(() => []),
+        api.getWeekNote(id),
+      ]);
+      setPortionSpecs(specs);
+      // Build a lookup map by meal_id
+      const sessionMap: Record<string, any> = {};
+      sessions.forEach((s: any) => { sessionMap[s.meal_id] = s; });
+      setTastingSessions(sessionMap);
+      if (note) {
+        setWeekNoteHeading(note.heading ?? '');
+        setWeekNoteNotes(note.notes ?? '');
+      }
+      setPortionSpecsLoaded(true);
+    } catch (e) {
+      console.error(e);
+    }
+  }, [id, portionSpecsLoaded]);
+
   // Auto-load report for whichever tab was opened initially (from dashboard ?tab= param)
   useEffect(() => {
     if (!loading) {
@@ -125,6 +161,7 @@ export default function ProductionPlanPage() {
     if (t === 'sub-recipes' && !subRecipeReport) loadSubRecipeReport();
     if (t === 'shopping' && !shoppingList) loadShoppingList();
     if (t === 'tasks') loadStationTasks();
+    if (t === 'portion-specs') loadPortionSpecs();
   }
 
   async function handleAddTask() {
@@ -275,6 +312,7 @@ export default function ProductionPlanPage() {
             ['sub-recipes', '🍳 Sub-Recipe Report'],
             ['shopping', '🛒 Shopping List'],
             ['tasks', '✅ Station Tasks'],
+            ['portion-specs', '⚖️ Portion Specs'],
           ] as const
         ).map(([key, label]) => (
           <button
@@ -574,6 +612,20 @@ export default function ProductionPlanPage() {
                               row={row}
                               expanded={expandedIngredients.has(row.id)}
                               onToggle={() => toggleIngredients(row.id)}
+                              onPriorityChange={(subRecipeId, priority) => {
+                                setSubRecipeReport(prev => {
+                                  if (!prev) return prev;
+                                  return {
+                                    ...prev,
+                                    grouped_by_station: Object.fromEntries(
+                                      Object.entries(prev.grouped_by_station).map(([k, v]) => [
+                                        k,
+                                        v.map(r => r.id === subRecipeId ? { ...r, priority } : r),
+                                      ])
+                                    ),
+                                  };
+                                });
+                              }}
                             />
                           ))}
                         </tbody>
@@ -772,34 +824,380 @@ export default function ProductionPlanPage() {
           )}
         </div>
       )}
+
+        {/* ── Tab: Portion Specs ── */}
+        {tab === 'portion-specs' && (
+        <div className="space-y-5">
+
+          {/* Header */}
+          <div className="flex items-center justify-between">
+            <div>
+              <h2 className="text-sm font-semibold text-gray-700">Portion Specs — {plan?.week_label}</h2>
+              <p className="text-xs text-gray-400 mt-0.5">
+                {portionSpecs.length > 0
+                  ? `${portionSpecs.length} of ${plan?.items.length ?? 0} meals have specs`
+                  : 'Auto-pulled from the meals selected in this plan'}
+              </p>
+            </div>
+            <div className="flex items-center gap-3">
+              <button
+                onClick={() => window.print()}
+                className="text-xs bg-gray-100 hover:bg-gray-200 text-gray-700 px-3 py-1.5 rounded-lg font-medium flex items-center gap-1.5"
+              >
+                🖨️ Print Specs
+              </button>
+              <button
+                onClick={() => { setPortionSpecsLoaded(false); loadPortionSpecs(); }}
+                className="text-xs text-brand-600 hover:underline"
+              >
+                Refresh
+              </button>
+            </div>
+          </div>
+
+          {/* Weekly changes banner */}
+          <div className="mb-6 bg-amber-50 border border-amber-200 rounded-xl p-4">
+            <h3 className="font-bold text-amber-800 mb-3 text-lg">📋 Changes Needed This Week</h3>
+            <input
+              className="w-full border border-amber-300 rounded-lg px-3 py-2 text-sm mb-2 bg-white focus:outline-none focus:ring-2 focus:ring-amber-400"
+              placeholder="Heading / summary..."
+              value={weekNoteHeading}
+              onChange={e => setWeekNoteHeading(e.target.value)}
+            />
+            <textarea
+              className="w-full border border-amber-300 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-amber-400"
+              rows={3}
+              placeholder="Detailed notes about any changes, substitutions, or special instructions for this week..."
+              value={weekNoteNotes}
+              onChange={e => setWeekNoteNotes(e.target.value)}
+            />
+            <button
+              className="mt-2 px-4 py-1.5 bg-amber-600 text-white text-sm rounded-lg hover:bg-amber-700 disabled:opacity-50"
+              disabled={weekNoteSaving}
+              onClick={async () => {
+                setWeekNoteSaving(true);
+                await api.upsertWeekNote({ plan_id: id, heading: weekNoteHeading, notes: weekNoteNotes });
+                setWeekNoteSaving(false);
+              }}
+            >
+              {weekNoteSaving ? 'Saving…' : 'Save Note'}
+            </button>
+          </div>
+
+          {portionSpecs.length === 0 ? (
+            <div className="bg-white rounded-xl border border-gray-200 p-12 text-center">
+              <p className="text-2xl mb-2">⚖️</p>
+              <p className="text-sm font-medium text-gray-600">No portion specs found for this plan's meals.</p>
+              <p className="text-xs text-gray-400 mt-1">
+                <a href="/portion-specs" className="text-brand-600 hover:underline">Go to Portion Specs page</a> to add specs for your meals.
+              </p>
+            </div>
+          ) : (() => {
+            const filteredSpecs = portionSpecs.filter(spec => {
+              if (psFilter === 'all') return true;
+              const cat = (spec.meal?.category ?? '').toLowerCase();
+              const isVegan = cat.includes('vegan') || cat.includes('plant') || cat.includes('vegetarian') || cat.includes('veggie');
+              return psFilter === 'vegan' ? isVegan : !isVegan;
+            });
+            return (
+            <>
+            {/* Filter buttons */}
+            <div className="flex gap-2 mb-4">
+              {(['all', 'vegan', 'meat'] as const).map(f => (
+                <button
+                  key={f}
+                  onClick={() => setPsFilter(f)}
+                  className={`px-3 py-1.5 rounded-lg text-sm font-medium ${psFilter === f ? 'bg-slate-800 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}
+                >
+                  {f === 'all' ? '📋 All' : f === 'vegan' ? '🥦 Vegan' : '🍗 Meat'}
+                </button>
+              ))}
+              <span className="ml-auto text-sm text-slate-500 self-center">{filteredSpecs.length} meals</span>
+            </div>
+            <div className="grid grid-cols-1 gap-5">
+              {filteredSpecs.map(spec => {
+                const meal = spec.meal;
+                return (
+                  <div key={spec.id} className="bg-white rounded-2xl border border-gray-200 overflow-hidden shadow-sm">
+
+                    {/* Card header with image */}
+                    <div className="flex items-stretch">
+
+                      {/* Meal photo */}
+                      <div className="w-40 flex-shrink-0 relative bg-gray-100">
+                        {meal?.image_url ? (
+                          <img
+                            src={meal.image_url}
+                            alt={meal.display_name}
+                            className="w-full h-full object-cover"
+                            style={{ minHeight: '120px', maxHeight: '160px' }}
+                          />
+                        ) : (
+                          <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-brand-50 to-brand-100" style={{ minHeight: '120px' }}>
+                            <span className="text-4xl">🍽️</span>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Meal info */}
+                      <div className="flex-1 px-5 py-4 flex flex-col justify-between">
+                        <div>
+                          <div className="flex items-center gap-2 flex-wrap mb-1">
+                            <span className="text-xs font-mono font-bold text-brand-600 bg-brand-50 px-2 py-0.5 rounded">
+                              {meal?.meal_code ?? '—'}
+                            </span>
+                            {spec.container_type && (
+                              <span className={`text-xs font-medium px-2.5 py-0.5 rounded-full ${
+                                spec.container_type.includes('Salad') ? 'bg-green-100 text-green-700' :
+                                spec.container_type.includes('Soup') ? 'bg-blue-100 text-blue-700' :
+                                'bg-orange-100 text-orange-700'
+                              }`}>
+                                📦 {spec.container_type}
+                              </span>
+                            )}
+                            {meal?.category && (
+                              <span className="text-xs bg-gray-100 text-gray-500 px-2 py-0.5 rounded-full">
+                                {meal.category}
+                              </span>
+                            )}
+                          </div>
+                          <h3 className="text-lg font-bold text-gray-900 leading-tight">
+                            {meal?.display_name ?? 'Unknown Meal'}
+                          </h3>
+                          {spec.general_notes && (
+                            <p className="text-xs text-amber-700 mt-1.5 bg-amber-50 px-2 py-1 rounded-lg border border-amber-100">
+                              ⚠️ {spec.general_notes}
+                            </p>
+                          )}
+                        </div>
+
+                        {/* Total weight badge */}
+                        {(spec.total_weight_min || spec.total_weight_max) && (
+                          <div className="flex items-center gap-1.5 mt-2">
+                            <span className="text-xs text-gray-500">Total weight:</span>
+                            <span className="text-sm font-bold text-gray-900 bg-gray-100 px-2 py-0.5 rounded-lg">
+                              {spec.total_weight_min && spec.total_weight_max
+                                ? `${spec.total_weight_min} – ${spec.total_weight_max} g`
+                                : `${spec.total_weight_min ?? spec.total_weight_max} g`}
+                            </span>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Component count badge */}
+                      <div className="flex-shrink-0 flex items-center px-5 border-l border-gray-100">
+                        <div className="text-center">
+                          <p className="text-3xl font-black text-brand-600">{spec.components.length}</p>
+                          <p className="text-xs text-gray-400 font-medium">steps</p>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Components — visual numbered steps */}
+                    <div className="border-t border-gray-100">
+                      <div className="divide-y divide-gray-50">
+                        {spec.components.map((c, i) => {
+                          const toolLower = (c.tool ?? '').toLowerCase();
+                          const toolColor =
+                            toolLower.includes('orange') ? 'bg-orange-500' :
+                            toolLower.includes('red') ? 'bg-red-500' :
+                            toolLower.includes('blue') ? 'bg-blue-500' :
+                            toolLower.includes('green') ? 'bg-green-500' :
+                            toolLower.includes('grey') || toolLower.includes('gray') ? 'bg-gray-400' :
+                            toolLower.includes('white') ? 'bg-gray-200' :
+                            toolLower.includes('teal') ? 'bg-teal-500' :
+                            toolLower.includes('purple') ? 'bg-purple-500' :
+                            toolLower.includes('yellow') ? 'bg-yellow-400' :
+                            'bg-gray-300';
+                          const toolIcon =
+                            toolLower.includes('scoop') ? '🥄' :
+                            toolLower.includes('squeeze') || toolLower.includes('bottle') ? '🧴' :
+                            toolLower.includes('shaker') ? '🧂' :
+                            toolLower.includes('tong') ? '🥢' :
+                            toolLower.includes('scale') ? '⚖️' :
+                            toolLower.includes('cup') ? '🥤' :
+                            toolLower.includes('spoon') ? '🥄' :
+                            '✋';
+                          const portionStr = c.portion_min && c.portion_max
+                            ? `${c.portion_min}–${c.portion_max} ${c.portion_unit ?? 'g'}`
+                            : c.portion_min
+                              ? `${c.portion_min} ${c.portion_unit ?? 'g'}`
+                              : null;
+
+                          return (
+                            <div key={c.id} className="flex items-start gap-4 px-5 py-3 hover:bg-gray-50/50">
+
+                              {/* Step number */}
+                              <div className="w-7 h-7 rounded-full bg-gray-900 text-white flex items-center justify-center flex-shrink-0 text-xs font-bold mt-0.5">
+                                {i + 1}
+                              </div>
+
+                              {/* Ingredient name */}
+                              <div className="flex-1 min-w-0">
+                                <p className="text-sm font-semibold text-gray-900">{c.ingredient_name}</p>
+                                {c.notes && (
+                                  <p className="text-xs text-gray-500 mt-0.5 leading-relaxed">{c.notes}</p>
+                                )}
+                              </div>
+
+                              {/* Portion amount */}
+                              {portionStr && (
+                                <div className="flex-shrink-0 text-center">
+                                  <span className="text-base font-black text-gray-900">{portionStr}</span>
+                                </div>
+                              )}
+
+                              {/* Tool */}
+                              {c.tool && (
+                                <div className="flex-shrink-0 flex items-center gap-1.5">
+                                  <div className={`w-3 h-3 rounded-full ${toolColor} flex-shrink-0`} />
+                                  <span className="text-xs text-gray-600 font-medium whitespace-nowrap">
+                                    {toolIcon} {c.tool}
+                                  </span>
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+
+                      {/* Tasting notes footer */}
+                      {spec.tasting_notes && (
+                        <div className="px-5 py-3 bg-blue-50 border-t border-blue-100 flex items-start gap-2">
+                          <span className="text-sm">✅</span>
+                          <p className="text-xs text-blue-800 font-medium">{spec.tasting_notes}</p>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Tasting checklist section */}
+                    <div className="mt-4 border-t border-slate-200 pt-4 px-5 pb-4">
+                      <div className="font-semibold text-slate-700 mb-2 text-sm">✅ Tasting Checklist</div>
+                      <div className="space-y-1 mb-3">
+                        {spec.components.map(c => {
+                          const session = tastingSessions[spec.meal_id] ?? {};
+                          const checked = (session.checked_steps ?? []).includes(c.sort_order);
+                          return (
+                            <label key={c.sort_order} className="flex items-center gap-2 text-sm cursor-pointer">
+                              <input
+                                type="checkbox"
+                                checked={checked}
+                                onChange={async () => {
+                                  const currentSteps = session.checked_steps ?? [];
+                                  const newSteps = checked
+                                    ? currentSteps.filter((s: number) => s !== c.sort_order)
+                                    : [...currentSteps, c.sort_order];
+                                  const updated = { ...(tastingSessions[spec.meal_id] ?? {}), checked_steps: newSteps };
+                                  setTastingSessions(prev => ({ ...prev, [spec.meal_id]: updated }));
+                                  await api.upsertTastingSession({
+                                    plan_id: id,
+                                    meal_id: spec.meal_id,
+                                    ...updated,
+                                  });
+                                }}
+                                className="w-4 h-4 rounded"
+                              />
+                              <span className={checked ? 'line-through text-slate-400' : 'text-slate-700'}>{c.ingredient_name}</span>
+                            </label>
+                          );
+                        })}
+                      </div>
+                      <div className="flex gap-2 mb-2">
+                        <input
+                          className="flex-1 border border-slate-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
+                          placeholder="Taster name..."
+                          value={tastingSessions[spec.meal_id]?.taster_name ?? ''}
+                          onChange={e => setTastingSessions(prev => ({
+                            ...prev,
+                            [spec.meal_id]: { ...(prev[spec.meal_id] ?? {}), taster_name: e.target.value }
+                          }))}
+                          onBlur={async () => {
+                            await api.upsertTastingSession({
+                              plan_id: id,
+                              meal_id: spec.meal_id,
+                              ...(tastingSessions[spec.meal_id] ?? {}),
+                            });
+                          }}
+                        />
+                      </div>
+                      <textarea
+                        className="w-full border border-slate-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
+                        rows={2}
+                        placeholder="Tasting notes / feedback..."
+                        value={tastingSessions[spec.meal_id]?.tasting_notes ?? ''}
+                        onChange={e => setTastingSessions(prev => ({
+                          ...prev,
+                          [spec.meal_id]: { ...(prev[spec.meal_id] ?? {}), tasting_notes: e.target.value }
+                        }))}
+                        onBlur={async () => {
+                          await api.upsertTastingSession({
+                            plan_id: id,
+                            meal_id: spec.meal_id,
+                            ...(tastingSessions[spec.meal_id] ?? {}),
+                          });
+                        }}
+                      />
+                    </div>
+
+                  </div>
+                );
+              })}
+            </div>
+            </>
+            );
+          })()}
+        </div>
+        )}
+
     </div>
   );
 }
 
 // ── Sub-component: ingredient breakdown row ─────────────────────────────────
 
+const PRIORITY_CYCLE: Record<number, { next: number; label: string; title: string }> = {
+  1: { next: 3, label: '🌅 AM High', title: 'Click to set Normal' },
+  3: { next: 5, label: '☀️ Normal',  title: 'Click to set PM/Later' },
+  5: { next: 1, label: '🌙 PM/Later', title: 'Click to set AM High' },
+};
+
 function SubRecipeReportRow({
   row,
   expanded,
   onToggle,
+  onPriorityChange,
 }: {
   row: PlanSubRecipeRow;
   expanded: boolean;
   onToggle: () => void;
+  onPriorityChange: (subRecipeId: string, priority: number) => void;
 }) {
+  const [saving, setSaving] = useState(false);
   const hasIngredients = row.ingredients && row.ingredients.length > 0;
+  const cycle = PRIORITY_CYCLE[row.priority] ?? PRIORITY_CYCLE[3];
+
+  async function cyclePriority() {
+    setSaving(true);
+    try {
+      await api.updateSubRecipePriority(row.id, cycle.next);
+      onPriorityChange(row.id, cycle.next);
+    } catch { /* ignore */ } finally { setSaving(false); }
+  }
 
   return (
     <>
       <tr className="hover:bg-gray-50">
         <td className="px-4 py-2.5">
-          <span
-            className={`px-1.5 py-0.5 rounded text-xs font-bold ${
+          <button
+            onClick={cyclePriority}
+            disabled={saving}
+            title={cycle.title}
+            className={`px-2 py-0.5 rounded text-xs font-bold transition-all hover:opacity-80 disabled:opacity-40 ${
               PRIORITY_COLOR[row.priority] ?? PRIORITY_COLOR[3]
             }`}
           >
-            P{row.priority}
-          </span>
+            {saving ? '…' : cycle.label}
+          </button>
         </td>
         <td className="px-4 py-2.5 font-medium text-gray-900">{row.name}</td>
         <td className="px-4 py-2.5 font-mono text-gray-500 text-xs">{row.sub_recipe_code}</td>

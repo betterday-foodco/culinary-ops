@@ -15,6 +15,7 @@ model User {
   role          String   @default("staff")  // "admin" | "staff" | "kitchen"
   name          String?                      // display name, required for kitchen staff
   station       String?                      // kitchen role only — one of the 6 fixed station names
+  station_role  String?                      // kitchen only — "lead" | "prep" (null = unset)
   created_at    DateTime @default(now())
 
   production_logs    KitchenProductionLog[]
@@ -26,6 +27,8 @@ model User {
   sent_messages      KitchenMessage[] @relation("SentMessages")
   received_messages  KitchenMessage[] @relation("ReceivedMessages")
   approved_shortages KitchenProductionLog[] @relation("ApprovedShortages")
+  approved_bulk      KitchenProductionLog[] @relation("ApprovedBulk")
+  assigned_logs      KitchenProductionLog[] @relation("AssignedToLogs")
 }
 
 model Ingredient {
@@ -98,6 +101,7 @@ model SubRecipeComponent {
 
 model MealRecipe {
   id                    String   @id @default(uuid())
+  meal_code             String?  @unique // e.g. "BD-001"
   name                  String
   display_name          String
   category              String?
@@ -136,19 +140,54 @@ model MealRecipe {
   orders                Order[]
   production_plan_items ProductionPlanItem[]
   menu_queue_items      MenuQueueItem[]
+  portion_spec          PortionSpec?
+  tasting_sessions      PlanTastingSession[]
 
   @@index([name])
   @@index([category])
   @@index([linked_meal_id])
 }
 
+model PortionSpec {
+  id               String   @id @default(uuid())
+  meal_id          String   @unique
+  container_type   String?
+  total_weight_min Float?
+  total_weight_max Float?
+  general_notes    String?
+  tasting_notes    String?
+  created_at       DateTime @default(now())
+  updated_at       DateTime @updatedAt
+
+  meal       MealRecipe             @relation(fields: [meal_id], references: [id], onDelete: Cascade)
+  components PortionSpecComponent[]
+}
+
+model PortionSpecComponent {
+  id              String  @id @default(uuid())
+  spec_id         String
+  ingredient_name String
+  portion_min     Float?
+  portion_max     Float?
+  portion_unit    String? @default("g")
+  tool            String?
+  notes           String?
+  sort_order      Int     @default(0)
+
+  spec PortionSpec @relation(fields: [spec_id], references: [id], onDelete: Cascade)
+
+  @@index([spec_id])
+}
+
 model MealComponent {
-  id             String      @id @default(uuid())
-  meal_id        String
-  ingredient_id  String?
-  sub_recipe_id  String?
-  quantity       Float
-  unit           String      @default("gr")
+  id                String      @id @default(uuid())
+  meal_id           String
+  ingredient_id     String?
+  sub_recipe_id     String?
+  quantity          Float
+  unit              String      @default("gr")
+  sort_order        Int         @default(0)
+  portioning_notes  String?
 
   meal           MealRecipe  @relation(fields: [meal_id], references: [id], onDelete: Cascade)
   ingredient     Ingredient? @relation(fields: [ingredient_id], references: [id])
@@ -185,6 +224,8 @@ model ProductionPlan {
   kitchen_logs     KitchenProductionLog[]
   station_requests StationRequest[]
   station_tasks    StationTask[]
+  tasting_sessions PlanTastingSession[]
+  week_note        PlanWeekNote?
 
   @@index([week_start])
 }
@@ -206,15 +247,26 @@ model KitchenProductionLog {
   plan_id         String
   sub_recipe_id   String
   user_id         String
-  status          String   @default("not_started") // not_started | in_progress | done | short
+  status          String   @default("not_started") // not_started | in_progress | done | short | bulk
   qty_cooked      Float?
   weight_recorded Float?
   have_on_hand    Float?   // qty already available (reduces required cook amount)
   notes           String?
   cooked_by       String?   // freetext: who actually cooked it
+  started_at      DateTime? // set when status → in_progress (for time tracking)
+  // Shortage approval
   shortage_approved         Boolean   @default(false)
   shortage_approved_by_id   String?
   shortage_approved_at      DateTime?
+  // Bulk cooking approval
+  bulk_reason               String?   // reason for cooking extra
+  bulk_approved             Boolean   @default(false)
+  bulk_approved_by_id       String?
+  bulk_approved_at          DateTime?
+  // Station lead assignment + approval
+  assigned_to_id            String?   // prep cook this task is assigned to
+  lead_approved             Boolean   @default(false)
+  lead_approved_at          DateTime?
   logged_at       DateTime @default(now())
   updated_at      DateTime @updatedAt
 
@@ -222,9 +274,12 @@ model KitchenProductionLog {
   sub_recipe              SubRecipe      @relation(fields: [sub_recipe_id], references: [id])
   user                    User           @relation(fields: [user_id], references: [id])
   shortage_approved_by    User?          @relation("ApprovedShortages", fields: [shortage_approved_by_id], references: [id])
+  bulk_approved_by        User?          @relation("ApprovedBulk", fields: [bulk_approved_by_id], references: [id])
+  assigned_to             User?          @relation("AssignedToLogs", fields: [assigned_to_id], references: [id])
 
   @@unique([plan_id, sub_recipe_id, user_id])
   @@index([plan_id])
+  @@index([status])
 }
 
 model KitchenFeedback {
@@ -326,4 +381,32 @@ model KitchenMessage {
   @@index([to_station])
   @@index([to_user_id])
   @@index([from_user_id])
+}
+
+model PlanTastingSession {
+  id            String   @id @default(uuid())
+  plan_id       String
+  meal_id       String
+  taster_name   String?
+  tasting_notes String?
+  checked_steps Json     @default("[]")
+  created_at    DateTime @default(now())
+  updated_at    DateTime @updatedAt
+
+  plan ProductionPlan @relation(fields: [plan_id], references: [id], onDelete: Cascade)
+  meal MealRecipe     @relation(fields: [meal_id], references: [id], onDelete: Cascade)
+
+  @@unique([plan_id, meal_id])
+  @@index([plan_id])
+}
+
+model PlanWeekNote {
+  id         String   @id @default(uuid())
+  plan_id    String   @unique
+  heading    String?
+  notes      String?
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  plan ProductionPlan @relation(fields: [plan_id], references: [id], onDelete: Cascade)
 }

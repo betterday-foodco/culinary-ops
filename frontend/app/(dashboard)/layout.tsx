@@ -5,20 +5,25 @@ import { useRouter, usePathname } from 'next/navigation';
 import Link from 'next/link';
 
 const PRIMARY_NAV = [
-  { href: '/dashboard',          label: 'Dashboard',          icon: '⊞' },
-  { href: '/production',         label: 'Production Plans',   icon: '📅' },
-  { href: '/inventory',          label: 'Inventory',          icon: '📦' },
-  { href: '/meals',              label: 'Meal Recipes',       icon: '🍽' },
-  { href: '/menu-builder',       label: 'Menu Builder',       icon: '📋' },
-  { href: '/sub-recipes',        label: 'Sub-Recipes',        icon: '🍲' },
-  { href: '/ingredients',        label: 'Ingredients',        icon: '🥦' },
-  { href: '/feedback',           label: 'Recipe Feedback',    icon: '💬' },
+  { href: '/dashboard',    label: 'Dashboard',      icon: '⊞' },
+  { href: '/production',   label: 'Production Plans', icon: '📅' },
+  { href: '/inventory',    label: 'Inventory',       icon: '📦' },
+  { href: '/meals',        label: 'Meal Recipes',    icon: '🍽' },
+  { href: '/menu-builder', label: 'Menu Builder',    icon: '📋' },
+  { href: '/sub-recipes',  label: 'Sub-Recipes',     icon: '🍲' },
+  { href: '/ingredients',  label: 'Ingredients',     icon: '🥦' },
+];
+
+const KITCHEN_NAV = [
   { href: '/station-assignment', label: 'Station Assignment', icon: '📍' },
   { href: '/kitchen-messages',   label: 'Kitchen Messages',   icon: '💬' },
-  { href: '/shortages',          label: 'Shortages',          icon: '⚠️' },
+  { href: '/approvals',          label: 'Approvals',          icon: '✅' },
+  { href: '/feedback',           label: 'Recipe Feedback',    icon: '⭐' },
+  { href: '/settings/staff',     label: 'Kitchen Staff',      icon: '👨‍🍳' },
 ];
 
 const OTHER_NAV = [
+  { href: '/portion-specs',         label: 'Portion Specs',      icon: '⚖️' },
   { href: '/meals/pricing',         label: 'Meal Pricing',       icon: '💲' },
   { href: '/reports/meals',         label: 'Meals Report',       icon: '📋' },
   { href: '/reports/cooking',       label: 'Cooking Report',     icon: '👨‍🍳' },
@@ -34,12 +39,15 @@ export default function DashboardLayout({
   const router = useRouter();
   const pathname = usePathname();
   const [othersOpen, setOthersOpen] = useState(false);
+  const [kitchenOpen, setKitchenOpen] = useState(false);
   const [userRole, setUserRole] = useState<string>('');
 
-  // Auto-open Others if current page lives there
+  // Auto-open sections if current page lives there
   useEffect(() => {
     const inOthers = OTHER_NAV.some((n) => pathname.startsWith(n.href));
     if (inOthers) setOthersOpen(true);
+    const inKitchen = KITCHEN_NAV.some((n) => pathname.startsWith(n.href));
+    if (inKitchen) setKitchenOpen(true);
   }, [pathname]);
 
   useEffect(() => {
@@ -99,6 +107,41 @@ export default function DashboardLayout({
           {/* Divider */}
           <div className="my-3 border-t border-gray-100" />
 
+          {/* Manage Kitchen (collapsible) — admin only */}
+          {userRole === 'admin' && (
+            <div className="mb-1">
+              <button
+                onClick={() => setKitchenOpen((o) => !o)}
+                className="w-full flex items-center justify-between gap-2.5 px-3 py-2 rounded-lg text-sm text-gray-600 hover:bg-gray-100 hover:text-gray-900 transition-colors"
+              >
+                <div className="flex items-center gap-2.5">
+                  <span className="text-base leading-none">🍳</span>
+                  Manage Kitchen
+                </div>
+                <span className={`text-xs transition-transform ${kitchenOpen ? 'rotate-180' : ''}`}>▾</span>
+              </button>
+
+              {kitchenOpen && (
+                <div className="mt-0.5 ml-2 pl-3 border-l border-gray-100 space-y-0.5">
+                  {KITCHEN_NAV.map(({ href, label, icon }) => (
+                    <Link
+                      key={href}
+                      href={href}
+                      className={`flex items-center gap-2 px-2 py-1.5 rounded-lg text-xs transition-colors ${
+                        isActive(href)
+                          ? 'bg-brand-50 text-brand-700 font-medium'
+                          : 'text-gray-500 hover:bg-gray-100 hover:text-gray-700'
+                      }`}
+                    >
+                      <span className="leading-none">{icon}</span>
+                      {label}
+                    </Link>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
           {/* Settings */}
           <Link
             href="/settings"
@@ -111,21 +154,6 @@ export default function DashboardLayout({
             <span className="text-base leading-none">⚙</span>
             Settings
           </Link>
-
-          {/* Kitchen Staff link — admin only */}
-          {userRole === 'admin' && (
-            <Link
-              href="/settings/staff"
-              className={`flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm transition-colors ${
-                isActive('/settings/staff')
-                  ? 'bg-brand-50 text-brand-700 font-medium'
-                  : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'
-              }`}
-            >
-              <span className="text-base leading-none">👨‍🍳</span>
-              Kitchen Staff
-            </Link>
-          )}
 
           {/* Others (collapsible) */}
           <div className="mt-1">

@@ -16,7 +16,7 @@ export class UpsertProductionLogDto {
   @IsUUID()
   sub_recipe_id: string;
 
-  @IsEnum(['not_started', 'in_progress', 'done', 'short'])
+  @IsEnum(['not_started', 'in_progress', 'done', 'short', 'bulk'])
   status: string;
 
   @IsOptional()
@@ -41,6 +41,13 @@ export class UpsertProductionLogDto {
   @IsOptional()
   @IsString()
   cooked_by?: string;
+
+  @IsOptional()
+  @IsString()
+  bulk_reason?: string;
+
+  @IsOptional()
+  started_at?: string; // ISO date string — set when status first becomes in_progress
 }
 
 export class SendMessageDto {

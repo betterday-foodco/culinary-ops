@@ -144,6 +144,9 @@ export const api = {
   deleteMeal: (id: string) =>
     request<void>(`/meals/${id}`, { method: 'DELETE' }),
 
+  backfillMealCodes: () =>
+    request<{ updated: number }>('/meals/backfill-codes', { method: 'POST' }),
+
   // Meal component CRUD
   addMealComponent: (mealId: string, data: { ingredient_id?: string; sub_recipe_id?: string; quantity: number; unit: string }) =>
     request<any>(`/meals/${mealId}/components`, { method: 'POST', body: JSON.stringify(data) }),
@@ -153,6 +156,23 @@ export const api = {
 
   removeMealComponent: (mealId: string, componentId: string) =>
     request<void>(`/meals/${mealId}/components/${componentId}`, { method: 'DELETE' }),
+
+  uploadMealPhoto: (mealId: string, file: File) => {
+    const token = getToken();
+    const formData = new FormData();
+    formData.append('photo', file);
+    return fetch(`${API_URL}/meals/${mealId}/photo`, {
+      method: 'POST',
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+      body: formData,
+    }).then(async (res) => {
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ message: res.statusText }));
+        throw new Error(err.message ?? 'Upload failed');
+      }
+      return res.json() as Promise<{ id: string; image_url: string }>;
+    });
+  },
 
   // Orders
   getOrders: (startDate?: string, endDate?: string) => {
@@ -267,11 +287,14 @@ export const api = {
   upsertProductionLog: (data: {
     plan_id: string;
     sub_recipe_id: string;
-    status: 'not_started' | 'in_progress' | 'done';
+    status: 'not_started' | 'in_progress' | 'done' | 'short' | 'bulk';
     qty_cooked?: number;
     weight_recorded?: number;
+    have_on_hand?: number;
     notes?: string;
     cooked_by?: string;
+    bulk_reason?: string;
+    started_at?: string;
   }) =>
     request<KitchenProductionLog>('/kitchen-portal/logs', {
       method: 'POST',
@@ -343,15 +366,55 @@ export const api = {
   approveShortage: (logId: string) =>
     request<KitchenProductionLog>(`/kitchen-portal/shortages/${logId}/approve`, { method: 'PATCH' }),
 
+  // Bulk Cooking Approval (admin)
+  getPendingBulk: () =>
+    request<BulkLog[]>('/kitchen-portal/bulk'),
+
+  approveBulk: (logId: string) =>
+    request<KitchenProductionLog>(`/kitchen-portal/bulk/${logId}/approve`, { method: 'PATCH' }),
+
+  // Admin: all messages
+  getAllKitchenMessages: () =>
+    request<KitchenMessage[]>('/kitchen-portal/messages/all'),
+
   // Station Assignment (admin)
   getStationAssignment: () =>
-    request<{ id: string; name: string | null; station: string | null }[]>('/kitchen-portal/station-assignment'),
+    request<StaffAssignment[]>('/kitchen-portal/station-assignment'),
 
   assignStation: (staffId: string, station: string | null) =>
-    request<{ id: string; name: string | null; station: string | null }>(
+    request<StaffAssignment>(
       `/kitchen-portal/station-assignment/${staffId}`,
       { method: 'PATCH', body: JSON.stringify({ station }) },
     ),
+
+  assignStationRole: (staffId: string, station_role: string | null) =>
+    request<StaffAssignment>(
+      `/kitchen-portal/station-assignment/${staffId}/role`,
+      { method: 'PATCH', body: JSON.stringify({ station_role }) },
+    ),
+
+  getStationPrepCooks: (station: string) =>
+    request<{ id: string; name: string | null; station_role: string | null }[]>(
+      `/kitchen-portal/station-prep-cooks?station=${encodeURIComponent(station)}`
+    ),
+
+  assignKitchenTask: (planId: string, subRecipeId: string, assignedToId: string | null) =>
+    request<{ count: number }>('/kitchen-portal/tasks/assign', {
+      method: 'PATCH',
+      body: JSON.stringify({ plan_id: planId, sub_recipe_id: subRecipeId, assigned_to_id: assignedToId }),
+    }),
+
+  leadApproveTask: (planId: string, subRecipeId: string) =>
+    request<{ count: number }>('/kitchen-portal/tasks/lead-approve', {
+      method: 'PATCH',
+      body: JSON.stringify({ plan_id: planId, sub_recipe_id: subRecipeId }),
+    }),
+
+  updateSubRecipePriority: (subRecipeId: string, priority: number) =>
+    request<{ id: string; priority: number }>(`/kitchen-portal/sub-recipes/${subRecipeId}/priority`, {
+      method: 'PATCH',
+      body: JSON.stringify({ priority }),
+    }),
 
   // Menu Queue
   getMenuQueue: () => request<MenuQueueResponse>('/menu-queues'),
@@ -394,6 +457,38 @@ export const api = {
 
   deleteStationTask: (id: string) =>
     request<{ message: string }>(`/station-tasks/${id}`, { method: 'DELETE' }),
+
+  // Portion Specs
+  getPortionSpecs: () => request<PortionSpec[]>('/portion-specs'),
+
+  getPortionSpecByMeal: (mealId: string) =>
+    request<PortionSpec | null>(`/portion-specs/${mealId}`).catch(() => null),
+
+  getPortionSpecsByPlan: (planId: string) =>
+    request<PortionSpec[]>(`/portion-specs/by-plan/${planId}`),
+
+  upsertPortionSpec: (data: UpsertPortionSpecData) =>
+    request<PortionSpec>('/portion-specs', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+
+  updatePortionSpec: (id: string, data: Partial<UpsertPortionSpecData>) =>
+    request<PortionSpec>(`/portion-specs/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    }),
+
+  deletePortionSpec: (id: string) =>
+    request<void>(`/portion-specs/${id}`, { method: 'DELETE' }),
+
+  // Plan tasting
+  getTastingSessions: (planId: string) => request<any[]>(`/plan-tasting/${planId}/sessions`),
+  upsertTastingSession: (data: { plan_id: string; meal_id: string; taster_name?: string; tasting_notes?: string; checked_steps?: number[] }) =>
+    request<any>('/plan-tasting/sessions', { method: 'POST', body: JSON.stringify(data) }),
+  getWeekNote: (planId: string) => request<{ heading?: string; notes?: string } | null>(`/plan-tasting/${planId}/week-note`).catch(() => null),
+  upsertWeekNote: (data: { plan_id: string; heading?: string; notes?: string }) =>
+    request<any>('/plan-tasting/week-note', { method: 'POST', body: JSON.stringify(data) }),
 };
 
 // ─── Types ──────────────────────────────────────────────────────────────────
@@ -467,9 +562,11 @@ export interface MealComponent {
 
 export interface MealRecipe {
   id: string;
+  meal_code: string | null;
   name: string;
   display_name: string;
   category: string | null;
+  is_active: boolean;
   final_yield_weight: number;
   pricing_override: number | null;
   computed_cost: number;
@@ -771,6 +868,7 @@ export interface AuthUser {
   role: string;
   name: string | null;
   station: string | null;
+  station_role: string | null;
 }
 
 // ─── Kitchen Staff types ──────────────────────────────────────────────────────
@@ -798,17 +896,48 @@ export interface KitchenProductionLog {
   plan_id: string;
   sub_recipe_id: string;
   user_id: string;
-  status: 'not_started' | 'in_progress' | 'done' | 'short';
+  status: 'not_started' | 'in_progress' | 'done' | 'short' | 'bulk';
   qty_cooked: number | null;
   weight_recorded: number | null;
   have_on_hand: number | null;
   notes: string | null;
   cooked_by: string | null;
+  started_at: string | null;
   shortage_approved: boolean;
   shortage_approved_at: string | null;
   shortage_approved_by: { id: string; name: string | null } | null;
+  bulk_reason: string | null;
+  bulk_approved: boolean;
+  bulk_approved_at: string | null;
+  bulk_approved_by: { id: string; name: string | null } | null;
+  assigned_to_id: string | null;
+  assigned_to: { id: string; name: string | null } | null;
+  lead_approved: boolean;
+  lead_approved_at: string | null;
   logged_at: string;
   updated_at: string;
+}
+
+export interface StaffAssignment {
+  id: string;
+  name: string | null;
+  station: string | null;
+  station_role: string | null; // 'lead' | 'prep' | null
+}
+
+export interface BulkLog {
+  id: string;
+  plan_id: string;
+  sub_recipe_id: string;
+  user_id: string;
+  status: string;
+  qty_cooked: number | null;
+  bulk_reason: string | null;
+  bulk_approved: boolean;
+  logged_at: string;
+  sub_recipe: { id: string; name: string; display_name: string | null; station_tag: string | null };
+  user: { id: string; name: string | null; station: string | null };
+  plan: { id: string; week_label: string };
 }
 
 export interface KitchenMessage {
@@ -886,15 +1015,23 @@ export interface KitchenTask {
   ingredients: PlanSubRecipeIngredient[];
   completed_by: string | null;
   log: {
-    status: 'not_started' | 'in_progress' | 'done' | 'short';
+    status: 'not_started' | 'in_progress' | 'done' | 'short' | 'bulk';
     qty_cooked: number | null;
     weight_recorded: number | null;
     have_on_hand: number | null;
     notes: string | null;
     cooked_by: string | null;
+    started_at: string | null;
     shortage_approved: boolean;
     shortage_approved_at: string | null;
     shortage_approved_by: { id: string; name: string | null } | null;
+    bulk_reason: string | null;
+    bulk_approved: boolean;
+    bulk_approved_by: { id: string; name: string | null } | null;
+    assigned_to_id: string | null;
+    assigned_to: { id: string; name: string | null } | null;
+    lead_approved: boolean;
+    lead_approved_at: string | null;
   };
 }
 
@@ -960,4 +1097,56 @@ export interface KitchenBoardResponse {
   pendingRequests: StationRequest[];
   stationTasks?: StationTask[];
   notPublished?: boolean;
+}
+
+// ─── Portion Specs types ───────────────────────────────────────────────────────
+
+export interface PortionSpecComponent {
+  id: string;
+  spec_id: string;
+  ingredient_name: string;
+  portion_min: number | null;
+  portion_max: number | null;
+  portion_unit: string | null;
+  tool: string | null;
+  notes: string | null;
+  sort_order: number;
+}
+
+export interface PortionSpec {
+  id: string;
+  meal_id: string;
+  container_type: string | null;
+  total_weight_min: number | null;
+  total_weight_max: number | null;
+  general_notes: string | null;
+  tasting_notes: string | null;
+  created_at: string;
+  updated_at: string;
+  meal?: {
+    id: string;
+    meal_code: string | null;
+    display_name: string;
+    image_url: string | null;
+    category: string | null;
+  };
+  components: PortionSpecComponent[];
+}
+
+export interface UpsertPortionSpecData {
+  meal_id: string;
+  container_type?: string;
+  total_weight_min?: number;
+  total_weight_max?: number;
+  general_notes?: string;
+  tasting_notes?: string;
+  components?: {
+    ingredient_name: string;
+    portion_min?: number;
+    portion_max?: number;
+    portion_unit?: string;
+    tool?: string;
+    notes?: string;
+    sort_order?: number;
+  }[];
 }

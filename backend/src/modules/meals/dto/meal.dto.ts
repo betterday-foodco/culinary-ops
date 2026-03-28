@@ -54,6 +54,14 @@ export class UpdateMealComponentDto {
   @IsOptional()
   @IsString()
   unit?: string;
+
+  @IsOptional()
+  @IsNumber()
+  sort_order?: number;
+
+  @IsOptional()
+  @IsString()
+  portioning_notes?: string;
 }
 
 export class CreateMealDto {

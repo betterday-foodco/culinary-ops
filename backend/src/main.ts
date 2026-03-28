@@ -1,12 +1,20 @@
 import { NestFactory } from '@nestjs/core';
 import { ValidationPipe } from '@nestjs/common';
 import { json, urlencoded } from 'express';
+import { NestExpressApplication } from '@nestjs/platform-express';
+import * as path from 'path';
+import * as fs from 'fs';
 import { AppModule } from './app.module';
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule, {
+  const app = await NestFactory.create<NestExpressApplication>(AppModule, {
     rawBody: true, // Required for Shopify webhook HMAC validation
   });
+
+  // Serve static files from public/meal-photos
+  const publicDir = path.join(process.cwd(), 'public');
+  fs.mkdirSync(path.join(publicDir, 'meal-photos'), { recursive: true });
+  app.useStaticAssets(publicDir);
 
   // Increase body size limit to allow base64-encoded meal images (up to ~10 MB)
   app.use(json({ limit: '10mb' }));

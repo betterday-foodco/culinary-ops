@@ -159,4 +159,76 @@ export class KitchenPortalController {
   ) {
     return this.service.assignStation(staffId, dto.station ?? null);
   }
+
+  /** PATCH /api/kitchen-portal/station-assignment/:staffId/role — admin assigns station role */
+  @Roles('admin')
+  @Patch('station-assignment/:staffId/role')
+  assignStationRole(
+    @Param('staffId', ParseUUIDPipe) staffId: string,
+    @Body() dto: { station_role: string | null },
+  ) {
+    return this.service.assignStationRole(staffId, dto.station_role ?? null);
+  }
+
+  // ── Admin messages (sees all) ──────────────────────────────────────────
+
+  /** GET /api/kitchen-portal/messages/all — admin: full message history */
+  @Roles('admin')
+  @Get('messages/all')
+  getAllMessages() {
+    return this.service.getAllMessages();
+  }
+
+  // ── Bulk Cooking Approval ──────────────────────────────────────────────
+
+  /** GET /api/kitchen-portal/bulk — admin: pending bulk cooking approvals */
+  @Roles('admin')
+  @Get('bulk')
+  getPendingBulk() {
+    return this.service.getPendingBulk();
+  }
+
+  /** PATCH /api/kitchen-portal/bulk/:logId/approve — admin approves bulk cooking */
+  @Roles('admin')
+  @Patch('bulk/:logId/approve')
+  approveBulk(
+    @Param('logId', ParseUUIDPipe) logId: string,
+    @Request() req: any,
+  ) {
+    return this.service.approveBulk(logId, req.user.id);
+  }
+
+  // ── Station Lead: task assignment + lead approval ──────────────────────
+
+  /** GET /api/kitchen-portal/station-prep-cooks?station=X — station lead: see prep cooks */
+  @Get('station-prep-cooks')
+  getStationPrepCooks(@Query('station') station: string) {
+    return this.service.getStationPrepCooks(station);
+  }
+
+  /** PATCH /api/kitchen-portal/tasks/assign — station lead assigns task to prep cook */
+  @Patch('tasks/assign')
+  assignTask(
+    @Body() dto: { plan_id: string; sub_recipe_id: string; assigned_to_id: string | null },
+  ) {
+    return this.service.assignTask(dto.plan_id, dto.sub_recipe_id, dto.assigned_to_id);
+  }
+
+  /** PATCH /api/kitchen-portal/tasks/lead-approve — station lead approves prep's completed task */
+  @Patch('tasks/lead-approve')
+  leadApproveTask(
+    @Body() dto: { plan_id: string; sub_recipe_id: string },
+    @Request() req: any,
+  ) {
+    return this.service.leadApproveTask(dto.plan_id, dto.sub_recipe_id, req.user.id);
+  }
+
+  /** PATCH /api/kitchen-portal/sub-recipes/:id/priority — update sub-recipe priority */
+  @Patch('sub-recipes/:id/priority')
+  updateSubRecipePriority(
+    @Param('id') id: string,
+    @Body() dto: { priority: number },
+  ) {
+    return this.service.updateSubRecipePriority(id, dto.priority);
+  }
 }

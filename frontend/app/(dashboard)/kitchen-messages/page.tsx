@@ -31,7 +31,7 @@ export default function AdminKitchenMessagesPage() {
   const load = useCallback(async () => {
     try {
       const [msgs, staffList] = await Promise.all([
-        api.getKitchenMessages(),
+        api.getAllKitchenMessages(),
         api.getKitchenStaff(),
       ]);
       setMessages(msgs.reverse());

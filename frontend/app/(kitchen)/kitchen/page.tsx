@@ -1,10 +1,30 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { api, KitchenTask, KitchenBoardResponse, StationRequest, StationTask, PlanSubRecipeIngredient } from '../../lib/api';
 
 type LogStatus = 'not_started' | 'in_progress' | 'done' | 'short';
 type View = 'overview' | 'station';
+
+// Live timer hook — returns formatted elapsed string from an ISO date
+function useLiveTimer(startedAt: string | null | undefined): string {
+  const [elapsed, setElapsed] = useState('');
+  useEffect(() => {
+    if (!startedAt) { setElapsed(''); return; }
+    function tick() {
+      const secs = Math.floor((Date.now() - new Date(startedAt!).getTime()) / 1000);
+      if (secs < 60) { setElapsed(`${secs}s`); return; }
+      const m = Math.floor(secs / 60); const s = secs % 60;
+      if (m < 60) { setElapsed(`${m}m ${s.toString().padStart(2,'0')}s`); return; }
+      const h = Math.floor(m / 60); const mm = m % 60;
+      setElapsed(`${h}h ${mm.toString().padStart(2,'0')}m`);
+    }
+    tick();
+    const id = setInterval(tick, 1000);
+    return () => clearInterval(id);
+  }, [startedAt]);
+  return elapsed;
+}
 
 interface TaskModal {
   task: KitchenTask;
@@ -20,6 +40,12 @@ interface TaskModal {
   reqDesc: string;
   reqQty: string;
   reqUnit: string;
+  bulkReason: string;
+}
+
+interface BulkConfirm {
+  qty: number;
+  needed: number;
 }
 
 const STATIONS = [
@@ -83,16 +109,55 @@ export default function KitchenBoardPage() {
   const [showIngredients, setShowIngredients] = useState(false);
   const [showInstructions, setShowInstructions] = useState(false);
   const [staffNames, setStaffNames] = useState<string[]>([]);
+  const [toast, setToast] = useState<string | null>(null);
+  const [bulkConfirm, setBulkConfirm] = useState<BulkConfirm | null>(null);
+  const lastUnreadRef = useRef<number | null>(null);
+  const [userStationRole, setUserStationRole] = useState<string | null>(null); // 'lead' | 'prep' | null
+  const [userId, setUserId] = useState('');
+  const [prepCooks, setPrepCooks] = useState<{ id: string; name: string | null; station_role: string | null }[]>([]);
+  const [overviewTab, setOverviewTab] = useState<'stations' | 'preplist'>('stations');
 
   useEffect(() => {
     const s = localStorage.getItem('user_station') ?? '';
     const n = localStorage.getItem('user_name') ?? '';
+    const id = localStorage.getItem('user_id') ?? '';
+    const role = localStorage.getItem('user_station_role') ?? null;
     setUserStation(s);
     setUserName(n);
+    setUserId(id);
+    setUserStationRole(role);
     api.getKitchenStaffNames()
       .then(staff => setStaffNames(staff.map(s => s.name ?? '').filter(Boolean).sort()))
       .catch(() => {});
+    // If station lead, fetch prep cooks for assignment dropdown
+    if (role === 'lead' && s) {
+      api.getStationPrepCooks(s).then(setPrepCooks).catch(() => {});
+    }
   }, []);
+
+  // Poll for new messages every 30s — show toast when unread count rises
+  useEffect(() => {
+    let mounted = true;
+    async function check() {
+      try {
+        const { unread } = await api.getKitchenUnreadCount();
+        if (lastUnreadRef.current !== null && unread > lastUnreadRef.current) {
+          setToast(`📩 You have ${unread} unread message${unread !== 1 ? 's' : ''}`);
+        }
+        if (mounted) lastUnreadRef.current = unread;
+      } catch {}
+    }
+    check();
+    const id = setInterval(check, 30_000);
+    return () => { mounted = false; clearInterval(id); };
+  }, []);
+
+  // Auto-dismiss toast after 4s
+  useEffect(() => {
+    if (!toast) return;
+    const id = setTimeout(() => setToast(null), 4000);
+    return () => clearTimeout(id);
+  }, [toast]);
 
   const loadOverview = useCallback(async () => {
     try {
@@ -138,6 +203,7 @@ export default function KitchenBoardPage() {
     const activeBoard = view === 'station' ? stationBoard : board;
     if (!activeBoard?.plan) return;
     try {
+      const now = new Date().toISOString();
       await api.upsertProductionLog({
         plan_id: activeBoard.plan.id,
         sub_recipe_id: task.sub_recipe_id,
@@ -145,33 +211,49 @@ export default function KitchenBoardPage() {
         qty_cooked: task.log.qty_cooked ?? undefined,
         weight_recorded: task.log.weight_recorded ?? undefined,
         notes: task.log.notes ?? undefined,
+        started_at: status === 'in_progress' && !task.log.started_at ? now : task.log.started_at ?? undefined,
       });
+      const startedAt = status === 'in_progress' && !task.log.started_at ? now : task.log.started_at;
       const updater = (prev: KitchenBoardResponse | null) => {
         if (!prev) return prev;
-        return { ...prev, tasks: prev.tasks.map((t) => t.sub_recipe_id === task.sub_recipe_id ? { ...t, log: { ...t.log, status } } : t) };
+        return { ...prev, tasks: prev.tasks.map((t) => t.sub_recipe_id === task.sub_recipe_id ? { ...t, log: { ...t.log, status, started_at: startedAt } } : t) };
       };
       setStationBoard(updater);
       setBoard(updater);
-      if (taskModal) setTaskModal({ ...taskModal, task: { ...taskModal.task, log: { ...taskModal.task.log, status } } });
+      if (taskModal) setTaskModal({ ...taskModal, task: { ...taskModal.task, log: { ...taskModal.task.log, status, started_at: startedAt } } });
     } catch (e: any) {
       alert(e.message ?? 'Failed to update status');
     }
   }
 
-  async function saveLog() {
+  async function saveLog(bulkReasonOverride?: string) {
     if (!taskModal) return;
     const activeBoard = view === 'station' ? stationBoard : board;
     if (!activeBoard?.plan) return;
+
+    const qtyCooked = taskModal.qty ? parseFloat(taskModal.qty) : undefined;
+    const haveOnHand = taskModal.haveOnHand ? parseFloat(taskModal.haveOnHand) : undefined;
+    const totalNeeded = taskModal.task.total_quantity ?? 0;
+    const totalAvailable = (qtyCooked ?? 0) + (haveOnHand ?? 0);
+
+    // Bulk detection: >20% over needed AND at least 0.5 Kgs extra → require reason
+    const isBulk = qtyCooked != null && totalNeeded > 0
+      && qtyCooked > totalNeeded * 1.20
+      && (qtyCooked - totalNeeded) >= 0.5;
+    if (isBulk && !bulkReasonOverride) {
+      setBulkConfirm({ qty: qtyCooked!, needed: totalNeeded });
+      return;
+    }
+
+    // Short auto-detection: combined total < 99% of needed
+    const effectiveStatus: 'not_started' | 'in_progress' | 'done' | 'short' | 'bulk' =
+      isBulk ? 'bulk'
+      : taskModal.task.log.status === 'done' && qtyCooked != null && totalAvailable < totalNeeded * 0.99
+        ? 'short'
+        : taskModal.task.log.status;
+
     setSaving(true);
     try {
-      const qtyCooked = taskModal.qty ? parseFloat(taskModal.qty) : undefined;
-      const haveOnHand = taskModal.haveOnHand ? parseFloat(taskModal.haveOnHand) : undefined;
-      const totalAvailable = (qtyCooked ?? 0) + (haveOnHand ?? 0);
-      const totalNeeded = taskModal.task.total_quantity ?? 0;
-      const effectiveStatus: LogStatus =
-        taskModal.task.log.status === 'done' && qtyCooked != null && totalAvailable < totalNeeded * 0.99
-          ? 'short'
-          : taskModal.task.log.status;
       await api.upsertProductionLog({
         plan_id: activeBoard.plan.id,
         sub_recipe_id: taskModal.task.sub_recipe_id,
@@ -181,6 +263,7 @@ export default function KitchenBoardPage() {
         have_on_hand: haveOnHand,
         notes: taskModal.notes || undefined,
         cooked_by: taskModal.cookedBy || undefined,
+        bulk_reason: isBulk ? (bulkReasonOverride || taskModal.bulkReason || undefined) : undefined,
       });
       const updater = (prev: KitchenBoardResponse | null) => {
         if (!prev) return prev;
@@ -188,14 +271,18 @@ export default function KitchenBoardPage() {
           ...prev,
           tasks: prev.tasks.map((t) =>
             t.sub_recipe_id === taskModal.task.sub_recipe_id
-              ? { ...t, log: { ...t.log, qty_cooked: taskModal.qty ? parseFloat(taskModal.qty) : null, weight_recorded: taskModal.weight ? parseFloat(taskModal.weight) : null, notes: taskModal.notes || null } }
+              ? { ...t, log: { ...t.log, status: effectiveStatus, qty_cooked: qtyCooked ?? null, weight_recorded: taskModal.weight ? parseFloat(taskModal.weight) : null, have_on_hand: haveOnHand ?? null, notes: taskModal.notes || null } }
               : t
           ),
         };
       };
       setStationBoard(updater);
       setBoard(updater);
+      setBulkConfirm(null);
       setTaskModal(null);
+
+      if (effectiveStatus === 'short') setToast('⚠️ Recorded as short — admin notified');
+      if (effectiveStatus === 'bulk') setToast('📦 Bulk cooking logged — awaiting admin approval');
     } catch (e: any) {
       alert(e.message ?? 'Failed to save log');
     } finally {
@@ -249,11 +336,46 @@ export default function KitchenBoardPage() {
     }
   }
 
+  async function handleAssignTask(task: KitchenTask, assignedToId: string | null) {
+    const activeBoard = view === 'station' ? stationBoard : board;
+    if (!activeBoard?.plan) return;
+    try {
+      await api.assignKitchenTask(activeBoard.plan.id, task.sub_recipe_id, assignedToId);
+      const assignedTo = assignedToId ? (prepCooks.find(p => p.id === assignedToId) ?? null) : null;
+      const updater = (prev: KitchenBoardResponse | null) => {
+        if (!prev) return prev;
+        return { ...prev, tasks: prev.tasks.map(t => t.sub_recipe_id === task.sub_recipe_id
+          ? { ...t, log: { ...t.log, assigned_to_id: assignedToId, assigned_to: assignedTo ? { id: assignedTo.id, name: assignedTo.name } : null } }
+          : t) };
+      };
+      setStationBoard(updater);
+      setBoard(updater);
+      setToast(assignedToId ? `✅ Task assigned to ${assignedTo?.name ?? 'prep cook'}` : 'Assignment removed');
+    } catch (e: any) { alert(e.message ?? 'Failed to assign'); }
+  }
+
+  async function handleLeadApprove(task: KitchenTask) {
+    const activeBoard = view === 'station' ? stationBoard : board;
+    if (!activeBoard?.plan) return;
+    try {
+      await api.leadApproveTask(activeBoard.plan.id, task.sub_recipe_id);
+      const updater = (prev: KitchenBoardResponse | null) => {
+        if (!prev) return prev;
+        return { ...prev, tasks: prev.tasks.map(t => t.sub_recipe_id === task.sub_recipe_id
+          ? { ...t, log: { ...t.log, lead_approved: true, lead_approved_at: new Date().toISOString() } }
+          : t) };
+      };
+      setStationBoard(updater);
+      setBoard(updater);
+      setToast('✅ Task approved');
+    } catch (e: any) { alert(e.message ?? 'Failed to approve'); }
+  }
+
   function openTaskModal(task: KitchenTask) {
     setShowIngredients((task.ingredients?.length ?? 0) > 0);
     setShowInstructions(false);
     const defaultName = task.completed_by || localStorage.getItem('user_name') || '';
-    setTaskModal({ task, tab: 'record', qty: task.log.qty_cooked?.toString() ?? '', weight: task.log.weight_recorded?.toString() ?? '', haveOnHand: task.log.have_on_hand?.toString() ?? '', notes: task.log.notes ?? '', cookedBy: defaultName, rating: 5, comment: '', toStation: '', reqDesc: '', reqQty: '', reqUnit: 'Kgs' });
+    setTaskModal({ task, tab: 'record', qty: task.log.qty_cooked?.toString() ?? '', weight: task.log.weight_recorded?.toString() ?? '', haveOnHand: task.log.have_on_hand?.toString() ?? '', notes: task.log.notes ?? '', cookedBy: defaultName, rating: 5, comment: '', toStation: '', reqDesc: '', reqQty: '', reqUnit: 'Kgs', bulkReason: task.log.bulk_reason ?? '' });
   }
 
   function getStationStats(station: string) {
@@ -324,8 +446,33 @@ export default function KitchenBoardPage() {
     const allTotal = allTasks.length;
     const overallPct = allTotal > 0 ? Math.round((allDone / allTotal) * 100) : 0;
 
+    // Prep list: all tasks sorted by priority, grouped by station
+    const prepListTasks = [...allTasks].sort((a, b) => {
+      const aBottom = a.log.status === 'done' || a.log.status === 'short' ? 1 : 0;
+      const bBottom = b.log.status === 'done' || b.log.status === 'short' ? 1 : 0;
+      if (aBottom !== bBottom) return aBottom - bBottom;
+      return (a.priority ?? 5) - (b.priority ?? 5);
+    });
+    const prepListByStation = STATIONS.map(s => ({
+      station: s,
+      tasks: prepListTasks.filter(t => t.station_tag === s),
+    })).filter(g => g.tasks.length > 0);
+
+    const PRIORITY_LABELS: Record<number, { label: string; color: string }> = {
+      1: { label: '🌅 AM High', color: 'bg-red-100 text-red-700' },
+      3: { label: '☀️ Normal',  color: 'bg-blue-100 text-blue-700' },
+      5: { label: '🌙 PM/Later', color: 'bg-gray-100 text-gray-600' },
+    };
+
     return (
-      <div className="space-y-5">
+      <div className="space-y-4">
+        {/* Toast notification */}
+        {toast && (
+          <div className="fixed top-4 left-1/2 -translate-x-1/2 z-50 px-5 py-3 bg-gray-900 text-white text-sm font-semibold rounded-2xl shadow-xl flex items-center gap-2.5 max-w-[90vw]">
+            <span>{toast}</span>
+            <button onClick={() => setToast(null)} className="text-white/50 hover:text-white text-xs ml-1">✕</button>
+          </div>
+        )}
         {/* Greeting hero */}
         <div className="bg-gradient-to-br from-brand-700 to-brand-500 rounded-2xl p-5 text-white shadow-lg">
           <p className="text-white/70 text-sm font-medium">{getGreeting()}, {userName || 'Chef'} 👋</p>
@@ -346,6 +493,27 @@ export default function KitchenBoardPage() {
           </div>
         </div>
 
+        {/* Tab switcher */}
+        <div className="flex bg-gray-100 rounded-2xl p-1 gap-1">
+          <button
+            onClick={() => setOverviewTab('stations')}
+            className={`flex-1 py-2.5 rounded-xl text-sm font-bold transition-all ${overviewTab === 'stations' ? 'bg-white shadow-sm text-gray-900' : 'text-gray-500'}`}
+          >
+            Station Board
+          </button>
+          <button
+            onClick={() => setOverviewTab('preplist')}
+            className={`flex-1 py-2.5 rounded-xl text-sm font-bold transition-all ${overviewTab === 'preplist' ? 'bg-white shadow-sm text-gray-900' : 'text-gray-500'}`}
+          >
+            Prep List
+            {allTotal > 0 && (
+              <span className={`ml-1.5 text-[10px] px-1.5 py-0.5 rounded-full font-black ${allDone === allTotal ? 'bg-green-500 text-white' : 'bg-brand-500 text-white'}`}>
+                {allDone}/{allTotal}
+              </span>
+            )}
+          </button>
+        </div>
+
         {/* Incoming requests */}
         {pendingRequests.length > 0 && (
           <div className="space-y-2">
@@ -355,86 +523,210 @@ export default function KitchenBoardPage() {
           </div>
         )}
 
-        {/* Station Tasks */}
-        {(board.stationTasks ?? []).length > 0 && (
-          <div>
-            <h2 className="text-sm font-bold text-gray-700 mb-2 flex items-center gap-1.5">
-              <span className="w-5 h-5 bg-amber-400 rounded-md flex items-center justify-center text-[10px]">📌</span>
-              Station Tasks
-            </h2>
-            <div className="bg-white rounded-2xl border border-gray-200 divide-y divide-gray-100 shadow-sm overflow-hidden">
-              {(board.stationTasks ?? []).map((t: StationTask) => (
-                <StationTaskRow key={t.id} task={t} onToggle={async () => {
-                  try {
-                    if (t.completed_at) await api.uncompleteStationTask(t.id);
-                    else await api.completeStationTask(t.id);
-                    const data = await api.getKitchenBoard(undefined);
-                    setBoard(data);
-                  } catch {}
-                }} />
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* Station cards */}
-        <div>
-          <h2 className="text-sm font-bold text-gray-700 mb-3">Your Stations</h2>
-          <div className="grid grid-cols-2 gap-3">
-            {STATIONS.map((station) => {
-              const stats = getStationStats(station);
-              const isYours = station === userStation;
-              const cfg = getStationConfig(station);
-              const allDoneStation = stats.total > 0 && stats.pct === 100;
-
-              return (
-                <button
-                  key={station}
-                  onClick={() => openStation(station)}
-                  className={`relative rounded-2xl overflow-hidden text-left active:scale-[0.96] transition-transform shadow-sm ${isYours ? 'ring-2 ring-offset-2 ring-brand-400' : ''}`}
-                >
-                  {/* Card background */}
-                  <div className={`bg-gradient-to-br ${cfg.gradient} p-4`}>
-                    {/* Top row */}
-                    <div className="flex items-start justify-between mb-3">
-                      <div>
-                        <span className="text-2xl leading-none">{cfg.emoji}</span>
-                        {isYours && (
-                          <span className="ml-1.5 text-[9px] bg-white/20 text-white px-1.5 py-0.5 rounded-full font-bold uppercase tracking-wide">YOU</span>
+        {overviewTab === 'stations' ? (
+          <>
+            {/* Station Tasks */}
+            {(board.stationTasks ?? []).length > 0 && (
+              <div>
+                <h2 className="text-sm font-bold text-gray-700 mb-2 flex items-center gap-1.5">
+                  <span className="w-5 h-5 bg-amber-400 rounded-md flex items-center justify-center text-[10px]">📌</span>
+                  Station Tasks
+                </h2>
+                <div className="bg-white rounded-2xl border border-gray-200 divide-y divide-gray-100 shadow-sm overflow-hidden">
+                  {(board.stationTasks ?? []).map((t: StationTask) => (
+                    <StationTaskRow key={t.id} task={t} onToggle={async () => {
+                      try {
+                        if (t.completed_at) await api.uncompleteStationTask(t.id);
+                        else await api.completeStationTask(t.id);
+                        const data = await api.getKitchenBoard(undefined);
+                        setBoard(data);
+                      } catch {}
+                    }} />
+                  ))}
+                </div>
+              </div>
+            )}
+            {/* Station cards */}
+            <div>
+              <h2 className="text-sm font-bold text-gray-700 mb-3">All Stations</h2>
+              <div className="grid grid-cols-2 gap-3">
+                {STATIONS.map((station) => {
+                  const stats = getStationStats(station);
+                  const isYours = station === userStation;
+                  const cfg = getStationConfig(station);
+                  const allDoneStation = stats.total > 0 && stats.pct === 100;
+                  return (
+                    <button
+                      key={station}
+                      onClick={() => openStation(station)}
+                      className={`relative rounded-2xl overflow-hidden text-left active:scale-[0.96] transition-transform shadow-sm ${isYours ? 'ring-2 ring-offset-2 ring-brand-400' : ''}`}
+                    >
+                      <div className={`bg-gradient-to-br ${cfg.gradient} p-4`}>
+                        <div className="flex items-start justify-between mb-3">
+                          <div>
+                            <span className="text-2xl leading-none">{cfg.emoji}</span>
+                            {isYours && (
+                              <span className="ml-1.5 text-[9px] bg-white/20 text-white px-1.5 py-0.5 rounded-full font-bold uppercase tracking-wide">YOU</span>
+                            )}
+                          </div>
+                          <div className="relative">
+                            <ProgressRing pct={stats.pct} size={44} stroke={4} color={cfg.accent} />
+                            <div className="absolute inset-0 flex items-center justify-center">
+                              <span className="text-white text-[10px] font-black">{stats.pct}%</span>
+                            </div>
+                          </div>
+                        </div>
+                        <p className="text-white font-bold text-xs leading-tight mb-2">{station}</p>
+                        {stats.total > 0 ? (
+                          <>
+                            <div className="flex items-center justify-between text-[10px] text-white/70 mb-1.5">
+                              <span>{stats.done} done · {stats.inProg} active</span>
+                              <span>{stats.total} total</span>
+                            </div>
+                            <div className="w-full h-1.5 bg-white/20 rounded-full overflow-hidden">
+                              <div className="h-1.5 rounded-full transition-all duration-500" style={{ width: `${stats.pct}%`, backgroundColor: allDoneStation ? '#4ade80' : 'rgba(255,255,255,0.9)' }} />
+                            </div>
+                          </>
+                        ) : (
+                          <p className="text-white/50 text-[10px]">No tasks assigned</p>
                         )}
                       </div>
-                      {/* Mini ring */}
-                      <div className="relative">
-                        <ProgressRing pct={stats.pct} size={44} stroke={4} color={cfg.accent} />
-                        <div className="absolute inset-0 flex items-center justify-center">
-                          <span className="text-white text-[10px] font-black">{stats.pct}%</span>
-                        </div>
-                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          </>
+        ) : (
+          /* ── Prep List ── */
+          <div className="space-y-5">
+            {prepListByStation.length === 0 ? (
+              <div className="text-center py-12 text-gray-400 text-sm">No tasks for this week yet.</div>
+            ) : prepListByStation.map(({ station, tasks: stTasks }) => {
+              const cfg = getStationConfig(station);
+              const doneCount = stTasks.filter(t => t.log.status === 'done').length;
+              return (
+                <div key={station}>
+                  {/* Station section header */}
+                  <div className={`flex items-center justify-between px-3 py-2 rounded-xl bg-gradient-to-r ${cfg.gradient} mb-2`}>
+                    <div className="flex items-center gap-2">
+                      <span className="text-lg">{cfg.emoji}</span>
+                      <span className="text-white font-bold text-sm">{station}</span>
+                      {station === userStation && (
+                        <span className="text-[9px] bg-white/20 text-white px-1.5 py-0.5 rounded-full font-bold uppercase tracking-wide">YOU</span>
+                      )}
                     </div>
-
-                    {/* Station name */}
-                    <p className="text-white font-bold text-xs leading-tight mb-2">{station}</p>
-
-                    {/* Stats row */}
-                    {stats.total > 0 ? (
-                      <>
-                        <div className="flex items-center justify-between text-[10px] text-white/70 mb-1.5">
-                          <span>{stats.done} done · {stats.inProg} active</span>
-                          <span>{stats.total} total</span>
-                        </div>
-                        <div className="w-full h-1.5 bg-white/20 rounded-full overflow-hidden">
-                          <div className="h-1.5 rounded-full transition-all duration-500" style={{ width: `${stats.pct}%`, backgroundColor: allDoneStation ? '#4ade80' : 'rgba(255,255,255,0.9)' }} />
-                        </div>
-                      </>
-                    ) : (
-                      <p className="text-white/50 text-[10px]">No tasks assigned</p>
-                    )}
+                    <span className="text-white/80 text-xs font-semibold">{doneCount}/{stTasks.length}</span>
                   </div>
-                </button>
+                  <div className="space-y-1.5">
+                    {stTasks.map((task) => {
+                      const isDone = task.log.status === 'done' || task.log.status === 'short';
+                      const isInProg = task.log.status === 'in_progress';
+                      const priInfo = PRIORITY_LABELS[task.priority ?? 3] ?? PRIORITY_LABELS[3];
+                      return (
+                        <button
+                          key={task.sub_recipe_id}
+                          onClick={() => openTaskModal(task)}
+                          className={`w-full flex items-center gap-3 px-3 py-3 rounded-xl border text-left transition-all active:scale-[0.99] ${
+                            isDone ? 'bg-green-50 border-green-200' : isInProg ? 'bg-blue-50 border-blue-200' : 'bg-white border-gray-200 hover:bg-gray-50'
+                          }`}
+                        >
+                          {/* Status dot */}
+                          <div className={`w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0 text-sm ${
+                            isDone ? 'bg-green-500 text-white' : isInProg ? 'bg-blue-500 text-white' : 'bg-gray-100 text-gray-400'
+                          }`}>
+                            {isDone ? '✓' : isInProg ? '▶' : '○'}
+                          </div>
+                          {/* Name + qty */}
+                          <div className="flex-1 min-w-0">
+                            <p className={`text-sm font-semibold truncate ${isDone ? 'line-through text-gray-400' : 'text-gray-900'}`}>
+                              {task.name}
+                            </p>
+                            <p className="text-xs text-gray-400 mt-0.5">
+                              {task.total_quantity?.toFixed(2)} {task.unit}
+                              {task.log.qty_cooked != null && !isDone && (
+                                <span className="ml-1.5 text-blue-500 font-medium">· {task.log.qty_cooked} done</span>
+                              )}
+                            </p>
+                          </div>
+                          {/* Priority badge */}
+                          <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold flex-shrink-0 ${priInfo.color}`}>
+                            {priInfo.label}
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
               );
             })}
           </div>
-        </div>
+        )}
+
+        {/* Task modal rendered in overview mode */}
+        {bulkConfirm && taskModal && (
+          <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-end sm:items-center justify-center p-4">
+            <div className="bg-white rounded-3xl p-6 w-full max-w-sm shadow-2xl text-center space-y-4">
+              <div className="text-4xl">📦</div>
+              <h3 className="text-lg font-black text-gray-900">Bulk Cooking Alert</h3>
+              <p className="text-sm text-gray-600 leading-relaxed">
+                You're logging <span className="font-bold text-amber-600">{bulkConfirm.qty.toFixed(2)} {taskModal.task.unit}</span> but only{' '}
+                <span className="font-bold">{bulkConfirm.needed.toFixed(2)} {taskModal.task.unit}</span> was needed.
+              </p>
+              <p className="text-xs text-gray-400 mt-1">That's {Math.round((bulkConfirm.qty / bulkConfirm.needed - 1) * 100)}% extra. Admin will be notified.</p>
+              <div className="text-left">
+                <label className="block text-xs font-bold text-gray-700 uppercase tracking-wide mb-1.5">WHY ARE YOU COOKING EXTRA? *</label>
+                <textarea
+                  rows={3}
+                  className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-amber-300"
+                  placeholder="e.g. Prepping for tomorrow, batch efficiency…"
+                  value={taskModal.bulkReason}
+                  onChange={(e) => setTaskModal({ ...taskModal, bulkReason: e.target.value })}
+                />
+              </div>
+              <div className="flex gap-3">
+                <button onClick={() => setBulkConfirm(null)} className="flex-1 py-3 rounded-2xl border border-gray-200 text-gray-600 font-semibold text-sm">Cancel</button>
+                <button
+                  onClick={() => { if (!taskModal.bulkReason.trim()) return; saveLog(taskModal.bulkReason); }}
+                  disabled={!taskModal.bulkReason.trim() || saving}
+                  className="flex-1 py-3 rounded-2xl bg-amber-500 text-white font-black text-sm disabled:opacity-50"
+                >
+                  {saving ? 'Saving…' : 'Confirm & Save'}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+        {taskModal && !bulkConfirm && (
+          <TaskDetailModal
+            task={taskModal.task}
+            modal={taskModal}
+            saving={saving}
+            showIngredients={showIngredients}
+            showInstructions={showInstructions}
+            stations={STATIONS.filter((s) => s !== taskModal.task.station_tag)}
+            staffNames={staffNames}
+            stationCfg={getStationConfig(taskModal.task.station_tag ?? userStation)}
+            onClose={() => { setTaskModal(null); setBulkConfirm(null); }}
+            onStatusChange={(s) => handleStatusChange(taskModal.task, s)}
+            onTabChange={(tab) => setTaskModal({ ...taskModal, tab })}
+            onQtyChange={(v) => setTaskModal({ ...taskModal, qty: v })}
+            onHaveOnHandChange={(v) => setTaskModal({ ...taskModal, haveOnHand: v })}
+            onNotesChange={(v) => setTaskModal({ ...taskModal, notes: v })}
+            onCookedByChange={(v) => setTaskModal({ ...taskModal, cookedBy: v })}
+            onSaveLog={saveLog}
+            onRatingChange={(v) => setTaskModal({ ...taskModal, rating: v })}
+            onCommentChange={(v) => setTaskModal({ ...taskModal, comment: v })}
+            onSaveFeedback={saveFeedback}
+            onToStationChange={(v) => setTaskModal({ ...taskModal, toStation: v })}
+            onReqDescChange={(v) => setTaskModal({ ...taskModal, reqDesc: v })}
+            onReqQtyChange={(v) => setTaskModal({ ...taskModal, reqQty: v })}
+            onReqUnitChange={(v) => setTaskModal({ ...taskModal, reqUnit: v })}
+            onSaveRequest={saveRequest}
+            onToggleIngredients={() => setShowIngredients((p) => !p)}
+            onToggleInstructions={() => setShowInstructions((p) => !p)}
+          />
+        )}
       </div>
     );
   }
@@ -525,70 +817,168 @@ export default function KitchenBoardPage() {
         </div>
       ) : (
         <div className="space-y-2">
+          {/* Prep cook: "Assigned to you" banner */}
+          {userStationRole === 'prep' && filteredTasks.some(t => t.log.assigned_to_id === userId) && (
+            <div className="bg-brand-50 border border-brand-200 rounded-2xl px-4 py-2.5 flex items-center gap-2 mb-1">
+              <span className="text-brand-600 font-black text-sm">📌 Assigned to you today</span>
+            </div>
+          )}
           {filteredTasks.map((task) => {
             const isDone = task.log.status === 'done';
             const isInProgress = task.log.status === 'in_progress';
             const ingCount = task.ingredients?.length ?? 0;
+            const isAssignedToMe = task.log.assigned_to_id === userId;
+            const needsLeadApproval = userStationRole === 'lead' && isDone && !task.log.lead_approved;
 
             return (
-              <button
-                key={task.sub_recipe_id}
-                onClick={() => openTaskModal(task)}
-                className={`w-full flex items-center gap-3 px-4 py-3.5 rounded-2xl border text-left active:scale-[0.98] transition-all shadow-sm
-                  ${isDone ? 'bg-green-50 border-green-200' : isInProgress ? 'bg-blue-50 border-blue-200' : 'bg-white border-gray-200 hover:border-gray-300 hover:shadow-md'}`}
-              >
-                {/* Status badge */}
-                <div className={`w-9 h-9 flex-shrink-0 rounded-xl flex items-center justify-center font-black text-sm
-                  ${isDone ? 'bg-green-500 text-white' : isInProgress ? 'bg-blue-500 text-white' : 'bg-gray-100 text-gray-600'}`}>
-                  {isDone ? '✓' : isInProgress ? '▶' : task.priority ?? '·'}
-                </div>
-
-                {/* Info */}
-                <div className="flex-1 min-w-0">
-                  <p className={`text-sm font-semibold leading-tight ${isDone ? 'line-through text-gray-400' : isInProgress ? 'text-blue-900' : 'text-gray-900'}`}>
-                    {task.display_name || task.name}
-                  </p>
-                  <div className="flex flex-wrap items-center gap-x-2 mt-0.5">
-                    <span className="text-xs text-gray-500">
-                      {(task.total_quantity ?? 0).toFixed(2)} {task.unit}
-                    </span>
-                    {task.log.qty_cooked != null && (
-                      <span className="text-xs text-green-600 font-medium">· Made: {task.log.qty_cooked}</span>
-                    )}
-                    {isDone && task.completed_by && (
-                      <span className="text-xs text-green-600 font-semibold">· {task.completed_by}</span>
-                    )}
-                    {ingCount > 0 && !isDone && (
-                      <span className="text-[10px] bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded-full font-medium">{ingCount} ings</span>
-                    )}
+              <div key={task.sub_recipe_id} className={`rounded-2xl border shadow-sm overflow-hidden ${
+                isAssignedToMe && !isDone ? 'border-brand-400 ring-2 ring-brand-200' :
+                isDone ? 'border-green-200' : isInProgress ? 'border-blue-200' : 'border-gray-200'
+              }`}>
+                <button
+                  onClick={() => openTaskModal(task)}
+                  className={`w-full flex items-center gap-3 px-4 py-3.5 text-left active:scale-[0.99] transition-all
+                    ${isAssignedToMe && !isDone ? 'bg-brand-50' : isDone ? 'bg-green-50' : isInProgress ? 'bg-blue-50' : 'bg-white hover:bg-gray-50'}`}
+                >
+                  {/* Status badge */}
+                  <div className={`w-9 h-9 flex-shrink-0 rounded-xl flex items-center justify-center font-black text-sm
+                    ${isDone ? 'bg-green-500 text-white' : isInProgress ? 'bg-blue-500 text-white' : isAssignedToMe ? 'bg-brand-500 text-white' : 'bg-gray-100 text-gray-600'}`}>
+                    {isDone ? '✓' : isInProgress ? '▶' : isAssignedToMe ? '→' : task.priority ?? '·'}
                   </div>
-                </div>
 
-                {/* Status pill */}
-                <div className="flex-shrink-0 flex flex-col items-end gap-1">
-                  {task.priority === 1 && !isDone && (
-                    <span className="text-[9px] bg-red-500 text-white px-1.5 py-0.5 rounded-full font-black uppercase tracking-wide">HIGH</span>
-                  )}
-                  {task.log.status === 'short' || (isDone && task.log.qty_cooked != null && (task.log.qty_cooked + (task.log.have_on_hand ?? 0)) < (task.total_quantity ?? 0) * 0.99) ? (
-                    <span className={`text-[10px] px-2 py-1 rounded-full font-bold ${task.log.shortage_approved ? 'bg-amber-400 text-white' : 'bg-red-500 text-white'}`}>
-                      {task.log.shortage_approved ? 'Short ✓' : 'Short'}
-                    </span>
-                  ) : isDone ? (
-                    <span className="text-[10px] bg-green-500 text-white px-2 py-1 rounded-full font-bold">Done</span>
+                  {/* Info */}
+                  <div className="flex-1 min-w-0">
+                    <p className={`text-sm font-semibold leading-tight ${isDone ? 'line-through text-gray-400' : isInProgress ? 'text-blue-900' : isAssignedToMe ? 'text-brand-900' : 'text-gray-900'}`}>
+                      {task.display_name || task.name}
+                    </p>
+                    <div className="flex flex-wrap items-center gap-x-2 mt-0.5">
+                      <span className="text-xs text-gray-500">
+                        {(task.total_quantity ?? 0).toFixed(2)} {task.unit}
+                      </span>
+                      {task.log.qty_cooked != null && (
+                        <span className="text-xs text-green-600 font-medium">· Made: {task.log.qty_cooked}</span>
+                      )}
+                      {isDone && task.completed_by && (
+                        <span className="text-xs text-green-600 font-semibold">· {task.completed_by}</span>
+                      )}
+                      {task.log.assigned_to && !isAssignedToMe && (
+                        <span className="text-[10px] bg-brand-100 text-brand-700 px-1.5 py-0.5 rounded-full font-medium">→ {task.log.assigned_to.name}</span>
+                      )}
+                      {ingCount > 0 && !isDone && (
+                        <span className="text-[10px] bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded-full font-medium">{ingCount} ings</span>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Status pill + timer */}
+                  <div className="flex-shrink-0 flex flex-col items-end gap-1">
+                    {task.priority === 1 && !isDone && (
+                      <span className="text-[9px] bg-red-500 text-white px-1.5 py-0.5 rounded-full font-black uppercase tracking-wide">HIGH</span>
+                    )}
+                    {task.log.status === 'short' || (isDone && task.log.qty_cooked != null && (task.log.qty_cooked + (task.log.have_on_hand ?? 0)) < (task.total_quantity ?? 0) * 0.99) ? (
+                      <span className={`text-[10px] px-2 py-1 rounded-full font-bold ${task.log.shortage_approved ? 'bg-amber-400 text-white' : 'bg-red-500 text-white'}`}>
+                        {task.log.shortage_approved ? 'Short ✓' : 'Short'}
+                      </span>
+                    ) : task.log.status === 'bulk' ? (
+                      <span className={`text-[10px] px-2 py-1 rounded-full font-bold ${task.log.bulk_approved ? 'bg-green-500 text-white' : 'bg-amber-500 text-white'}`}>
+                        {task.log.bulk_approved ? 'Bulk ✓' : 'Bulk'}
+                      </span>
+                    ) : isDone ? (
+                      <span className={`text-[10px] px-2 py-1 rounded-full font-bold ${task.log.lead_approved ? 'bg-green-600 text-white' : 'bg-green-500 text-white'}`}>
+                        {task.log.lead_approved ? 'Done ✓' : 'Done'}</span>
                   ) : isInProgress ? (
-                    <span className="text-[10px] bg-blue-500 text-white px-2 py-1 rounded-full font-bold">Active</span>
+                    <>
+                      <span className="text-[10px] bg-blue-500 text-white px-2 py-1 rounded-full font-bold">Active</span>
+                      <TaskTimer startedAt={task.log.started_at} />
+                    </>
                   ) : (
                     <span className="text-gray-300 text-lg">›</span>
                   )}
-                </div>
-              </button>
+                  </div>
+                </button>
+
+                {/* Station lead controls: assign to prep + approve */}
+                {userStationRole === 'lead' && prepCooks.length > 0 && (
+                  <div className="flex items-center gap-2 px-4 pb-2.5 bg-inherit">
+                    <select
+                      value={task.log.assigned_to_id ?? ''}
+                      onChange={e => handleAssignTask(task, e.target.value || null)}
+                      className="flex-1 text-xs bg-white border border-gray-200 rounded-xl px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-brand-400"
+                    >
+                      <option value="">Assign to prep cook…</option>
+                      {prepCooks.map(p => (
+                        <option key={p.id} value={p.id}>{p.name ?? 'Staff'}</option>
+                      ))}
+                    </select>
+                    {needsLeadApproval && (
+                      <button
+                        onClick={e => { e.stopPropagation(); handleLeadApprove(task); }}
+                        className="text-xs bg-green-500 text-white px-3 py-1.5 rounded-xl font-bold hover:bg-green-600 transition-colors flex-shrink-0"
+                      >
+                        ✓ Approve
+                      </button>
+                    )}
+                  </div>
+                )}
+              </div>
             );
           })}
         </div>
       )}
 
+      {/* Toast notification */}
+      {toast && (
+        <div className="fixed top-4 left-1/2 -translate-x-1/2 z-50 px-5 py-3 bg-gray-900 text-white text-sm font-semibold rounded-2xl shadow-xl animate-fade-in flex items-center gap-2.5 max-w-[90vw]">
+          <span>{toast}</span>
+          <button onClick={() => setToast(null)} className="text-white/50 hover:text-white text-xs ml-1">✕</button>
+        </div>
+      )}
+
+      {/* Bulk confirm modal */}
+      {bulkConfirm && taskModal && (
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 px-4 backdrop-blur-sm">
+          <div className="bg-white rounded-3xl p-6 w-full max-w-sm shadow-2xl">
+            <div className="text-center mb-5">
+              <div className="text-5xl mb-3">📦</div>
+              <h2 className="text-lg font-black text-gray-900">Bulk Cooking Alert</h2>
+              <p className="text-sm text-gray-500 mt-1.5">
+                You're logging <span className="font-bold text-amber-600">{bulkConfirm.qty.toFixed(2)} {taskModal.task.unit}</span> but only{' '}
+                <span className="font-bold">{bulkConfirm.needed.toFixed(2)} {taskModal.task.unit}</span> was needed.
+              </p>
+              <p className="text-xs text-gray-400 mt-1">That's {Math.round((bulkConfirm.qty / bulkConfirm.needed - 1) * 100)}% extra. Admin will be notified.</p>
+            </div>
+            <div className="mb-4">
+              <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest block mb-1.5">Why are you cooking extra? *</label>
+              <textarea
+                rows={3}
+                value={taskModal.bulkReason}
+                onChange={(e) => setTaskModal({ ...taskModal, bulkReason: e.target.value })}
+                placeholder="e.g. Getting ahead for tomorrow, correcting waste, catering order…"
+                className="w-full px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-amber-400 resize-none"
+                autoFocus
+              />
+            </div>
+            <div className="flex gap-2">
+              <button
+                onClick={() => { setBulkConfirm(null); setSaving(false); }}
+                className="flex-1 py-3 bg-gray-100 text-gray-700 rounded-2xl text-sm font-bold hover:bg-gray-200 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => { if (!taskModal.bulkReason.trim()) return; saveLog(taskModal.bulkReason); }}
+                disabled={!taskModal.bulkReason.trim() || saving}
+                className="flex-1 py-3 bg-amber-500 text-white rounded-2xl text-sm font-bold hover:bg-amber-600 disabled:opacity-40 transition-colors"
+              >
+                {saving ? 'Saving…' : 'Log Bulk Cooking'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Task detail modal */}
-      {taskModal && (
+      {taskModal && !bulkConfirm && (
         <TaskDetailModal
           task={taskModal.task}
           modal={taskModal}
@@ -619,6 +1009,18 @@ export default function KitchenBoardPage() {
         />
       )}
     </div>
+  );
+}
+
+// ── Task Timer ────────────────────────────────────────────────────────────────
+function TaskTimer({ startedAt }: { startedAt: string | null | undefined }) {
+  const elapsed = useLiveTimer(startedAt);
+  if (!elapsed) return null;
+  const secs = startedAt ? Math.floor((Date.now() - new Date(startedAt).getTime()) / 1000) : 0;
+  const color = secs < 1800 ? 'text-green-600' : secs < 3600 ? 'text-amber-600' : 'text-red-600';
+  const bg = secs < 1800 ? 'bg-green-50' : secs < 3600 ? 'bg-amber-50' : 'bg-red-50';
+  return (
+    <span className={`text-[10px] font-black px-1.5 py-0.5 rounded-full ${bg} ${color}`}>⏱ {elapsed}</span>
   );
 }
 
@@ -663,6 +1065,17 @@ function PendingRequestBanner({ req, onAck, onDone }: { req: StationRequest; onA
         </div>
       </div>
     </div>
+  );
+}
+
+// ── Modal Timer ───────────────────────────────────────────────────────────────
+function ModalTimer({ startedAt }: { startedAt: string }) {
+  const elapsed = useLiveTimer(startedAt);
+  const secs = Math.floor((Date.now() - new Date(startedAt).getTime()) / 1000);
+  const bg = secs < 1800 ? 'bg-green-400/30 text-green-100' : secs < 3600 ? 'bg-amber-400/30 text-amber-100' : 'bg-red-400/30 text-red-100';
+  const msg = secs < 1800 ? '🔥 Great pace!' : secs < 3600 ? '⏳ Keep going!' : '⚡ Push through!';
+  return (
+    <span className={`text-[10px] font-black px-2 py-0.5 rounded-full ${bg}`}>⏱ {elapsed} · {msg}</span>
   );
 }
 
@@ -748,7 +1161,12 @@ function TaskDetailModal({
                 </span>
               </div>
               <h2 className="text-lg font-black text-white leading-tight">{name}</h2>
-              <p className="text-white/70 text-sm mt-0.5 font-medium">{(task.total_quantity ?? 0).toFixed(2)} {task.unit}</p>
+              <div className="flex items-center gap-2 mt-0.5">
+                <p className="text-white/70 text-sm font-medium">{(task.total_quantity ?? 0).toFixed(2)} {task.unit}</p>
+                {isInProgress && task.log.started_at && (
+                  <ModalTimer startedAt={task.log.started_at} />
+                )}
+              </div>
             </div>
             <button onClick={onClose} className="w-8 h-8 bg-white/20 hover:bg-white/30 rounded-full flex items-center justify-center text-white text-sm transition-colors flex-shrink-0">
               ✕
@@ -854,9 +1272,9 @@ function TaskDetailModal({
                   </div>
                 )}
 
-                {/* Status buttons */}
+                {/* Status buttons — Short is auto-detected on save */}
                 <div className="flex gap-1.5 flex-wrap">
-                  {(['not_started', 'in_progress', 'done', 'short'] as const).map((s) => {
+                  {(['not_started', 'in_progress', 'done'] as const).map((s) => {
                     const blockDone = s === 'done' && !allIngsChecked && !isDone;
                     const isActive = task.log.status === s;
                     return (
@@ -869,16 +1287,24 @@ function TaskDetailModal({
                           : isActive
                             ? s === 'done' ? 'bg-green-500 text-white border-green-500 shadow-sm'
                               : s === 'in_progress' ? 'bg-blue-500 text-white border-blue-500 shadow-sm'
-                              : s === 'short' ? 'bg-red-500 text-white border-red-500 shadow-sm'
                               : 'bg-gray-200 text-gray-700 border-gray-300'
-                            : s === 'short' ? 'border-red-200 text-red-500 hover:bg-red-50'
                             : 'border-gray-200 text-gray-500 hover:bg-gray-50 hover:border-gray-300'
                         }`}>
-                        {s === 'not_started' ? '○ Not Started' : s === 'in_progress' ? '▶ Active' : s === 'done' ? '✓ Done' : '⚠ Short'}
+                        {s === 'not_started' ? '○ Not Started' : s === 'in_progress' ? '▶ Active' : '✓ Done'}
                       </button>
                     );
                   })}
                 </div>
+                {/* Auto-shortage / bulk notice */}
+                {(task.log.status === 'short' || task.log.status === 'bulk') && (
+                  <div className={`mt-1 px-3 py-2 rounded-xl text-xs font-semibold border ${
+                    task.log.status === 'bulk' ? 'bg-amber-50 border-amber-200 text-amber-700' : 'bg-red-50 border-red-200 text-red-700'
+                  }`}>
+                    {task.log.status === 'short'
+                      ? task.log.shortage_approved ? '✓ Shortage approved' : '⚠️ System detected short — awaiting admin approval'
+                      : task.log.bulk_approved ? '✓ Bulk cooking approved' : '📦 Bulk cooking logged — awaiting admin approval'}
+                  </div>
+                )}
 
                 {ingCount > 0 && !allIngsChecked && !isDone && (
                   <div className="mt-2 flex items-center gap-1.5 px-3 py-2 bg-amber-50 rounded-xl border border-amber-200">
@@ -924,7 +1350,7 @@ function TaskDetailModal({
 
               {/* Save button */}
               <button
-                onClick={onSaveLog}
+                onClick={() => onSaveLog()}
                 disabled={saving}
                 className="w-full py-4 bg-gray-900 text-white rounded-2xl text-sm font-black hover:bg-gray-800 disabled:opacity-50 transition-all active:scale-[0.98] shadow-sm"
               >
