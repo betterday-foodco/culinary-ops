@@ -79,6 +79,7 @@ model SubRecipe {
   kitchen_logs      KitchenProductionLog[]
   feedback          KitchenFeedback[]
   station_requests  StationRequest[]
+  number_updates    ProductionNumberUpdate[]
 
   @@index([sub_recipe_code])
   @@index([station_tag])
@@ -226,6 +227,7 @@ model ProductionPlan {
   station_tasks    StationTask[]
   tasting_sessions PlanTastingSession[]
   week_note        PlanWeekNote?
+  number_updates   ProductionNumberUpdate[]
 
   @@index([week_start])
 }
@@ -409,4 +411,55 @@ model PlanWeekNote {
   updated_at DateTime @updatedAt
 
   plan ProductionPlan @relation(fields: [plan_id], references: [id], onDelete: Cascade)
+}
+
+model ProductionNumberUpdate {
+  id            String   @id @default(uuid())
+  plan_id       String
+  sub_recipe_id String
+  wednesday_qty Float
+  thursday_qty  Float?
+  unit          String?
+  shortage      Boolean  @default(false)
+  shortage_note String?
+  updated_at    DateTime @updatedAt
+  created_at    DateTime @default(now())
+
+  plan       ProductionPlan @relation(fields: [plan_id], references: [id], onDelete: Cascade)
+  sub_recipe SubRecipe      @relation(fields: [sub_recipe_id], references: [id], onDelete: Cascade)
+
+  @@unique([plan_id, sub_recipe_id])
+  @@index([plan_id])
+}
+
+model SystemTag {
+  id          String   @id @default(uuid())
+  name        String
+  type        String   // allergens, proteins, badges, diets, menu-cats, ingredient-cats, suppliers, storage
+  subtype     String?  // Allergen, Dislike, Protein, Filter, Badge, Plan, Category, Supplier, Location
+  source      String   @default("dish") // ingredient, dish, computed
+  visible     Boolean  @default(true)
+  label_bold  Boolean  @default(false)
+  rule        String?  // computed rule expression
+  emoji       String?
+  sort_order  Int      @default(0)
+  created_at  DateTime @default(now())
+  updated_at  DateTime @updatedAt
+
+  connections_from TagConnection[] @relation("ConnectionFrom")
+  connections_to   TagConnection[] @relation("ConnectionTo")
+}
+
+model TagConnection {
+  id           String    @id @default(uuid())
+  from_tag_id  String
+  to_tag_id    String
+  relationship String    // blocks, triggers, linked, composed
+  description  String?
+  created_at   DateTime  @default(now())
+
+  from_tag SystemTag @relation("ConnectionFrom", fields: [from_tag_id], references: [id], onDelete: Cascade)
+  to_tag   SystemTag @relation("ConnectionTo", fields: [to_tag_id], references: [id], onDelete: Cascade)
+
+  @@unique([from_tag_id, to_tag_id, relationship])
 }

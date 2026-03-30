@@ -50,7 +50,7 @@ export default function KitchenLayout({ children }: { children: React.ReactNode 
     <div className="min-h-screen bg-gray-50 flex flex-col">
       {/* Top header */}
       <header className="bg-white border-b border-gray-200 sticky top-0 z-20">
-        <div className="max-w-2xl mx-auto px-4 h-14 flex items-center justify-between">
+        <div className="max-w-3xl mx-auto px-4 md:px-6 h-14 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <span className="w-9 h-9 bg-bd-yellow rounded-xl flex items-center justify-center text-brand-700 font-black text-xs tracking-tight shadow-sm">BD</span>
             <div>
@@ -69,11 +69,11 @@ export default function KitchenLayout({ children }: { children: React.ReactNode 
       </header>
 
       {/* Page content */}
-      <main className="flex-1 max-w-2xl mx-auto w-full px-4 py-4 pb-24">{children}</main>
+      <main className="flex-1 max-w-3xl mx-auto w-full px-4 md:px-6 py-4 pb-24">{children}</main>
 
       {/* Bottom nav */}
       <nav className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-100 z-20 safe-area-pb shadow-[0_-4px_20px_rgba(0,0,0,0.06)]">
-        <div className="max-w-2xl mx-auto px-2 flex items-center justify-around">
+        <div className="max-w-3xl mx-auto px-2 flex items-center justify-around">
           {tabs.map(({ href, label, icon, badge }) => {
             const active = pathname === href;
             return (

@@ -13,7 +13,7 @@ import {
   PortionSpec,
 } from '../../../lib/api';
 
-type Tab = 'plan' | 'sub-recipes' | 'shopping' | 'tasks' | 'portion-specs';
+type Tab = 'plan' | 'sub-recipes' | 'shopping' | 'tasks' | 'portion-specs' | 'numbers';
 
 const STATUS_OPTIONS = ['draft', 'confirmed', 'completed'];
 const STATUS_STYLES: Record<string, string> = {
@@ -71,6 +71,11 @@ export default function ProductionPlanPage() {
   const [weekNoteHeading, setWeekNoteHeading] = useState('');
   const [weekNoteNotes, setWeekNoteNotes] = useState('');
   const [weekNoteSaving, setWeekNoteSaving] = useState(false);
+
+  // Production numbers (Wed/Thu tracking)
+  const [productionNumbers, setProductionNumbers] = useState<any[]>([]);
+  const [numbersLoaded, setNumbersLoaded] = useState(false);
+  const [shortages, setShortages] = useState<any[]>([]);
 
   // Station tasks
   const [stationTasks, setStationTasks] = useState<StationTask[]>([]);
@@ -162,6 +167,11 @@ export default function ProductionPlanPage() {
     if (t === 'shopping' && !shoppingList) loadShoppingList();
     if (t === 'tasks') loadStationTasks();
     if (t === 'portion-specs') loadPortionSpecs();
+    if (t === 'numbers' && !numbersLoaded) {
+      Promise.all([api.getProductionNumbers(id), api.getProductionShortages(id)])
+        .then(([nums, shorts]) => { setProductionNumbers(nums); setShortages(shorts); setNumbersLoaded(true); })
+        .catch(console.error);
+    }
   }
 
   async function handleAddTask() {
@@ -310,6 +320,7 @@ export default function ProductionPlanPage() {
           [
             ['plan', '📋 Plan Items'],
             ['sub-recipes', '🍳 Sub-Recipe Report'],
+            ['numbers', '📊 Numbers'],
             ['shopping', '🛒 Shopping List'],
             ['tasks', '✅ Station Tasks'],
             ['portion-specs', '⚖️ Portion Specs'],
@@ -384,7 +395,28 @@ export default function ProductionPlanPage() {
                     const lineCost = qty * cost;
                     return (
                     <tr key={item.id} className="hover:bg-gray-50">
-                      <td className="px-4 py-3 font-medium text-gray-900">{item.meal.display_name}</td>
+                      <td className="px-4 py-3">
+                        <div className="flex items-center gap-2">
+                          {(item.meal as any).image_url ? (
+                            <img
+                              src={(item.meal as any).image_url}
+                              alt={item.meal.display_name}
+                              className="w-9 h-9 rounded-lg object-cover flex-shrink-0"
+                            />
+                          ) : (
+                            <div className="w-9 h-9 rounded-lg bg-gray-100 flex items-center justify-center flex-shrink-0 text-base">🍽️</div>
+                          )}
+                          <a
+                            href={`/meals/${item.meal_id}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="font-medium text-blue-600 hover:underline cursor-pointer"
+                            onClick={e => e.stopPropagation()}
+                          >
+                            {item.meal.display_name}
+                          </a>
+                        </div>
+                      </td>
                       <td className="px-4 py-3">
                         {item.meal.category ? (
                           <span className="px-2 py-0.5 bg-orange-50 text-orange-700 rounded text-xs">
@@ -417,18 +449,23 @@ export default function ProductionPlanPage() {
                         )}
                       </td>
                       <td className="px-4 py-3">
-                        <input
-                          type="number"
-                          min={0}
-                          value={quantities[item.meal_id] ?? 0}
-                          onChange={(e) =>
-                            setQuantities((prev) => ({
-                              ...prev,
-                              [item.meal_id]: parseInt(e.target.value) || 0,
-                            }))
-                          }
-                          className="w-20 px-2 py-1 border border-gray-300 rounded text-sm text-center focus:outline-none focus:ring-1 focus:ring-brand-500"
-                        />
+                        <div className="flex items-center gap-1">
+                          <button
+                            onClick={() => setQuantities(prev => ({ ...prev, [item.meal_id]: Math.max(0, (prev[item.meal_id] ?? 0) - 1) }))}
+                            className="w-7 h-7 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold flex items-center justify-center text-lg leading-none"
+                          >−</button>
+                          <input
+                            type="number"
+                            min={0}
+                            value={quantities[item.meal_id] ?? 0}
+                            onChange={(e) => setQuantities(prev => ({ ...prev, [item.meal_id]: parseInt(e.target.value) || 0 }))}
+                            className="w-16 text-center border border-slate-200 rounded-lg px-1 py-1 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-400"
+                          />
+                          <button
+                            onClick={() => setQuantities(prev => ({ ...prev, [item.meal_id]: (prev[item.meal_id] ?? 0) + 1 }))}
+                            className="w-7 h-7 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold flex items-center justify-center text-lg leading-none"
+                          >+</button>
+                        </div>
                       </td>
                       <td className="px-4 py-3">
                         {lineCost > 0 ? (
@@ -825,6 +862,104 @@ export default function ProductionPlanPage() {
         </div>
       )}
 
+      {/* ── Tab: Production Numbers ── */}
+      {tab === 'numbers' && (
+        <div>
+          {/* Shortage alerts */}
+          {shortages.length > 0 && (
+            <div className="mb-6 bg-red-50 border border-red-200 rounded-xl p-4">
+              <div className="font-bold text-red-800 mb-2">Shortage Alerts ({shortages.length})</div>
+              <div className="space-y-2">
+                {shortages.map((s: any) => (
+                  <div key={s.id} className="flex items-center gap-3 bg-white border border-red-100 rounded-lg px-3 py-2">
+                    <span className="text-red-500">!</span>
+                    <div>
+                      <span className="font-medium text-slate-800">{s.sub_recipe.name}</span>
+                      <span className="ml-2 text-sm text-red-600">{s.shortage_note}</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Numbers table */}
+          <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
+            <div className="px-4 py-3 border-b border-slate-200 flex items-center justify-between">
+              <div>
+                <div className="font-semibold text-slate-800">Production Numbers</div>
+                <div className="text-xs text-slate-500 mt-0.5">
+                  Wednesday = projected · Thursday = updated final · Shortage = Thursday &gt; Wednesday
+                </div>
+              </div>
+            </div>
+            <table className="w-full text-sm">
+              <thead className="bg-slate-50 border-b border-slate-200">
+                <tr>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase">Sub-Recipe</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase">Station</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase">Wednesday (Original)</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase">Thursday (Updated)</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase">Status</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {productionNumbers.length === 0 ? (
+                  <tr>
+                    <td colSpan={5} className="px-4 py-10 text-center text-slate-400">
+                      No numbers entered yet. Numbers will appear here once Wednesday projections are set from the Sub-Recipe Report.
+                    </td>
+                  </tr>
+                ) : productionNumbers.map((n: any) => (
+                  <tr key={n.id} className={n.shortage ? 'bg-red-50' : 'hover:bg-slate-50'}>
+                    <td className="px-4 py-3">
+                      <a href={`/sub-recipes/${n.sub_recipe.id}`} className="font-medium text-blue-600 hover:underline">
+                        {n.sub_recipe.name}
+                      </a>
+                    </td>
+                    <td className="px-4 py-3 text-slate-600">{n.sub_recipe.station_tag ?? '—'}</td>
+                    <td className="px-4 py-3 font-medium">{n.wednesday_qty} {n.unit}</td>
+                    <td className="px-4 py-3">
+                      <input
+                        type="number"
+                        defaultValue={n.thursday_qty ?? ''}
+                        placeholder="Enter updated qty..."
+                        className="border border-slate-300 rounded-lg px-2 py-1 text-sm w-32 focus:outline-none focus:ring-2 focus:ring-blue-400"
+                        onBlur={async (e) => {
+                          const val = parseFloat(e.target.value);
+                          if (!isNaN(val)) {
+                            await api.updateThursdayNumber(id, n.sub_recipe.id, val);
+                            const [nums, shorts] = await Promise.all([
+                              api.getProductionNumbers(id),
+                              api.getProductionShortages(id),
+                            ]);
+                            setProductionNumbers(nums);
+                            setShortages(shorts);
+                          }
+                        }}
+                      />
+                    </td>
+                    <td className="px-4 py-3">
+                      {n.shortage ? (
+                        <span className="text-xs bg-red-100 text-red-700 px-2 py-0.5 rounded-full font-medium">
+                          Shortage
+                        </span>
+                      ) : n.thursday_qty != null ? (
+                        <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full">
+                          Updated
+                        </span>
+                      ) : (
+                        <span className="text-xs text-slate-400">Pending</span>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
         {/* ── Tab: Portion Specs ── */}
         {tab === 'portion-specs' && (
         <div className="space-y-5">
@@ -893,25 +1028,39 @@ export default function ProductionPlanPage() {
               </p>
             </div>
           ) : (() => {
+            const isVegan = (cat: string) => {
+              const c = cat.toLowerCase();
+              return c.includes('plant') || c.includes('vegan') || c.includes('vegetarian') || c.includes('veggie') || c.startsWith('wc');
+            };
             const filteredSpecs = portionSpecs.filter(spec => {
               if (psFilter === 'all') return true;
-              const cat = (spec.meal?.category ?? '').toLowerCase();
-              const isVegan = cat.includes('vegan') || cat.includes('plant') || cat.includes('vegetarian') || cat.includes('veggie');
-              return psFilter === 'vegan' ? isVegan : !isVegan;
+              const cat = spec.meal?.category ?? '';
+              return psFilter === 'vegan' ? isVegan(cat) : !isVegan(cat);
             });
+            const veganCount = portionSpecs.filter(s => isVegan(s.meal?.category ?? '')).length;
+            const meatCount = portionSpecs.length - veganCount;
             return (
             <>
             {/* Filter buttons */}
             <div className="flex gap-2 mb-4">
-              {(['all', 'vegan', 'meat'] as const).map(f => (
-                <button
-                  key={f}
-                  onClick={() => setPsFilter(f)}
-                  className={`px-3 py-1.5 rounded-lg text-sm font-medium ${psFilter === f ? 'bg-slate-800 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}
-                >
-                  {f === 'all' ? '📋 All' : f === 'vegan' ? '🥦 Vegan' : '🍗 Meat'}
-                </button>
-              ))}
+              <button
+                onClick={() => setPsFilter('all')}
+                className={`px-3 py-1.5 rounded-lg text-sm font-medium ${psFilter === 'all' ? 'bg-slate-800 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}
+              >
+                📋 All ({portionSpecs.length})
+              </button>
+              <button
+                onClick={() => setPsFilter('vegan')}
+                className={`px-3 py-1.5 rounded-lg text-sm font-medium ${psFilter === 'vegan' ? 'bg-slate-800 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}
+              >
+                🥦 Vegan ({veganCount})
+              </button>
+              <button
+                onClick={() => setPsFilter('meat')}
+                className={`px-3 py-1.5 rounded-lg text-sm font-medium ${psFilter === 'meat' ? 'bg-slate-800 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}
+              >
+                🍗 Meat ({meatCount})
+              </button>
               <span className="ml-auto text-sm text-slate-500 self-center">{filteredSpecs.length} meals</span>
             </div>
             <div className="grid grid-cols-1 gap-5">

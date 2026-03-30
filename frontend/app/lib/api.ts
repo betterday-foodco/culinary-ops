@@ -127,8 +127,21 @@ export const api = {
 
   // Meals
   getMeals: () => request<MealRecipe[]>('/meals'),
+  searchMeals: (q: string) => request<MealRecipe[]>(`/meals?search=${encodeURIComponent(q)}`),
 
   getMeal: (id: string) => request<MealRecipe>(`/meals/${id}`),
+
+  getSuggestedVariants: (mealId: string) => request<any[]>(`/meals/${mealId}/suggested-variants`),
+  linkMealVariant: (mealId: string, linkedId: string) =>
+    request<any>(`/meals/${mealId}/link-variant`, {
+      method: 'PATCH',
+      body: JSON.stringify({ linked_meal_id: linkedId }),
+    }),
+  unlinkMealVariant: (mealId: string) =>
+    request<any>(`/meals/${mealId}/link-variant`, {
+      method: 'PATCH',
+      body: JSON.stringify({ linked_meal_id: null }),
+    }),
 
   getMealPricing: () => request<MealPricing[]>('/meals/pricing'),
 
@@ -489,6 +502,32 @@ export const api = {
   getWeekNote: (planId: string) => request<{ heading?: string; notes?: string } | null>(`/plan-tasting/${planId}/week-note`).catch(() => null),
   upsertWeekNote: (data: { plan_id: string; heading?: string; notes?: string }) =>
     request<any>('/plan-tasting/week-note', { method: 'POST', body: JSON.stringify(data) }),
+
+  // Production Numbers (Wed/Thu tracking + shortage alerts)
+  getProductionNumbers: (planId: string) =>
+    request<any[]>(`/production-numbers/${planId}`),
+
+  getProductionShortages: (planId: string) =>
+    request<any[]>(`/production-numbers/${planId}/shortages`),
+
+  updateThursdayNumber: (planId: string, subRecipeId: string, qty: number) =>
+    request<any>(`/production-numbers/${planId}/${subRecipeId}/thursday`, {
+      method: 'PATCH',
+      body: JSON.stringify({ qty }),
+    }),
+
+  bulkSetWednesdayNumbers: (planId: string, entries: Array<{ sub_recipe_id: string; qty: number; unit?: string }>) =>
+    request<any>(`/production-numbers/${planId}/wednesday`, {
+      method: 'POST',
+      body: JSON.stringify({ entries }),
+    }),
+
+  // System Tags
+  getTags: () => request<any[]>('/tags'),
+  seedTags: () => request<any>('/tags/seed', { method: 'POST' }),
+  createTag: (data: any) => request<any>('/tags', { method: 'POST', body: JSON.stringify(data) }),
+  updateTag: (id: string, data: any) => request<any>(`/tags/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+  deleteTag: (id: string) => request<void>(`/tags/${id}`, { method: 'DELETE' }),
 };
 
 // ─── Types ──────────────────────────────────────────────────────────────────

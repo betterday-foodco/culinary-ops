@@ -46,11 +46,20 @@ interface SubRecipeDetail {
 
 type Tab = 'details' | 'components';
 
+const priorityLabel = (p: number) => ['', 'Wednesday', 'Thursday', 'Friday', 'Friday'][p] ?? `Day ${p}`;
+const priorityColor = (p: number) => [
+  '',
+  'bg-blue-100 text-blue-800',    // Wednesday
+  'bg-green-100 text-green-800',  // Thursday
+  'bg-orange-100 text-orange-800', // Friday
+  'bg-orange-100 text-orange-800', // Friday (p4)
+][p] ?? 'bg-gray-100 text-gray-700';
+
 const PRIORITY_INFO: Record<number, { label: string; color: string }> = {
-  1: { label: 'P1 – Critical', color: 'bg-red-100 text-red-700' },
-  2: { label: 'P2 – High',     color: 'bg-orange-100 text-orange-700' },
-  3: { label: 'P3 – Normal',   color: 'bg-yellow-100 text-yellow-700' },
-  4: { label: 'P4 – Low',      color: 'bg-blue-100 text-blue-700' },
+  1: { label: priorityLabel(1), color: priorityColor(1) },
+  2: { label: priorityLabel(2), color: priorityColor(2) },
+  3: { label: priorityLabel(3), color: priorityColor(3) },
+  4: { label: priorityLabel(4), color: priorityColor(4) },
   5: { label: 'P5 – Optional', color: 'bg-gray-100 text-gray-500' },
 };
 
@@ -214,7 +223,7 @@ export default function SubRecipeDetailPage() {
           <div className="flex items-center gap-3">
             <h1 className="text-2xl font-bold text-gray-900">{sr.name}</h1>
             <span className={`px-2 py-0.5 rounded text-xs font-bold ${pInfo.color}`}>
-              P{priority}
+              {pInfo.label}
             </span>
             <span
               className={`px-2 py-0.5 rounded-full text-xs font-medium ${
@@ -397,15 +406,17 @@ export default function SubRecipeDetailPage() {
                 )}
               </div>
               <div>
-                <label className="block text-xs font-medium text-gray-600 mb-1">Priority</label>
+                <label className="block text-xs font-medium text-gray-600 mb-1">Production Day</label>
                 <select
                   value={priority}
                   onChange={(e) => setPriority(Number(e.target.value))}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
                 >
-                  {[1, 2, 3, 4, 5].map((p) => (
-                    <option key={p} value={p}>{PRIORITY_INFO[p].label}</option>
-                  ))}
+                  <option value={1}>Wednesday</option>
+                  <option value={2}>Thursday</option>
+                  <option value={3}>Friday</option>
+                  <option value={4}>Friday (Late)</option>
+                  <option value={5}>P5 – Optional</option>
                 </select>
               </div>
               <div>

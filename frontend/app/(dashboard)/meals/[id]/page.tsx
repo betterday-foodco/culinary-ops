@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useMemo } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { api, Ingredient, SubRecipe, PortionSpec, PortionSpecComponent } from '../../../lib/api';
 
@@ -37,7 +37,7 @@ interface ComponentDetail {
   sub_recipe: { id: string; name: string; sub_recipe_code: string; station_tag: string | null; computed_cost: number; priority: number; base_yield_weight: number; base_yield_unit: string; } | null;
 }
 
-type Tab = 'details' | 'components' | 'portioning' | 'label' | 'pricing' | 'portion-specs';
+type Tab = 'details' | 'components' | 'label' | 'pricing' | 'portion-specs';
 
 // ─── Unit normalisation (mirrors cost-engine.service.ts) ──────────────────────
 function normalizeQty(quantity: number, fromUnit: string, toUnit: string): number {
@@ -156,6 +156,10 @@ export default function MealDetailPage() {
   const [linkedMealId, setLinkedMealId] = useState<string | null>(null);
   const [linkedMealSearch, setLinkedMealSearch] = useState('');
   const [allMeals, setAllMeals] = useState<MealVariant[]>([]);
+  // Variant suggestions
+  const [suggestedVariants, setSuggestedVariants] = useState<any[]>([]);
+  const [variantSearch, setVariantSearch] = useState('');
+  const [variantSearchResults, setVariantSearchResults] = useState<any[]>([]);
 
   // Component add state
   const [allIngredients, setAllIngredients] = useState<Ingredient[]>([]);
@@ -239,6 +243,24 @@ export default function MealDetailPage() {
       setAllMeals(m as MealVariant[]);
     });
   }, [loadMeal]);
+
+  // Load suggested variants once meal id is known
+  useEffect(() => {
+    if (id) {
+      api.getSuggestedVariants(id).then(setSuggestedVariants).catch(() => {});
+    }
+  }, [id]);
+
+  // Debounced variant search
+  useEffect(() => {
+    if (variantSearch.length < 2) { setVariantSearchResults([]); return; }
+    const t = setTimeout(() => {
+      api.searchMeals(variantSearch)
+        .then((results) => setVariantSearchResults(results.slice(0, 5)))
+        .catch(() => {});
+    }, 300);
+    return () => clearTimeout(t);
+  }, [variantSearch]);
 
   const loadPortionSpec = useCallback(async () => {
     if (portionSpecLoaded) return;
@@ -395,6 +417,25 @@ export default function MealDetailPage() {
     } catch (e: any) { alert(e.message); }
   }
 
+  async function handleLinkVariant(linkedId: string) {
+    try {
+      await api.linkMealVariant(id, linkedId);
+      setVariantSearch('');
+      setVariantSearchResults([]);
+      setLinkedMealSearch('');
+      await loadMeal();
+      api.getSuggestedVariants(id).then(setSuggestedVariants).catch(() => {});
+    } catch (e: any) { alert(e.message); }
+  }
+
+  async function handleUnlinkVariant() {
+    try {
+      await api.unlinkMealVariant(id);
+      await loadMeal();
+      api.getSuggestedVariants(id).then(setSuggestedVariants).catch(() => {});
+    } catch (e: any) { alert(e.message); }
+  }
+
   function handleImageFile(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -421,6 +462,13 @@ export default function MealDetailPage() {
     : allIngredients.filter((i) => !addSearch || i.internal_name.toLowerCase().includes(addSearch.toLowerCase()) || i.sku.toLowerCase().includes(addSearch.toLowerCase()) || (i.display_name ?? '').toLowerCase().includes(addSearch.toLowerCase()));
 
   const totalComponentCost = meal?.components.reduce((sum, c) => sum + componentCost(c), 0) ?? 0;
+
+  // Build lookup: ingredient_name (lowercase) → psComponent, for cross-referencing spec data
+  const specByName = useMemo(() => {
+    const map: Record<string, typeof psComponents[0]> = {};
+    psComponents.forEach(c => { map[c.ingredient_name.toLowerCase()] = c; });
+    return map;
+  }, [psComponents]);
 
   if (loading) return <div className="p-8 text-center text-gray-400">Loading meal...</div>;
   if (!meal) return <div className="p-8 text-center text-gray-400">Meal not found</div>;
@@ -510,6 +558,33 @@ export default function MealDetailPage() {
             <label className="block text-xs font-medium text-gray-500 mb-1">Final Yield (g)</label>
             <input type="number" min="0" value={finalYieldWeight} onChange={(e) => setFinalYieldWeight(e.target.value)}
               className="w-full px-2 py-1.5 border border-gray-200 rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-brand-400" />
+            <button
+              onClick={() => {
+                const components = meal?.components ?? [];
+                const totalG = components
+                  .filter(c => {
+                    const u = (c.unit ?? '').toLowerCase();
+                    return u === 'g' || u === 'gr' || u === 'gram' || u === 'grams' ||
+                           u === 'kg' || u === 'kgs' || u === 'kilo' || u === 'kilos' || u === 'kilogram' || u === 'kilograms';
+                  })
+                  .reduce((sum, c) => {
+                    const u = (c.unit ?? '').toLowerCase();
+                    const qty = (u === 'kg' || u === 'kgs' || u === 'kilo' || u === 'kilos' || u === 'kilogram' || u === 'kilograms')
+                      ? c.quantity * 1000
+                      : c.quantity;
+                    return sum + qty;
+                  }, 0);
+                if (totalG > 0) {
+                  setFinalYieldWeight(totalG.toString());
+                } else {
+                  alert('No gram-unit components found to calculate from');
+                }
+              }}
+              className="mt-1 px-2 py-1 text-xs bg-slate-100 hover:bg-slate-200 text-slate-600 rounded border border-slate-200 w-full"
+              title="Auto-calculate from ingredient quantities"
+            >
+              ⚡ Calc from components
+            </button>
           </div>
           <div>
             <label className="block text-xs font-medium text-gray-500 mb-1">Net Weight (kg)</label>
@@ -551,7 +626,6 @@ export default function MealDetailPage() {
             {([
               ['details',     'Details & Tags'],
               ['components',  `Ingredients (${meal.components.length})`],
-              ['portioning',    'Portioning'],
               ['portion-specs', 'Portion Specs'],
               ['label',         'Label & Macros'],
               ['pricing',       'Pricing'],
@@ -646,56 +720,75 @@ export default function MealDetailPage() {
                   </div>
                 </div>
 
-                {/* Linked Variant */}
-                <div className="bg-white rounded-xl border border-gray-200 p-5 space-y-3">
-                  <div className="flex items-center gap-2">
-                    <h2 className="text-sm font-semibold text-gray-700">Meat / Vegan Variant Link</h2>
-                    <span className="text-xs text-gray-400">Link to the counterpart version (e.g. Mango Chicken ↔ Mango Curry)</span>
-                  </div>
-                  {meal.linked_meal && (
-                    <div className="flex items-center gap-3 p-3 bg-blue-50 border border-blue-200 rounded-lg">
-                      <span className="text-blue-500">🔗</span>
-                      <div className="flex-1">
-                        <p className="text-sm font-medium text-blue-800">{meal.linked_meal.display_name}</p>
-                        <p className="text-xs text-blue-400">{meal.linked_meal.category}</p>
+                {/* Meal Variant Linking */}
+                <div className="border border-slate-200 rounded-xl p-4">
+                  <div className="font-semibold text-slate-800 mb-2">🔗 Meal Variant (Meat ↔ Vegan)</div>
+                  {meal.linked_meal ? (
+                    <div className="flex items-center justify-between bg-green-50 border border-green-200 rounded-lg px-3 py-2">
+                      <div>
+                        <span className="text-xs text-green-600 font-medium">Linked variant:</span>
+                        <a href={`/meals/${meal.linked_meal.id}`} className="ml-2 text-sm font-medium text-green-800 hover:underline">
+                          {meal.linked_meal.display_name}
+                        </a>
+                        {(meal.linked_meal as any).meal_code && (
+                          <span className="ml-1 text-xs text-green-600 font-mono">{(meal.linked_meal as any).meal_code}</span>
+                        )}
                       </div>
-                      <button onClick={() => router.push(`/meals/${meal.linked_meal!.id}`)}
-                        className="text-xs px-3 py-1 bg-blue-600 text-white rounded hover:bg-blue-700">
-                        Go to variant →
-                      </button>
-                      <button onClick={() => setLinkedMealId(null)} className="text-xs text-red-400 hover:text-red-600">Unlink</button>
+                      <button onClick={handleUnlinkVariant} className="text-xs text-red-500 hover:underline">Unlink</button>
                     </div>
-                  )}
-                  {meal.variant_meals.length > 0 && (
-                    <div className="flex flex-wrap gap-2">
-                      <span className="text-xs text-gray-500">Also linked from:</span>
-                      {meal.variant_meals.map((v) => (
-                        <button key={v.id} onClick={() => router.push(`/meals/${v.id}`)}
-                          className="text-xs px-2 py-1 bg-gray-100 text-gray-700 rounded hover:bg-gray-200">
-                          {v.display_name} ({v.category})
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                  {!meal.linked_meal && (
-                    <div className="space-y-2">
-                      <input type="text" placeholder="Search meal to link…" value={linkedMealSearch}
-                        onChange={(e) => setLinkedMealSearch(e.target.value)}
-                        className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-400" />
-                      {linkedMealSearch && (
-                        <div className="border border-gray-200 rounded-lg divide-y max-h-40 overflow-y-auto">
-                          {allMeals.filter((m) => m.id !== id && (
-                            m.display_name.toLowerCase().includes(linkedMealSearch.toLowerCase()) ||
-                            m.name.toLowerCase().includes(linkedMealSearch.toLowerCase())
-                          )).slice(0, 6).map((m) => (
-                            <button key={m.id} onClick={() => { setLinkedMealId(m.id); setLinkedMealSearch(''); }}
-                              className="w-full flex items-center justify-between px-3 py-2 hover:bg-gray-50 text-left">
-                              <p className="text-sm font-medium text-gray-800">{m.display_name}</p>
-                              <span className="text-xs px-2 py-0.5 rounded-full bg-gray-100 text-gray-600">{m.category}</span>
-                            </button>
+                  ) : (
+                    <div>
+                      <p className="text-xs text-slate-500 mb-2">Link this meal to its meat or vegan counterpart</p>
+                      {suggestedVariants.length > 0 ? (
+                        <div className="space-y-1">
+                          <div className="text-xs text-slate-500 font-medium mb-1">Suggested matches:</div>
+                          {suggestedVariants.map((v: any) => (
+                            <div key={v.id} className="flex items-center justify-between bg-slate-50 rounded-lg px-3 py-1.5">
+                              <div>
+                                <span className="text-sm text-slate-700">{v.display_name}</span>
+                                {v.meal_code && <span className="ml-1 text-xs text-slate-400 font-mono">{v.meal_code}</span>}
+                                <span className="ml-2 text-xs text-slate-400">{v.matchedWords?.join(', ')}</span>
+                              </div>
+                              <button
+                                onClick={() => handleLinkVariant(v.id)}
+                                className="text-xs px-2 py-0.5 bg-blue-600 text-white rounded hover:bg-blue-700"
+                              >Link</button>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <p className="text-xs text-slate-400 italic mb-2">No automatic matches found — search below</p>
+                      )}
+                      <div className="flex gap-2 mt-2">
+                        <input
+                          type="text"
+                          placeholder="Search meal to link..."
+                          value={variantSearch}
+                          onChange={(e) => setVariantSearch(e.target.value)}
+                          className="flex-1 border border-slate-200 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
+                        />
+                      </div>
+                      {variantSearchResults.length > 0 && (
+                        <div className="mt-1 border border-slate-200 rounded-lg overflow-hidden">
+                          {variantSearchResults.map((v: any) => (
+                            <div key={v.id} className="flex items-center justify-between px-3 py-1.5 hover:bg-slate-50 border-b border-slate-100 last:border-0">
+                              <span className="text-sm">{v.display_name} <span className="text-xs text-slate-400 font-mono">{v.meal_code}</span></span>
+                              <button onClick={() => handleLinkVariant(v.id)} className="text-xs px-2 py-0.5 bg-blue-600 text-white rounded hover:bg-blue-700">Link</button>
+                            </div>
                           ))}
                         </div>
                       )}
+                    </div>
+                  )}
+                  {meal.variant_meals.length > 0 && (
+                    <div className="flex flex-wrap gap-2 mt-2">
+                      <span className="text-xs text-gray-500">Also referenced from:</span>
+                      {meal.variant_meals.map((v) => (
+                        <button key={v.id} onClick={() => router.push(`/meals/${v.id}`)}
+                          className="text-xs px-2 py-1 bg-gray-100 text-gray-700 rounded hover:bg-gray-200">
+                          {v.display_name}
+                        </button>
+                      ))}
                     </div>
                   )}
                 </div>
@@ -887,118 +980,6 @@ export default function MealDetailPage() {
                   </div>
                 </div>
               </>
-            )}
-
-            {/* ══ TAB: Portioning ══════════════════════════════════════════════ */}
-            {tab === 'portioning' && (
-              <div className="space-y-5">
-                {/* Header */}
-                <div className="flex items-center justify-between">
-                  <div>
-                    <h2 className="text-base font-semibold text-gray-900">Portioning Instructions</h2>
-                    <p className="text-xs text-gray-400 mt-0.5">Step-by-step plating guide for kitchen staff. Add portioning notes per component.</p>
-                  </div>
-                  <div className="text-xs text-gray-400 bg-gray-50 border border-gray-200 rounded-lg px-3 py-1.5">
-                    {meal.components.length} component{meal.components.length !== 1 ? 's' : ''}
-                  </div>
-                </div>
-
-                {/* Column headers */}
-                <div className="hidden md:grid grid-cols-[40px_1fr_80px_1fr_90px] gap-3 px-4 py-2 bg-gray-50 rounded-lg text-xs font-semibold text-gray-500 uppercase tracking-wide">
-                  <div>Step</div>
-                  <div>Sub-Recipe</div>
-                  <div className="text-center">Target Qty</div>
-                  <div>Portioning Notes</div>
-                  <div></div>
-                </div>
-
-                {/* Portioning rows */}
-                {meal.components.length === 0 ? (
-                  <div className="text-center py-12 text-gray-400 bg-white rounded-xl border border-gray-200">
-                    No components yet. Add sub-recipes in the Ingredients tab first.
-                  </div>
-                ) : (
-                  <div className="space-y-2">
-                    {[...meal.components]
-                      .sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0))
-                      .map((comp, idx) => {
-                        const name = comp.sub_recipe?.name ?? comp.ingredient?.internal_name ?? 'Unknown';
-                        const code = comp.sub_recipe?.sub_recipe_code ?? comp.ingredient?.sku ?? '';
-                        const station = comp.sub_recipe?.station_tag;
-                        const saving = portSaving[comp.id];
-
-                        return (
-                          <div key={comp.id} className="bg-white rounded-xl border border-gray-200 p-4 grid grid-cols-[40px_1fr_80px_1fr_90px] gap-3 items-start">
-                            {/* Step number */}
-                            <div className="flex items-center justify-center">
-                              <span className="w-7 h-7 rounded-full bg-brand-100 text-brand-700 text-xs font-bold flex items-center justify-center">
-                                {idx + 1}
-                              </span>
-                            </div>
-
-                            {/* Sub-recipe info */}
-                            <div>
-                              <p className="font-medium text-gray-900 text-sm">{name}</p>
-                              <div className="flex items-center gap-2 mt-0.5">
-                                <span className="text-xs text-gray-400 font-mono">{code}</span>
-                                {station && (
-                                  <span className="text-[10px] bg-blue-50 text-blue-600 px-1.5 py-0.5 rounded-full">{station}</span>
-                                )}
-                              </div>
-                            </div>
-
-                            {/* Target qty */}
-                            <div className="text-center">
-                              <span className="text-sm font-bold text-gray-900">{comp.quantity}</span>
-                              <span className="text-xs text-gray-400 ml-0.5">{comp.unit}</span>
-                              <div className="text-[10px] text-gray-400 mt-0.5">
-                                ≈{Math.round(comp.quantity * 0.9)}–{Math.round(comp.quantity * 1.1)} acceptable
-                              </div>
-                            </div>
-
-                            {/* Notes input */}
-                            <textarea
-                              value={portNotes[comp.id] ?? ''}
-                              onChange={(e) => setPortNotes(n => ({ ...n, [comp.id]: e.target.value }))}
-                              placeholder="e.g. Spread evenly across base, layer first…"
-                              rows={2}
-                              className="w-full text-xs px-2.5 py-2 border border-gray-200 rounded-lg resize-none focus:outline-none focus:ring-2 focus:ring-brand-400 text-gray-700"
-                            />
-
-                            {/* Save notes button */}
-                            <div className="flex items-start pt-0.5">
-                              <button
-                                disabled={saving}
-                                onClick={async () => {
-                                  setPortSaving(s => ({ ...s, [comp.id]: true }));
-                                  try {
-                                    await api.updateMealComponent(id, comp.id, {
-                                      portioning_notes: portNotes[comp.id] || undefined,
-                                    } as any);
-                                  } catch (e: any) { alert(e.message); }
-                                  finally { setPortSaving(s => ({ ...s, [comp.id]: false })); }
-                                }}
-                                className="w-full px-3 py-1.5 bg-brand-600 text-white text-xs font-medium rounded-lg hover:bg-brand-700 disabled:opacity-50 transition-colors"
-                              >
-                                {saving ? '...' : 'Save'}
-                              </button>
-                            </div>
-                          </div>
-                        );
-                      })}
-                  </div>
-                )}
-
-                {/* Portioning tips */}
-                <div className="bg-amber-50 border border-amber-200 rounded-xl p-4">
-                  <p className="text-xs font-semibold text-amber-800 mb-1">📐 Portioning Tips</p>
-                  <ul className="text-xs text-amber-700 space-y-0.5 list-disc list-inside">
-                    <li>The ±10% range shown is a guideline — adjust based on your portion spec sheets.</li>
-                    <li>Notes are saved individually per component — click Save after each edit.</li>
-                    <li>Reorder components in the Ingredients tab (sort by priority).</li>
-                  </ul>
-                </div>
-              </div>
             )}
 
             {/* ══ TAB: Label & Macros ══════════════════════════════════════════ */}
@@ -1396,21 +1377,108 @@ export default function MealDetailPage() {
                   </div>
                 </div>
 
-                {/* Components table */}
+                {/* Components table — sourced from actual meal ingredients, cross-referenced with spec data */}
                 <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
                   <div className="px-5 py-3 border-b border-gray-100 flex items-center justify-between">
-                    <h2 className="text-sm font-semibold text-gray-700">Portioning Components ({psComponents.length})</h2>
+                    <h2 className="text-sm font-semibold text-gray-700">Portioning Components ({meal.components.length})</h2>
                     <button onClick={addPsComponent}
                       className="text-xs bg-brand-500 text-white px-3 py-1.5 rounded-lg hover:bg-brand-600 font-medium">
                       + Add Row
                     </button>
                   </div>
 
-                  {psComponents.length === 0 ? (
+                  {meal.components.length === 0 ? (
                     <div className="p-8 text-center text-sm text-gray-400">
-                      No components yet. Click "+ Add Row" to start building the portioning guide.
+                      No ingredients yet. Add sub-recipes or ingredients in the Ingredients tab first.
                     </div>
                   ) : (
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-sm">
+                        <thead className="bg-gray-50 border-b border-gray-100">
+                          <tr>
+                            <th className="px-4 py-2.5 text-left text-xs font-semibold text-gray-500 w-8">#</th>
+                            <th className="px-4 py-2.5 text-left text-xs font-semibold text-gray-500">Ingredient / Sub-Recipe</th>
+                            <th className="px-4 py-2.5 text-left text-xs font-semibold text-gray-500 w-24">Portion Min</th>
+                            <th className="px-4 py-2.5 text-left text-xs font-semibold text-gray-500 w-24">Portion Max</th>
+                            <th className="px-4 py-2.5 text-left text-xs font-semibold text-gray-500 w-20">Unit</th>
+                            <th className="px-4 py-2.5 text-left text-xs font-semibold text-gray-500 w-32">Tool</th>
+                            <th className="px-4 py-2.5 text-left text-xs font-semibold text-gray-500">Placement Notes</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-gray-50">
+                          {[...meal.components]
+                            .sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0))
+                            .map((comp, idx) => {
+                              const ingredientName = comp.ingredient?.internal_name || comp.sub_recipe?.name || 'Unknown';
+                              const spec = specByName[ingredientName.toLowerCase()] || null;
+                              const linkHref = comp.sub_recipe
+                                ? `/sub-recipes/${comp.sub_recipe.id}`
+                                : comp.ingredient
+                                  ? `/ingredients/${comp.ingredient.id}`
+                                  : null;
+                              const placementNotes = spec?.notes || comp.portioning_notes || '';
+                              return (
+                                <tr key={comp.id} className="hover:bg-gray-50/50">
+                                  <td className="px-4 py-3 text-xs text-gray-400 font-medium">{idx + 1}</td>
+                                  <td className="px-4 py-3">
+                                    {linkHref ? (
+                                      <a href={linkHref}
+                                        className="text-blue-600 hover:text-blue-800 hover:underline font-medium text-sm">
+                                        {ingredientName}
+                                      </a>
+                                    ) : (
+                                      <span className="font-medium text-sm text-gray-800">{ingredientName}</span>
+                                    )}
+                                    <div className="flex items-center gap-1.5 mt-0.5">
+                                      <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium ${comp.sub_recipe ? 'bg-purple-100 text-purple-600' : 'bg-blue-100 text-blue-600'}`}>
+                                        {comp.sub_recipe ? 'Sub-recipe' : 'Ingredient'}
+                                      </span>
+                                      <span className="text-[10px] text-gray-400">{comp.quantity} {comp.unit}</span>
+                                    </div>
+                                  </td>
+                                  <td className="px-4 py-3 text-sm text-gray-700">
+                                    {spec?.portion_min ? spec.portion_min : <span className="text-gray-300">—</span>}
+                                  </td>
+                                  <td className="px-4 py-3 text-sm text-gray-700">
+                                    {spec?.portion_max ? spec.portion_max : <span className="text-gray-300">—</span>}
+                                  </td>
+                                  <td className="px-4 py-3 text-xs text-gray-500">
+                                    {spec?.portion_unit || <span className="text-gray-300">—</span>}
+                                  </td>
+                                  <td className="px-4 py-3 text-xs text-gray-600">
+                                    {spec?.tool ? (
+                                      <span className="px-2 py-0.5 bg-amber-50 border border-amber-200 rounded text-amber-700 font-medium">{spec.tool}</span>
+                                    ) : <span className="text-gray-300">—</span>}
+                                  </td>
+                                  <td className="px-4 py-3 text-xs text-gray-600">
+                                    {placementNotes || <span className="text-gray-300">—</span>}
+                                  </td>
+                                </tr>
+                              );
+                            })}
+                        </tbody>
+                        {(psWeightMin || psWeightMax) && (
+                          <tfoot className="bg-gray-50 border-t border-gray-200">
+                            <tr>
+                              <td colSpan={2} className="px-4 py-2.5 text-xs font-semibold text-gray-700">Total Weight Range</td>
+                              <td colSpan={5} className="px-4 py-2.5 text-xs font-semibold text-gray-900">
+                                {psWeightMin && psWeightMax ? `${psWeightMin} – ${psWeightMax} g` : psWeightMin ? `${psWeightMin} g` : `${psWeightMax} g`}
+                              </td>
+                            </tr>
+                          </tfoot>
+                        )}
+                      </table>
+                    </div>
+                  )}
+                </div>
+
+                {/* Editable spec rows (for adding/editing spec data per ingredient) */}
+                {psComponents.length > 0 && (
+                  <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+                    <div className="px-5 py-3 border-b border-gray-100">
+                      <h2 className="text-sm font-semibold text-gray-700">Edit Spec Rows</h2>
+                      <p className="text-xs text-gray-400 mt-0.5">Fine-tune portion data for individual ingredients. Changes saved when you click "Update Portion Spec".</p>
+                    </div>
                     <div className="overflow-x-auto">
                       <table className="w-full text-sm">
                         <thead className="bg-gray-50 border-b border-gray-100">
@@ -1486,20 +1554,10 @@ export default function MealDetailPage() {
                             </tr>
                           ))}
                         </tbody>
-                        {(psWeightMin || psWeightMax) && (
-                          <tfoot className="bg-gray-50 border-t border-gray-200">
-                            <tr>
-                              <td colSpan={2} className="px-4 py-2.5 text-xs font-semibold text-gray-700">Total Weight Range</td>
-                              <td colSpan={6} className="px-4 py-2.5 text-xs font-semibold text-gray-900">
-                                {psWeightMin && psWeightMax ? `${psWeightMin} – ${psWeightMax} g` : psWeightMin ? `${psWeightMin} g` : `${psWeightMax} g`}
-                              </td>
-                            </tr>
-                          </tfoot>
-                        )}
                       </table>
                     </div>
-                  )}
-                </div>
+                  </div>
+                )}
 
                 {/* Save button */}
                 <div className="flex justify-end">

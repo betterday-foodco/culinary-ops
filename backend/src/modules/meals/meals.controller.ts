@@ -34,8 +34,8 @@ export class MealsController {
   constructor(private readonly service: MealsService) {}
 
   @Get()
-  findAll(@Query('category') category?: string) {
-    return this.service.findAll();
+  findAll(@Query('category') category?: string, @Query('search') search?: string) {
+    return this.service.findAll(search);
   }
 
   @Get('categories')
@@ -64,6 +64,22 @@ export class MealsController {
     res.setHeader('Content-Type', 'application/json');
     res.setHeader('Content-Disposition', 'attachment; filename="betterday-meals-export.json"');
     res.send(JSON.stringify(meals, null, 2));
+  }
+
+  @Get(':id/suggested-variants')
+  getSuggestedVariants(@Param('id', ParseUUIDPipe) id: string) {
+    return this.service.getSuggestedVariants(id);
+  }
+
+  @Patch(':id/link-variant')
+  linkOrUnlinkVariant(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() body: { linked_meal_id: string | null },
+  ) {
+    if (body.linked_meal_id === null) {
+      return this.service.unlinkVariant(id);
+    }
+    return this.service.linkVariant(id, body.linked_meal_id);
   }
 
   @Get(':id')

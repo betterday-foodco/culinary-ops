@@ -15,11 +15,13 @@ const PRIMARY_NAV = [
 ];
 
 const KITCHEN_NAV = [
+  { href: '/kitchen-admin',      label: 'Kitchen Admin',      icon: '👨‍🍳' },
   { href: '/station-assignment', label: 'Station Assignment', icon: '📍' },
   { href: '/kitchen-messages',   label: 'Kitchen Messages',   icon: '💬' },
   { href: '/approvals',          label: 'Approvals',          icon: '✅' },
   { href: '/feedback',           label: 'Recipe Feedback',    icon: '⭐' },
   { href: '/settings/staff',     label: 'Kitchen Staff',      icon: '👨‍🍳' },
+  { href: '/settings/tags',      label: 'System Tags',        icon: '🏷️' },
 ];
 
 const OTHER_NAV = [
