@@ -14,6 +14,8 @@ import { StationTasksModule } from './modules/station-tasks/station-tasks.module
 import { MenuQueueModule } from './modules/menu-queue/menu-queue.module';
 import { PortionSpecsModule } from './modules/portion-specs/portion-specs.module';
 import { PlanTastingModule } from './modules/plan-tasting/plan-tasting.module';
+import { TagsModule } from './modules/tags/tags.module';
+import { ProductionNumbersModule } from './modules/production-numbers/production-numbers.module';
 import { ShopifyWebhookController } from './webhooks/shopify.controller';
 import { CostEngineService } from './services/cost-engine.service';
 import { ProductionEngineService } from './services/production-engine.service';
@@ -35,6 +37,8 @@ import { ProductionEngineService } from './services/production-engine.service';
     MenuQueueModule,
     PortionSpecsModule,
     PlanTastingModule,
+    TagsModule,
+    ProductionNumbersModule,
   ],
   controllers: [ShopifyWebhookController],
   providers: [CostEngineService, ProductionEngineService],

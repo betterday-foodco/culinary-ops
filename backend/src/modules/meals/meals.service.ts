@@ -14,9 +14,17 @@ export class MealsService {
     private costEngine: CostEngineService,
   ) {}
 
-  async findAll() {
+  async findAll(search?: string) {
     return this.prisma.mealRecipe.findMany({
+      where: search ? {
+        OR: [
+          { display_name: { contains: search, mode: 'insensitive' } },
+          { name: { contains: search, mode: 'insensitive' } },
+          { meal_code: { contains: search, mode: 'insensitive' } },
+        ],
+      } : undefined,
       include: {
+        linked_meal: { select: { id: true, display_name: true, meal_code: true } },
         components: {
           include: {
             ingredient: { select: { id: true, internal_name: true, sku: true } },
@@ -32,8 +40,8 @@ export class MealsService {
     const meal = await this.prisma.mealRecipe.findUnique({
       where: { id },
       include: {
-        linked_meal: { select: { id: true, name: true, display_name: true, category: true } },
-        variant_meals: { select: { id: true, name: true, display_name: true, category: true } },
+        linked_meal: { select: { id: true, name: true, display_name: true, category: true, meal_code: true } },
+        variant_meals: { select: { id: true, name: true, display_name: true, category: true, meal_code: true } },
         components: {
           include: {
             ingredient: true,
@@ -353,6 +361,72 @@ export class MealsService {
       },
       orderBy: { display_name: 'asc' }
     });
+  }
+
+  /** Suggest variant meals by keyword overlap */
+  async getSuggestedVariants(mealId: string) {
+    const meal = await this.prisma.mealRecipe.findUnique({
+      where: { id: mealId },
+      select: { id: true, display_name: true, category: true },
+    });
+    if (!meal) return [];
+
+    const skip = new Set(['with', 'the', 'and', 'for', 'from', 'thai', 'style', 'bowl', 'meal']);
+    const words = meal.display_name
+      .toLowerCase()
+      .replace(/[^a-z0-9 ]/g, '')
+      .split(' ')
+      .filter((w) => w.length >= 4 && !skip.has(w));
+
+    if (words.length === 0) return [];
+
+    const allMeals = await this.prisma.mealRecipe.findMany({
+      where: { id: { not: mealId }, is_active: true },
+      select: { id: true, display_name: true, category: true, meal_code: true },
+    });
+
+    return allMeals
+      .map((m) => {
+        const mWords = m.display_name
+          .toLowerCase()
+          .replace(/[^a-z0-9 ]/g, '')
+          .split(' ');
+        const matches = words.filter((w) => mWords.includes(w));
+        return { ...m, matchScore: matches.length, matchedWords: matches };
+      })
+      .filter((m) => m.matchScore >= 2)
+      .sort((a, b) => b.matchScore - a.matchScore)
+      .slice(0, 5);
+  }
+
+  /** Bidirectionally link two meals as variants */
+  async linkVariant(id: string, linkedId: string) {
+    await Promise.all([
+      this.prisma.mealRecipe.update({ where: { id }, data: { linked_meal_id: linkedId } }),
+      this.prisma.mealRecipe.update({ where: { id: linkedId }, data: { linked_meal_id: id } }),
+    ]);
+    return this.findOne(id);
+  }
+
+  /** Bidirectionally unlink a meal variant */
+  async unlinkVariant(id: string) {
+    const meal = await this.prisma.mealRecipe.findUnique({
+      where: { id },
+      select: { linked_meal_id: true },
+    });
+    const updates: Promise<any>[] = [
+      this.prisma.mealRecipe.update({ where: { id }, data: { linked_meal_id: null } }),
+    ];
+    if (meal?.linked_meal_id) {
+      updates.push(
+        this.prisma.mealRecipe.update({
+          where: { id: meal.linked_meal_id },
+          data: { linked_meal_id: null },
+        }),
+      );
+    }
+    await Promise.all(updates);
+    return this.findOne(id);
   }
 
   /** All unique categories */

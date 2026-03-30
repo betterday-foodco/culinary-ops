@@ -12,6 +12,11 @@ function fmt(n: number) {
 function fmtQty(n: number) {
   return n.toLocaleString('en-CA', { minimumFractionDigits: 0, maximumFractionDigits: 3 });
 }
+function displayCategory(cat: string): string {
+  if (cat === 'Frozen') return 'Freezer';
+  if (cat === 'Pantry') return 'Dry Storage';
+  return cat;
+}
 
 // ── component ─────────────────────────────────────────────────────────────────
 
@@ -33,6 +38,7 @@ export default function InventoryPage() {
   const [saveMsg, setSaveMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const [filterNeedsOrdering, setFilterNeedsOrdering] = useState(false);
   const [search, setSearch] = useState('');
+  const [lowStockOnly, setLowStockOnly] = useState(false);
 
   // ── load plans ─────────────────────────────────────────────────────────────
   useEffect(() => {
@@ -148,6 +154,51 @@ export default function InventoryPage() {
     }
   }
 
+  // ── GFS order sheet export ─────────────────────────────────────────────────
+  function exportGFSOrder() {
+    if (!report) return;
+    const allRows = Object.entries(report.grouped_by_category).flatMap(([cat, rows]) =>
+      rows.map((row) => ({ ...row, cat }))
+    );
+    const filtered = lowStockOnly
+      ? allRows.filter((row) => {
+          const onHand = onHandMap[row.id] ?? row.stock;
+          return (row.need - onHand) > 0;
+        })
+      : allRows;
+
+    const headers = ['Item Name', 'Category', 'Current Stock', 'Unit', 'Need', 'To Order', 'Cases', 'Unit Cost ($)', 'Case Price ($)', 'SKU', 'Supplier', 'Notes'];
+    const rows = filtered.map((row) => {
+      const onHand = onHandMap[row.id] ?? row.stock;
+      const toOrder = Math.max(0, row.need - onHand);
+      const cases = toOrder > 0 ? Math.ceil(toOrder / (row.base_weight > 0 ? row.base_weight : 1)) : 0;
+      return [
+        row.internal_name,
+        displayCategory(row.category ?? ''),
+        onHand,
+        row.unit ?? '',
+        row.need,
+        toOrder,
+        cases,
+        row.cost_per_unit?.toFixed(2) ?? '',
+        row.case_price?.toFixed(2) ?? '',
+        row.sku ?? '',
+        row.supplier_name ?? '',
+        '',
+      ];
+    });
+    const csv = [headers, ...rows]
+      .map((r) => r.map((v) => `"${String(v).replace(/"/g, '""')}"`).join(','))
+      .join('\n');
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `gfs-order-${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
   // ── render ─────────────────────────────────────────────────────────────────
   return (
     <div className="p-6 max-w-screen-2xl mx-auto">
@@ -184,6 +235,27 @@ export default function InventoryPage() {
             >
               View Vendor Orders →
             </button>
+          )}
+
+          {/* GFS Order Sheet export */}
+          {report && (
+            <div className="flex items-center gap-2">
+              <label className="flex items-center gap-1.5 text-sm text-gray-600 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={lowStockOnly}
+                  onChange={(e) => setLowStockOnly(e.target.checked)}
+                  className="w-3.5 h-3.5 rounded border-gray-300 text-brand-600 focus:ring-brand-500"
+                />
+                Needs order only
+              </label>
+              <button
+                onClick={exportGFSOrder}
+                className="px-4 py-2 border border-gray-300 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-50 flex items-center gap-1.5"
+              >
+                📋 Order Sheet
+              </button>
+            </div>
           )}
 
           {/* Save Count */}
@@ -314,7 +386,7 @@ export default function InventoryPage() {
               {/* Category header */}
               <div className="px-5 py-3 bg-gray-50 border-b border-gray-200 flex items-center justify-between">
                 <div className="flex items-center gap-3">
-                  <span className="text-sm font-semibold text-gray-700">{cat}</span>
+                  <span className="text-sm font-semibold text-gray-700">{displayCategory(cat)}</span>
                   <span className="px-2 py-0.5 bg-gray-100 text-gray-500 rounded text-xs">{rows.length} items</span>
                   {catNeedingOrder > 0 && (
                     <span className="px-2 py-0.5 bg-red-100 text-red-600 rounded text-xs font-medium">
@@ -351,7 +423,9 @@ export default function InventoryPage() {
                         <tr key={row.id} className={`hover:bg-gray-50/50 ${hasChanged ? 'bg-amber-50/30' : ''}`}>
                           {/* Ingredient */}
                           <td className="px-4 py-2.5">
-                            <div className="font-medium text-gray-900 leading-tight">{row.internal_name}</div>
+                            <div className="leading-tight">
+                              <a href={`/ingredients/${row.id}`} className="font-medium text-blue-600 hover:underline">{row.internal_name}</a>
+                            </div>
                             <div className="font-mono text-xs text-gray-400">{row.sku}</div>
                           </td>
                           {/* Need */}

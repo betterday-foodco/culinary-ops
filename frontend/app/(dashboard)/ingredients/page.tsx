@@ -3,6 +3,12 @@
 import { useEffect, useState } from 'react';
 import { api, Ingredient, CreateIngredientData } from '../../lib/api';
 
+function displayCategory(cat: string): string {
+  if (cat === 'Frozen') return 'Freezer';
+  if (cat === 'Pantry') return 'Dry Storage';
+  return cat;
+}
+
 const EMPTY: CreateIngredientData = {
   internal_name: '',
   display_name: '',
@@ -137,7 +143,7 @@ export default function IngredientsPage() {
         >
           <option value="">All categories</option>
           {categories.map((c) => (
-            <option key={c} value={c}>{c}</option>
+            <option key={c} value={c}>{displayCategory(c)}</option>
           ))}
         </select>
       </div>
@@ -163,12 +169,12 @@ export default function IngredientsPage() {
               filtered.map((i) => (
                 <tr key={i.id} className="hover:bg-gray-50">
                   <td className="px-4 py-3">
-                    <p className="font-medium text-gray-900">{i.internal_name}</p>
+                    <a href={`/ingredients/${i.id}`} className="font-medium text-blue-600 hover:underline">{i.internal_name}</a>
                     <p className="text-xs text-gray-500">{i.display_name}</p>
                   </td>
                   <td className="px-4 py-3 text-gray-600 font-mono text-xs">{i.sku}</td>
                   <td className="px-4 py-3">
-                    <span className="px-2 py-0.5 bg-gray-100 text-gray-700 rounded-md text-xs">{i.category}</span>
+                    <span className="px-2 py-0.5 bg-gray-100 text-gray-700 rounded-md text-xs">{displayCategory(i.category)}</span>
                   </td>
                   <td className="px-4 py-3 text-gray-600">{i.supplier_name ?? '—'}</td>
                   <td className="px-4 py-3 text-gray-900 font-medium">${i.cost_per_unit.toFixed(4)}</td>

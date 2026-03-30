@@ -549,7 +549,7 @@ export default function KitchenBoardPage() {
             {/* Station cards */}
             <div>
               <h2 className="text-sm font-bold text-gray-700 mb-3">All Stations</h2>
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
                 {STATIONS.map((station) => {
                   const stats = getStationStats(station);
                   const isYours = station === userStation;
@@ -627,7 +627,7 @@ export default function KitchenBoardPage() {
                         <button
                           key={task.sub_recipe_id}
                           onClick={() => openTaskModal(task)}
-                          className={`w-full flex items-center gap-3 px-3 py-3 rounded-xl border text-left transition-all active:scale-[0.99] ${
+                          className={`w-full flex items-center gap-3 px-3 py-3 rounded-xl border text-left transition-all active:scale-[0.99] min-h-[52px] ${
                             isDone ? 'bg-green-50 border-green-200' : isInProg ? 'bg-blue-50 border-blue-200' : 'bg-white border-gray-200 hover:bg-gray-50'
                           }`}
                         >
@@ -837,7 +837,7 @@ export default function KitchenBoardPage() {
               }`}>
                 <button
                   onClick={() => openTaskModal(task)}
-                  className={`w-full flex items-center gap-3 px-4 py-3.5 text-left active:scale-[0.99] transition-all
+                  className={`w-full flex items-center gap-3 px-4 py-3.5 text-left active:scale-[0.99] transition-all min-h-[56px]
                     ${isAssignedToMe && !isDone ? 'bg-brand-50' : isDone ? 'bg-green-50' : isInProgress ? 'bg-blue-50' : 'bg-white hover:bg-gray-50'}`}
                 >
                   {/* Status badge */}

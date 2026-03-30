@@ -68,7 +68,7 @@ export default function DailyTasksPage() {
   });
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4 max-w-3xl mx-auto">
       {/* Header */}
       <div className="bg-gradient-to-br from-brand-700 to-brand-500 rounded-2xl p-5 text-white">
         <h1 className="text-xl font-black">{board.plan.week_label}</h1>
@@ -93,7 +93,7 @@ export default function DailyTasksPage() {
           <button
             key={f}
             onClick={() => setFilter(f)}
-            className={`px-4 py-1.5 rounded-full text-xs font-bold transition-all capitalize ${filter === f ? 'bg-gray-900 text-white' : 'bg-gray-100 text-gray-500'}`}
+            className={`px-4 py-2 min-h-[40px] rounded-full text-xs font-bold transition-all capitalize ${filter === f ? 'bg-gray-900 text-white' : 'bg-gray-100 text-gray-500'}`}
           >
             {f === 'todo' ? 'To Do' : f === 'all' ? `All (${allTasks.length})` : `Done (${doneCt})`}
           </button>
@@ -144,10 +144,10 @@ function TaskRow({ task, group }: { task: KitchenTask; group: typeof PRIORITY_GR
   const progressPct = needed > 0 ? Math.min(100, Math.round((total / needed) * 100)) : 0;
 
   return (
-    <div className={`rounded-xl border px-3 py-2.5 ${isDone ? `${group.light} ${group.border}` : isInProg ? 'bg-blue-50 border-blue-200' : 'bg-white border-gray-200'}`}>
+    <div className={`rounded-xl border px-3 py-3 min-h-[52px] ${isDone ? `${group.light} ${group.border}` : isInProg ? 'bg-blue-50 border-blue-200' : 'bg-white border-gray-200'}`}>
       <div className="flex items-center gap-2.5">
         {/* Status icon */}
-        <div className={`w-6 h-6 rounded-lg flex items-center justify-center flex-shrink-0 text-xs font-black ${
+        <div className={`w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0 text-sm font-black ${
           isDone ? 'bg-green-500 text-white' : isInProg ? 'bg-blue-500 text-white' : 'bg-gray-100 text-gray-400'
         }`}>
           {isDone ? '✓' : isInProg ? '▶' : '○'}

@@ -202,6 +202,9 @@ export default function MealsPage() {
                             {(meal as any).meal_code && (
                               <span className="px-1.5 py-0 bg-gray-100 text-gray-500 rounded text-xs font-mono">{(meal as any).meal_code}</span>
                             )}
+                            {(meal as any).linked_meal && (
+                              <span title={`Variant: ${(meal as any).linked_meal.display_name}`} className="text-gray-400 text-xs">🔗</span>
+                            )}
                           </div>
                           {meal.short_description && (
                             <div className="text-xs text-gray-400 mt-0.5 line-clamp-1">{meal.short_description}</div>

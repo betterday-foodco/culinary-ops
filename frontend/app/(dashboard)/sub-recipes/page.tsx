@@ -4,11 +4,20 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { api, SubRecipe } from '../../lib/api';
 
+const priorityLabel = (p: number) => ['', 'Wednesday', 'Thursday', 'Friday', 'Friday'][p] ?? `Day ${p}`;
+const priorityColor = (p: number) => [
+  '',
+  'bg-blue-100 text-blue-800',    // Wednesday
+  'bg-green-100 text-green-800',  // Thursday
+  'bg-orange-100 text-orange-800', // Friday
+  'bg-orange-100 text-orange-800', // Friday (p4)
+][p] ?? 'bg-gray-100 text-gray-700';
+
 const PRIORITY_INFO: Record<number, { label: string; color: string }> = {
-  1: { label: 'P1 – Critical',  color: 'bg-red-100 text-red-700' },
-  2: { label: 'P2 – High',      color: 'bg-orange-100 text-orange-700' },
-  3: { label: 'P3 – Normal',    color: 'bg-yellow-100 text-yellow-700' },
-  4: { label: 'P4 – Low',       color: 'bg-blue-100 text-blue-700' },
+  1: { label: priorityLabel(1), color: priorityColor(1) },
+  2: { label: priorityLabel(2), color: priorityColor(2) },
+  3: { label: priorityLabel(3), color: priorityColor(3) },
+  4: { label: priorityLabel(4), color: priorityColor(4) },
   5: { label: 'P5 – Optional',  color: 'bg-gray-100 text-gray-500' },
 };
 
@@ -176,7 +185,7 @@ export default function SubRecipesPage() {
 
         {/* Priority filter */}
         <div className="px-4 py-3">
-          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Priority</p>
+          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Production Day</p>
           <div className="space-y-1">
             {([1, 2, 3, 4, 5] as const).map((p) => {
               const info = PRIORITY_INFO[p];
@@ -189,7 +198,7 @@ export default function SubRecipesPage() {
                     className="w-3.5 h-3.5 rounded border-gray-300 text-brand-600 focus:ring-brand-500"
                   />
                   <span className={`text-xs px-1.5 py-0.5 rounded font-medium ${info.color}`}>
-                    P{p}
+                    {info.label}
                   </span>
                   <span className="text-xs text-gray-400">{priorityCounts[p] ?? 0}</span>
                 </label>
@@ -276,7 +285,7 @@ export default function SubRecipesPage() {
                   key={p}
                   className="inline-flex items-center gap-1 px-2 py-0.5 bg-yellow-50 text-yellow-700 rounded-full text-xs font-medium"
                 >
-                  P{p}
+                  {priorityLabel(p)}
                   <button onClick={() => setSelectedPriorities((prev) => toggleSet(prev, p))}>×</button>
                 </span>
               ))}
@@ -359,7 +368,7 @@ export default function SubRecipesPage() {
                       {/* Right: priority + cost + actions */}
                       <div className="flex items-center gap-4 flex-shrink-0">
                         <span className={`px-2 py-0.5 rounded text-xs font-bold ${pInfo.color}`}>
-                          P{priority}
+                          {pInfo.label}
                         </span>
                         <div className="text-right min-w-[60px]">
                           <p className="text-sm font-semibold text-gray-900">
