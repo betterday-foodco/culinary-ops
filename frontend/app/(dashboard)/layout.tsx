@@ -22,7 +22,8 @@ const KITCHEN_NAV = [
   { href: '/feedback',           label: 'Recipe Feedback',    icon: '⭐' },
   { href: '/settings/staff',     label: 'Kitchen Staff',      icon: '👨‍🍳' },
   { href: '/settings/tags',      label: 'System Tags',        icon: '🏷️' },
-  { href: '/checklist-manage',   label: 'Checklist Assign',   icon: '📋' },
+  { href: '/checklist-manage',        label: 'Checklist Assign',   icon: '📋' },
+  { href: '/settings/integration',    label: 'MealPrep Integration', icon: '🔗' },
 ];
 
 const OTHER_NAV = [

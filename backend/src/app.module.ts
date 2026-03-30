@@ -18,6 +18,9 @@ import { TagsModule } from './modules/tags/tags.module';
 import { ProductionNumbersModule } from './modules/production-numbers/production-numbers.module';
 import { KitchenStationsModule } from './modules/kitchen-stations/kitchen-stations.module';
 import { DailyChecklistModule } from './modules/daily-checklist/daily-checklist.module';
+import { SystemConfigModule } from './modules/system-config/system-config.module';
+import { MealPrepWebhookModule } from './modules/mealprep-webhook/mealprep-webhook.module';
+import { MealPrepSyncModule } from './modules/mealprep-sync/mealprep-sync.module';
 import { ShopifyWebhookController } from './webhooks/shopify.controller';
 import { CostEngineService } from './services/cost-engine.service';
 import { ProductionEngineService } from './services/production-engine.service';
@@ -43,6 +46,9 @@ import { ProductionEngineService } from './services/production-engine.service';
     ProductionNumbersModule,
     KitchenStationsModule,
     DailyChecklistModule,
+    SystemConfigModule,
+    MealPrepWebhookModule,
+    MealPrepSyncModule,
   ],
   controllers: [ShopifyWebhookController],
   providers: [CostEngineService, ProductionEngineService],

@@ -559,6 +559,19 @@ export const api = {
   // Admin: update production log (fix qty)
   updateProductionLog: (logId: string, data: { qty_cooked?: number; notes?: string }) =>
     request<any>(`/kitchen-portal/logs/${logId}`, { method: 'PATCH', body: JSON.stringify(data) }),
+
+  // Integration / MealPrep platform
+  getIntegrationConfig: () => request<{
+    mealprep_api_endpoint: string;
+    mealprep_api_token_set: boolean;
+    mealprep_webhook_secret_set: boolean;
+    mealprep_webhook_url_hint: string;
+  }>('/mealprep-sync/config'),
+  saveIntegrationConfig: (data: Record<string, string>) =>
+    request<{ ok: boolean }>('/system-config', { method: 'PATCH', body: JSON.stringify(data) }),
+  publishToMealPrep: (planId: string) =>
+    request<any>(`/mealprep-sync/publish/${planId}`, { method: 'POST' }),
+  getWebhookLogs: () => request<any[]>('/webhooks/logs'),
 };
 
 // ─── Types ──────────────────────────────────────────────────────────────────

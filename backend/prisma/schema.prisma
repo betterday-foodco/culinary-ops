@@ -496,3 +496,26 @@ model TagConnection {
 
   @@unique([from_tag_id, to_tag_id, relationship])
 }
+
+// Generic key-value store for integration settings (API tokens, endpoints, etc.)
+model SystemConfig {
+  id         String   @id @default(uuid())
+  key        String   @unique
+  value      String
+  updated_at DateTime @updatedAt
+}
+
+// Log of inbound webhook calls from third-party platforms
+model WebhookLog {
+  id           String   @id @default(uuid())
+  source       String   // e.g. "mealprep"
+  event_type   String?  // e.g. "order.created"
+  payload      Json
+  status       String   @default("received") // received | processed | error
+  result       Json?    // what we did (plan created/updated, meal matches, etc.)
+  error        String?
+  received_at  DateTime @default(now())
+
+  @@index([source])
+  @@index([received_at])
+}

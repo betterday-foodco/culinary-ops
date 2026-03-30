@@ -50,6 +50,7 @@ export default function ProductionPlanPage() {
   const [reportLoading, setReportLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [publishing, setPublishing] = useState(false);
+  const [publishingMealPrep, setPublishingMealPrep] = useState(false);
 
   // Local edits
   const [quantities, setQuantities] = useState<Record<string, number>>({});
@@ -198,6 +199,16 @@ export default function ProductionPlanPage() {
     });
   }
 
+  async function handlePublishToMealPrep() {
+    if (!confirm(`Push "${plan?.week_label}" menu to MealPrep platform?`)) return;
+    setPublishingMealPrep(true);
+    try {
+      const result = await api.publishToMealPrep(id);
+      alert(`Sent ${(result as any).meals_sent} meals to MealPrep for ${(result as any).week_label}.`);
+    } catch (e: any) { alert(e.message); }
+    finally { setPublishingMealPrep(false); }
+  }
+
   async function handlePublish(publish: boolean) {
     setPublishing(true);
     try {
@@ -305,6 +316,14 @@ export default function ProductionPlanPage() {
               {publishing ? 'Publishing...' : 'Publish to Kitchen'}
             </button>
           )}
+          <button
+            onClick={handlePublishToMealPrep}
+            disabled={publishingMealPrep}
+            title="Push this week's menu to MealPrep platform"
+            className="flex items-center gap-1.5 px-3 py-1.5 text-xs border border-purple-300 bg-purple-50 text-purple-700 rounded-lg hover:bg-purple-100 disabled:opacity-50 transition-colors font-medium"
+          >
+            {publishingMealPrep ? 'Sending...' : '🚀 Publish to MealPrep'}
+          </button>
           <button
             onClick={() => window.print()}
             className="px-3 py-1.5 text-xs border border-gray-300 text-gray-600 rounded-lg hover:bg-gray-50"
