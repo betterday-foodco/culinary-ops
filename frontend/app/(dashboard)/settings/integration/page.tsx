@@ -1,5 +1,5 @@
 'use client';
-
+// MealPrep integration settings
 import { useEffect, useState } from 'react';
 import { api } from '../../../lib/api';
 
@@ -13,8 +13,10 @@ export default function IntegrationSettingsPage() {
   const [secretSet, setSecretSet] = useState(false);
   const [webhookLogs, setWebhookLogs] = useState<any[]>([]);
   const [logsLoading, setLogsLoading] = useState(true);
+  const [hookUrl, setHookUrl] = useState('');
 
   useEffect(() => {
+    setHookUrl(`${window.location.protocol}//${window.location.hostname}:3002/api/webhooks/mealprep-order`);
     api.getIntegrationConfig().then((c) => {
       setEndpoint(c.mealprep_api_endpoint ?? '');
       setTokenSet(!!c.mealprep_api_token_set);
@@ -44,9 +46,6 @@ export default function IntegrationSettingsPage() {
     }
   }
 
-  const webhookUrl = typeof window !== 'undefined'
-    ? `${window.location.protocol}//${window.location.hostname}:3002/api/webhooks/mealprep-order`
-    : 'https://your-domain.com/api/webhooks/mealprep-order';
 
   return (
     <div className="p-8 max-w-3xl">
@@ -62,11 +61,11 @@ export default function IntegrationSettingsPage() {
           Ask them to send order webhooks to this endpoint. When they post orders here, BetterDay automatically creates or updates your production plan for that week.
         </p>
         <div className="flex items-center gap-2">
-          <code className="flex-1 bg-white border border-blue-200 rounded-lg px-3 py-2 text-sm font-mono text-blue-900 select-all">
-            {webhookUrl}
+          <code suppressHydrationWarning className="flex-1 bg-white border border-blue-200 rounded-lg px-3 py-2 text-sm font-mono text-blue-900 select-all">
+            {hookUrl}
           </code>
           <button
-            onClick={() => navigator.clipboard.writeText(webhookUrl)}
+            onClick={() => navigator.clipboard.writeText(hookUrl)}
             className="px-3 py-2 bg-blue-600 text-white text-xs font-medium rounded-lg hover:bg-blue-700"
           >
             Copy
