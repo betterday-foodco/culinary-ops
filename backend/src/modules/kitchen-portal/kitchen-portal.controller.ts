@@ -231,4 +231,14 @@ export class KitchenPortalController {
   ) {
     return this.service.updateSubRecipePriority(id, dto.priority);
   }
+
+  /** PATCH /api/kitchen-portal/logs/:id — admin updates a production log (fix qty etc.) */
+  @Roles('admin')
+  @Patch('logs/:id')
+  updateProductionLog(
+    @Param('id') id: string,
+    @Body() dto: { qty_cooked?: number; notes?: string },
+  ) {
+    return this.service.updateProductionLog(id, dto);
+  }
 }

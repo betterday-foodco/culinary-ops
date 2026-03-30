@@ -16,6 +16,11 @@ export default function ApprovalsPage() {
   const [bulkLogs, setBulkLogs] = useState<BulkLog[]>([]);
   const [loading, setLoading] = useState(true);
   const [approving, setApproving] = useState<string | null>(null);
+  const [editingShortage, setEditingShortage] = useState<string | null>(null);
+  const [editThursdayQty, setEditThursdayQty] = useState('');
+  const [editingBulk, setEditingBulk] = useState<string | null>(null);
+  const [editBulkQty, setEditBulkQty] = useState('');
+  const [saving, setSaving] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -53,6 +58,36 @@ export default function ApprovalsPage() {
       alert(e.message ?? 'Failed to approve');
     } finally {
       setApproving(null);
+    }
+  }
+
+  async function saveShortageEdit(log: ShortageLog) {
+    const qty = parseFloat(editThursdayQty);
+    if (isNaN(qty)) return;
+    setSaving(log.id);
+    try {
+      await api.updateProductionLog(log.id, { qty_cooked: qty });
+      setEditingShortage(null);
+      await load();
+    } catch (e: any) {
+      alert(e.message ?? 'Failed to save');
+    } finally {
+      setSaving(null);
+    }
+  }
+
+  async function saveBulkEdit(log: BulkLog) {
+    const qty = parseFloat(editBulkQty);
+    if (isNaN(qty)) return;
+    setSaving(log.id);
+    try {
+      await api.updateProductionLog(log.id, { qty_cooked: qty });
+      setEditingBulk(null);
+      await load();
+    } catch (e: any) {
+      alert(e.message ?? 'Failed to save');
+    } finally {
+      setSaving(null);
     }
   }
 
@@ -155,13 +190,37 @@ export default function ApprovalsPage() {
                         <p className="font-bold text-gray-700">{log.plan.week_label}</p>
                       </div>
                     </div>
-                    <button
-                      onClick={() => approveShortage(log.id)}
-                      disabled={approving === log.id}
-                      className="w-full py-2.5 bg-brand-600 text-white rounded-xl text-sm font-bold hover:bg-brand-700 disabled:opacity-50 transition-colors"
-                    >
-                      {approving === log.id ? 'Approving…' : '✓ Approve Shortage'}
-                    </button>
+                    <div className="flex gap-2">
+                      {editingShortage === log.id ? (
+                        <>
+                          <input
+                            type="number"
+                            value={editThursdayQty}
+                            onChange={e => setEditThursdayQty(e.target.value)}
+                            className="border border-slate-300 rounded-lg px-2 py-1.5 text-sm w-24 focus:outline-none focus:ring-2 focus:ring-blue-400"
+                            placeholder="Qty Kgs"
+                          />
+                          <button
+                            onClick={() => saveShortageEdit(log)}
+                            disabled={saving === log.id}
+                            className="flex-1 py-2 bg-green-600 text-white rounded-xl text-sm font-bold hover:bg-green-700 disabled:opacity-50"
+                          >{saving === log.id ? 'Saving…' : '✓ Save'}</button>
+                          <button onClick={() => setEditingShortage(null)} className="px-3 py-2 bg-slate-100 rounded-xl text-sm">Cancel</button>
+                        </>
+                      ) : (
+                        <>
+                          <button
+                            onClick={() => { setEditingShortage(log.id); setEditThursdayQty(String(log.qty_cooked ?? '')); }}
+                            className="px-3 py-2.5 bg-slate-100 hover:bg-slate-200 rounded-xl text-sm font-medium"
+                          >Edit Qty</button>
+                          <button
+                            onClick={() => approveShortage(log.id)}
+                            disabled={approving === log.id}
+                            className="flex-1 py-2.5 bg-brand-600 text-white rounded-xl text-sm font-bold hover:bg-brand-700 disabled:opacity-50 transition-colors"
+                          >{approving === log.id ? 'Approving…' : '✓ Approve Shortage'}</button>
+                        </>
+                      )}
+                    </div>
                   </div>
                 </div>
               );
@@ -213,13 +272,37 @@ export default function ApprovalsPage() {
                         <p className="text-sm text-gray-800">{log.bulk_reason}</p>
                       </div>
                     )}
-                    <button
-                      onClick={() => approveBulk(log.id)}
-                      disabled={approving === log.id}
-                      className="w-full py-2.5 bg-amber-500 text-white rounded-xl text-sm font-bold hover:bg-amber-600 disabled:opacity-50 transition-colors"
-                    >
-                      {approving === log.id ? 'Approving…' : '✓ Approve Bulk Cooking'}
-                    </button>
+                    <div className="flex gap-2">
+                      {editingBulk === log.id ? (
+                        <>
+                          <input
+                            type="number"
+                            value={editBulkQty}
+                            onChange={e => setEditBulkQty(e.target.value)}
+                            className="border border-slate-300 rounded-lg px-2 py-1.5 text-sm w-24 focus:outline-none focus:ring-2 focus:ring-blue-400"
+                            placeholder="Qty Kgs"
+                          />
+                          <button
+                            onClick={() => saveBulkEdit(log)}
+                            disabled={saving === log.id}
+                            className="flex-1 py-2 bg-green-600 text-white rounded-xl text-sm font-bold hover:bg-green-700 disabled:opacity-50"
+                          >{saving === log.id ? 'Saving…' : '✓ Save'}</button>
+                          <button onClick={() => setEditingBulk(null)} className="px-3 py-2 bg-slate-100 rounded-xl text-sm">Cancel</button>
+                        </>
+                      ) : (
+                        <>
+                          <button
+                            onClick={() => { setEditingBulk(log.id); setEditBulkQty(String(log.qty_cooked ?? '')); }}
+                            className="px-3 py-2.5 bg-slate-100 hover:bg-slate-200 rounded-xl text-sm font-medium"
+                          >Edit Qty</button>
+                          <button
+                            onClick={() => approveBulk(log.id)}
+                            disabled={approving === log.id}
+                            className="flex-1 py-2.5 bg-amber-500 text-white rounded-xl text-sm font-bold hover:bg-amber-600 disabled:opacity-50 transition-colors"
+                          >{approving === log.id ? 'Approving…' : '✓ Approve Bulk Cooking'}</button>
+                        </>
+                      )}
+                    </div>
                   </div>
                 </div>
               );

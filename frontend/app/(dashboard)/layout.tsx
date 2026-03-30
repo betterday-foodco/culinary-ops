@@ -22,6 +22,7 @@ const KITCHEN_NAV = [
   { href: '/feedback',           label: 'Recipe Feedback',    icon: '⭐' },
   { href: '/settings/staff',     label: 'Kitchen Staff',      icon: '👨‍🍳' },
   { href: '/settings/tags',      label: 'System Tags',        icon: '🏷️' },
+  { href: '/checklist-manage',   label: 'Checklist Assign',   icon: '📋' },
 ];
 
 const OTHER_NAV = [

@@ -103,6 +103,9 @@ export class ProductionPlansService {
 
   async remove(id: string) {
     await this.findOne(id);
+    // Delete related records that do NOT have onDelete: Cascade
+    await this.prisma.kitchenProductionLog.deleteMany({ where: { plan_id: id } });
+    await this.prisma.stationRequest.deleteMany({ where: { plan_id: id } });
     return this.prisma.productionPlan.delete({ where: { id } });
   }
 

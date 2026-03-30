@@ -66,6 +66,7 @@ model SubRecipe {
   production_day   String?
   station_tag      String?
   priority         Int      @default(3)
+  sub_priority     Int?     // 1=P1/AM, 2=P2, 3=P3/PM
   base_yield_weight Float   @default(1)
   base_yield_unit   String  @default("Kgs")
   computed_cost    Float    @default(0)
@@ -430,6 +431,38 @@ model ProductionNumberUpdate {
 
   @@unique([plan_id, sub_recipe_id])
   @@index([plan_id])
+}
+
+model KitchenStation {
+  id         String   @id @default(uuid())
+  name       String   @unique
+  is_active  Boolean  @default(true)
+  sort_order Int      @default(0)
+  created_at DateTime @default(now())
+}
+
+model DailyChecklist {
+  id          String   @id @default(uuid())
+  title       String
+  day         String   // 'wednesday', 'thursday', 'friday'
+  station     String?
+  sort_order  Int      @default(0)
+  is_active   Boolean  @default(true)
+  created_at  DateTime @default(now())
+
+  completions DailyChecklistCompletion[]
+}
+
+model DailyChecklistCompletion {
+  id           String   @id @default(uuid())
+  checklist_id String
+  week_label   String
+  completed_by String?
+  completed_at DateTime @default(now())
+
+  checklist DailyChecklist @relation(fields: [checklist_id], references: [id], onDelete: Cascade)
+
+  @@unique([checklist_id, week_label])
 }
 
 model SystemTag {

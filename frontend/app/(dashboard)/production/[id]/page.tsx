@@ -449,21 +449,23 @@ export default function ProductionPlanPage() {
                         )}
                       </td>
                       <td className="px-4 py-3">
-                        <div className="flex items-center gap-1">
+                        <div className="flex items-center gap-2">
                           <button
-                            onClick={() => setQuantities(prev => ({ ...prev, [item.meal_id]: Math.max(0, (prev[item.meal_id] ?? 0) - 1) }))}
-                            className="w-7 h-7 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold flex items-center justify-center text-lg leading-none"
+                            type="button"
+                            onClick={() => setQuantities(q => ({ ...q, [item.meal_id]: Math.max(0, (q[item.meal_id] ?? 0) - 1) }))}
+                            className="w-8 h-8 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 text-xl font-bold flex items-center justify-center leading-none select-none"
                           >−</button>
                           <input
                             type="number"
                             min={0}
                             value={quantities[item.meal_id] ?? 0}
-                            onChange={(e) => setQuantities(prev => ({ ...prev, [item.meal_id]: parseInt(e.target.value) || 0 }))}
-                            className="w-16 text-center border border-slate-200 rounded-lg px-1 py-1 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-400"
+                            onChange={e => setQuantities(q => ({ ...q, [item.meal_id]: Math.max(0, parseInt(e.target.value) || 0) }))}
+                            className="w-16 text-center border border-slate-200 rounded-lg py-1.5 text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent"
                           />
                           <button
-                            onClick={() => setQuantities(prev => ({ ...prev, [item.meal_id]: (prev[item.meal_id] ?? 0) + 1 }))}
-                            className="w-7 h-7 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold flex items-center justify-center text-lg leading-none"
+                            type="button"
+                            onClick={() => setQuantities(q => ({ ...q, [item.meal_id]: (q[item.meal_id] ?? 0) + 1 }))}
+                            className="w-8 h-8 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 text-xl font-bold flex items-center justify-center leading-none select-none"
                           >+</button>
                         </div>
                       </td>

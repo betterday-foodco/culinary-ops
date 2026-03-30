@@ -16,6 +16,8 @@ import { PortionSpecsModule } from './modules/portion-specs/portion-specs.module
 import { PlanTastingModule } from './modules/plan-tasting/plan-tasting.module';
 import { TagsModule } from './modules/tags/tags.module';
 import { ProductionNumbersModule } from './modules/production-numbers/production-numbers.module';
+import { KitchenStationsModule } from './modules/kitchen-stations/kitchen-stations.module';
+import { DailyChecklistModule } from './modules/daily-checklist/daily-checklist.module';
 import { ShopifyWebhookController } from './webhooks/shopify.controller';
 import { CostEngineService } from './services/cost-engine.service';
 import { ProductionEngineService } from './services/production-engine.service';
@@ -39,6 +41,8 @@ import { ProductionEngineService } from './services/production-engine.service';
     PlanTastingModule,
     TagsModule,
     ProductionNumbersModule,
+    KitchenStationsModule,
+    DailyChecklistModule,
   ],
   controllers: [ShopifyWebhookController],
   providers: [CostEngineService, ProductionEngineService],

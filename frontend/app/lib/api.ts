@@ -528,6 +528,37 @@ export const api = {
   createTag: (data: any) => request<any>('/tags', { method: 'POST', body: JSON.stringify(data) }),
   updateTag: (id: string, data: any) => request<any>(`/tags/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
   deleteTag: (id: string) => request<void>(`/tags/${id}`, { method: 'DELETE' }),
+
+  // Daily Checklist
+  getDailyChecklist: (day?: string) =>
+    request<any[]>(`/daily-checklist${day ? `?day=${day}` : ''}`),
+  seedDailyChecklist: () =>
+    request<any>('/daily-checklist/seed', { method: 'POST' }),
+  createDailyChecklistItem: (data: { title: string; day: string; station?: string; sort_order?: number }) =>
+    request<any>('/daily-checklist', { method: 'POST', body: JSON.stringify(data) }),
+  updateDailyChecklistItem: (id: string, data: any) =>
+    request<any>(`/daily-checklist/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+  deleteDailyChecklistItem: (id: string) =>
+    request<any>(`/daily-checklist/${id}`, { method: 'DELETE' }),
+  toggleDailyChecklist: (id: string, weekLabel: string, completedBy?: string) =>
+    request<any>(`/daily-checklist/${id}/toggle`, {
+      method: 'POST',
+      body: JSON.stringify({ week_label: weekLabel, completed_by: completedBy }),
+    }),
+
+  // Kitchen Stations
+  getKitchenStations: () => request<any[]>('/kitchen-stations'),
+  seedKitchenStations: () => request<any>('/kitchen-stations/seed', { method: 'POST' }),
+  createKitchenStation: (data: { name: string; sort_order?: number }) =>
+    request<any>('/kitchen-stations', { method: 'POST', body: JSON.stringify(data) }),
+  updateKitchenStation: (id: string, data: any) =>
+    request<any>(`/kitchen-stations/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+  deleteKitchenStation: (id: string) =>
+    request<any>(`/kitchen-stations/${id}`, { method: 'DELETE' }),
+
+  // Admin: update production log (fix qty)
+  updateProductionLog: (logId: string, data: { qty_cooked?: number; notes?: string }) =>
+    request<any>(`/kitchen-portal/logs/${logId}`, { method: 'PATCH', body: JSON.stringify(data) }),
 };
 
 // ─── Types ──────────────────────────────────────────────────────────────────
