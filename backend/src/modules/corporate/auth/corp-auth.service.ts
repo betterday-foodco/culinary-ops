@@ -10,6 +10,7 @@ import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../../../prisma/prisma.service';
 import * as bcrypt from 'bcrypt';
 import * as crypto from 'crypto';
+import { Resend } from 'resend';
 
 @Injectable()
 export class CorpAuthService {
@@ -179,7 +180,7 @@ export class CorpAuthService {
     };
   }
 
-  // ── Email sending (pluggable) ──────────────────────────────────────────────
+  // ── Email sending via Resend ───────────────────────────────────────────────
 
   private async sendMagicLinkEmail(
     to: string,
@@ -187,8 +188,70 @@ export class CorpAuthService {
     link: string,
     company_name: string,
   ) {
-    // TODO Phase 3: wire up Resend / SendGrid / Nodemailer
-    // For now: just log. In dev the link is logged above.
-    this.logger.log(`[EMAIL] To: ${to} | Subject: Your BetterDay login link | Body: Hi ${name}, click ${link}`);
+    const apiKey = this.config.get<string>('RESEND_API_KEY');
+    if (!apiKey) {
+      this.logger.warn('[EMAIL] RESEND_API_KEY not set — skipping email send (dev mode)');
+      return;
+    }
+
+    const fromDomain = this.config.get<string>('RESEND_FROM_EMAIL') ?? 'noreply@betterday.com.au';
+    const resend = new Resend(apiKey);
+
+    try {
+      const { error } = await resend.emails.send({
+        from:    `BetterDay Meals <${fromDomain}>`,
+        to:      [to],
+        subject: `Your ${company_name} meal portal login link`,
+        html: `
+<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"></head>
+<body style="margin:0;padding:0;background:#f9f9f9;font-family:Arial,sans-serif">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#f9f9f9;padding:40px 0">
+    <tr><td align="center">
+      <table width="540" cellpadding="0" cellspacing="0" style="background:#fff;border-radius:12px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,.08)">
+        <!-- Header -->
+        <tr><td style="background:#00465e;padding:32px 40px">
+          <p style="margin:0;color:#fff;font-size:22px;font-weight:700">BetterDay Meals</p>
+          <p style="margin:6px 0 0;color:#a3c8d8;font-size:14px">${company_name} Employee Portal</p>
+        </td></tr>
+        <!-- Body -->
+        <tr><td style="padding:40px">
+          <p style="margin:0 0 16px;color:#222;font-size:16px">Hi ${name},</p>
+          <p style="margin:0 0 28px;color:#555;font-size:15px;line-height:1.6">
+            Click the button below to sign in to your ${company_name} meal ordering portal.
+            This link expires in <strong>15 minutes</strong>.
+          </p>
+          <table cellpadding="0" cellspacing="0"><tr><td>
+            <a href="${link}" style="display:inline-block;background:#00465e;color:#fff;text-decoration:none;font-size:15px;font-weight:600;padding:14px 32px;border-radius:8px">
+              Sign in to ${company_name} Portal →
+            </a>
+          </td></tr></table>
+          <p style="margin:28px 0 0;color:#999;font-size:13px">
+            If you didn't request this, you can safely ignore this email.
+          </p>
+        </td></tr>
+        <!-- Footer -->
+        <tr><td style="background:#f5f5f5;padding:20px 40px;border-top:1px solid #e8e8e8">
+          <p style="margin:0;color:#aaa;font-size:12px">
+            © ${new Date().getFullYear()} BetterDay Meals · This is an automated email, please do not reply.
+          </p>
+        </td></tr>
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>`,
+      });
+
+      if (error) {
+        this.logger.error(`[EMAIL] Resend error: ${JSON.stringify(error)}`);
+      } else {
+        this.logger.log(`[EMAIL] Magic link sent to ${to} via Resend`);
+      }
+    } catch (err) {
+      // Don't fail the request if email fails — token was already saved
+      this.logger.error(`[EMAIL] Resend send failed: ${String(err)}`);
+    }
   }
 }
