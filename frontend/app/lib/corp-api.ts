@@ -129,7 +129,7 @@ export const corpAuth = {
     ),
 
   requestMagicLink: (email: string, company_id: string) =>
-    request<{ ok: boolean; message: string }>(
+    request<{ ok: boolean; message: string; dev_token?: string; dev_link?: string }>(
       '/corp-auth/magic-link',
       { method: 'POST', body: JSON.stringify({ email, company_id }) },
     ),

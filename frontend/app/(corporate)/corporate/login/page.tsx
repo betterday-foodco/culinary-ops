@@ -87,7 +87,14 @@ export default function CorporateLoginPage() {
     setLoading(true);
     setError('');
     try {
-      await corpAuth.requestMagicLink(em, companyId);
+      const res = await corpAuth.requestMagicLink(em, companyId);
+      // Dev mode: backend returns the token directly so we can skip email
+      if ((res as any).dev_token) {
+        const verify = await corpAuth.verifyToken((res as any).dev_token);
+        setCorpToken(verify.access_token, verify.user);
+        router.replace('/corporate/work');
+        return;
+      }
       setStep('magic-sent');
     } catch (e: any) {
       setError(e.message ?? 'Something went wrong');

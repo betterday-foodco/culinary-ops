@@ -100,11 +100,17 @@ export class CorpAuthService {
     const baseUrl = this.config.get<string>('FRONTEND_URL') ?? 'http://localhost:3000';
     const link = `${baseUrl}/corporate/verify?token=${token}`;
 
-    // In dev: log link. In production: send email (pluggable email service)
     this.logger.log(`[MAGIC LINK] ${employee.name} <${normalEmail}>: ${link}`);
     await this.sendMagicLinkEmail(normalEmail, employee.name, link, company.name);
 
-    return { ok: true, message: 'If that email is registered, a link has been sent.' };
+    // In development: return the token directly so the frontend can redirect
+    // without needing a real email service configured yet.
+    const isDev = (this.config.get<string>('NODE_ENV') ?? 'development') !== 'production';
+    return {
+      ok: true,
+      message: 'If that email is registered, a link has been sent.',
+      ...(isDev ? { dev_token: token, dev_link: link } : {}),
+    };
   }
 
   async verifyMagicToken(token: string) {
