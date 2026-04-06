@@ -79,6 +79,11 @@ export class CorpBdAdminController {
     return this.svc.setPublishedToCorporate(plan_id, body.published);
   }
 
+  @Get('companies/:id/employees')
+  getCompanyEmployees(@Param('id') company_id: string) {
+    return this.svc.getEmployees(company_id);
+  }
+
   /** Get company dashboard from BD admin perspective */
   @Get('companies/:id/dashboard')
   getCompanyDashboard(@Param('id') company_id: string) {

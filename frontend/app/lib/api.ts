@@ -596,6 +596,30 @@ export const api = {
     request<any>(`/mealprep-sync/publish/${planId}`, { method: 'POST' }),
   getWebhookLogs: () => request<any[]>('/webhooks/logs'),
 
+  // BD Admin — Corporate Management (admin role only)
+  bdGetAllCompanies: () =>
+    request<{ ok: boolean; companies: BdCompany[] }>('/corp-admin/companies'),
+  bdUpsertCompany: (data: Partial<BdCompany> & { id?: string }) =>
+    request<{ ok: boolean; company: BdCompany }>('/corp-admin/companies', {
+      method: 'POST', body: JSON.stringify(data),
+    }),
+  bdUpsertEmployee: (data: { id?: string; company_id: string; name: string; email: string; role?: string; employee_code?: string }) =>
+    request<{ ok: boolean; employee: BdEmployee }>('/corp-admin/employees', {
+      method: 'POST', body: JSON.stringify(data),
+    }),
+  bdUpdateCompanyPin: (companyId: string, pin: string) =>
+    request<{ ok: boolean }>(`/corp-admin/companies/${companyId}/pin`, {
+      method: 'PATCH', body: JSON.stringify({ pin }),
+    }),
+  bdGetCompanyEmployees: (companyId: string) =>
+    request<{ ok: boolean; employees: BdEmployee[] }>(`/corp-admin/companies/${companyId}/employees`),
+  bdGetCompanyDashboard: (companyId: string) =>
+    request<BdCompanyDashboard>(`/corp-admin/companies/${companyId}/dashboard`),
+  bdGetCompanyOrders: (companyId: string, limit?: number) =>
+    request<{ ok: boolean; orders: BdOrder[] }>(`/corp-admin/companies/${companyId}/orders${limit ? `?limit=${limit}` : ''}`),
+  bdGetCompanyInvoices: (companyId: string) =>
+    request<{ ok: boolean; invoices: BdInvoice[] }>(`/corp-admin/companies/${companyId}/invoices`),
+
   // Corporate Sync
   getCorporateOrders: (week?: string) =>
     request<CorporateOrderSummary>(`/corporate-sync/orders${week ? `?week=${week}` : ''}`),
@@ -1304,3 +1328,73 @@ export interface UpsertPortionSpecData {
     sort_order?: number;
   }[];
 }
+
+// ─── BD Admin / Corporate types ───────────────────────────────────────────────
+
+export interface BdCompany {
+  id: string;
+  name: string;
+  delivery_day: string | null;
+  contact_email: string | null;
+  contact_name: string | null;
+  is_active: boolean;
+  extra: Record<string, unknown> | null;
+  _count?: { employees: number; orders: number };
+}
+
+export interface BdEmployee {
+  id: string;
+  company_id: string;
+  employee_code: string;
+  name: string;
+  email: string;
+  role: string;
+  is_active: boolean;
+  created_at: string;
+}
+
+export interface BdCompanyDashboard {
+  ok: boolean;
+  company: {
+    id: string;
+    name: string;
+    delivery_day: string | null;
+    employee_count: number;
+    par_levels: { category_name: string; max_meals_week: number }[];
+    extra: Record<string, unknown> | null;
+  };
+  recent_orders: number;
+  totals: { employee: number; company: number; bd: number; meals: number };
+}
+
+export interface BdOrder {
+  id: string;
+  order_code: string;
+  status: string;
+  delivery_date: string | null;
+  created_at: string;
+  employee_cost: number;
+  company_cost: number;
+  bd_cost: number;
+  employee: { name: string; email: string; employee_code: string } | null;
+  items: {
+    id: string;
+    meal_name: string;
+    quantity: number;
+    unit_price_employee: number;
+    unit_price_company: number;
+    meal_recipe: { display_name: string; category: string | null } | null;
+  }[];
+}
+
+export interface BdInvoice {
+  id: string;
+  invoice_number: string;
+  period_start: string;
+  period_end: string;
+  total_amount: number;
+  status: string;
+  pdf_url: string | null;
+  created_at: string;
+}
+

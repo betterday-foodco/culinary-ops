@@ -146,6 +146,21 @@ export default function DashboardLayout({
             </div>
           )}
 
+          {/* BD Corporate Admin — admin only */}
+          {userRole === 'admin' && (
+            <Link
+              href="/corporate-admin"
+              className={`flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm transition-colors ${
+                isActive('/corporate-admin')
+                  ? 'bg-brand-50 text-brand-700 font-medium'
+                  : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'
+              }`}
+            >
+              <span className="text-base leading-none">🏢</span>
+              BD Corporate
+            </Link>
+          )}
+
           {/* Settings */}
           <Link
             href="/settings"
