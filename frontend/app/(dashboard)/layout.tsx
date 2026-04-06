@@ -22,6 +22,8 @@ const KITCHEN_NAV = [
   { href: '/feedback',           label: 'Recipe Feedback',    icon: '⭐' },
   { href: '/settings/staff',     label: 'Kitchen Staff',      icon: '👨‍🍳' },
   { href: '/settings/tags',      label: 'System Tags',        icon: '🏷️' },
+  { href: '/checklist-manage',        label: 'Checklist Assign',   icon: '📋' },
+  { href: '/settings/integration',    label: 'MealPrep Integration', icon: '🔗' },
 ];
 
 const OTHER_NAV = [
@@ -142,6 +144,21 @@ export default function DashboardLayout({
                 </div>
               )}
             </div>
+          )}
+
+          {/* BD Corporate Admin — admin only */}
+          {userRole === 'admin' && (
+            <Link
+              href="/corporate-admin"
+              className={`flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm transition-colors ${
+                isActive('/corporate-admin')
+                  ? 'bg-brand-50 text-brand-700 font-medium'
+                  : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'
+              }`}
+            >
+              <span className="text-base leading-none">🏢</span>
+              BD Corporate
+            </Link>
           )}
 
           {/* Settings */}

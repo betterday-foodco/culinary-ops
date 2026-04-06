@@ -492,4 +492,12 @@ export class KitchenPortalService {
       select: { id: true, priority: true },
     });
   }
+
+  /** Update a production log record (admin use: fix qty_cooked etc.) */
+  async updateProductionLog(logId: string, data: { qty_cooked?: number; notes?: string }) {
+    return this.prisma.kitchenProductionLog.update({
+      where: { id: logId },
+      data,
+    });
+  }
 }

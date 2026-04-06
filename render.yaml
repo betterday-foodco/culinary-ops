@@ -1,0 +1,45 @@
+services:
+  # ── NestJS API ─────────────────────────────────────────────────────────────
+  - type: web
+    name: culinary-ops-api
+    runtime: node
+    region: singapore
+    rootDir: backend
+    buildCommand: npm ci && npx prisma generate && npm run build
+    startCommand: npm run start
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 3001
+      - key: DATABASE_URL
+        sync: false          # set in Render dashboard
+      - key: JWT_SECRET
+        generateValue: true  # Render auto-generates a secure random value
+      - key: JWT_EXPIRATION
+        value: 7d
+      - key: FRONTEND_URL
+        sync: false          # set in Render dashboard after frontend is deployed
+      - key: RESEND_API_KEY
+        sync: false          # set in Render dashboard
+      - key: RESEND_FROM_EMAIL
+        value: noreply@betterday.com.au
+      - key: SHOPIFY_WEBHOOK_SECRET
+        sync: false
+
+  # ── Next.js Frontend ────────────────────────────────────────────────────────
+  - type: web
+    name: culinary-ops-frontend
+    runtime: node
+    region: singapore
+    rootDir: frontend
+    buildCommand: npm ci && npm run build
+    startCommand: npm run start
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 3000
+      - key: NEXT_PUBLIC_API_URL
+        sync: false          # set to https://culinary-ops-api.onrender.com/api

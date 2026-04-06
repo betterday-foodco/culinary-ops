@@ -59,6 +59,12 @@ export class CreateSubRecipeDto {
   @Max(5)
   priority?: number;
 
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  @Max(3)
+  sub_priority?: number | null;
+
   @IsNumber()
   @Min(0)
   base_yield_weight: number;

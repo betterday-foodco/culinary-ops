@@ -66,6 +66,7 @@ model SubRecipe {
   production_day   String?
   station_tag      String?
   priority         Int      @default(3)
+  sub_priority     Int?     // 1=P1/AM, 2=P2, 3=P3/PM
   base_yield_weight Float   @default(1)
   base_yield_unit   String  @default("Kgs")
   computed_cost    Float    @default(0)
@@ -143,6 +144,7 @@ model MealRecipe {
   menu_queue_items      MenuQueueItem[]
   portion_spec          PortionSpec?
   tasting_sessions      PlanTastingSession[]
+  corporate_order_items CorporateOrderItem[]
 
   @@index([name])
   @@index([category])
@@ -157,6 +159,7 @@ model PortionSpec {
   total_weight_max Float?
   general_notes    String?
   tasting_notes    String?
+  photo_url        String?
   created_at       DateTime @default(now())
   updated_at       DateTime @updatedAt
 
@@ -217,9 +220,10 @@ model ProductionPlan {
   week_start           DateTime
   status               String   @default("draft")
   notes                String?
-  published_to_kitchen Boolean  @default(false)
-  created_at           DateTime @default(now())
-  updated_at           DateTime @updatedAt
+  published_to_kitchen    Boolean  @default(false)
+  published_to_corporate  Boolean  @default(false)  // true once menu is pushed to corporate portal
+  created_at              DateTime @default(now())
+  updated_at              DateTime @updatedAt
 
   items            ProductionPlanItem[]
   kitchen_logs     KitchenProductionLog[]
@@ -432,6 +436,38 @@ model ProductionNumberUpdate {
   @@index([plan_id])
 }
 
+model KitchenStation {
+  id         String   @id @default(uuid())
+  name       String   @unique
+  is_active  Boolean  @default(true)
+  sort_order Int      @default(0)
+  created_at DateTime @default(now())
+}
+
+model DailyChecklist {
+  id          String   @id @default(uuid())
+  title       String
+  day         String   // 'wednesday', 'thursday', 'friday'
+  station     String?
+  sort_order  Int      @default(0)
+  is_active   Boolean  @default(true)
+  created_at  DateTime @default(now())
+
+  completions DailyChecklistCompletion[]
+}
+
+model DailyChecklistCompletion {
+  id           String   @id @default(uuid())
+  checklist_id String
+  week_label   String
+  completed_by String?
+  completed_at DateTime @default(now())
+
+  checklist DailyChecklist @relation(fields: [checklist_id], references: [id], onDelete: Cascade)
+
+  @@unique([checklist_id, week_label])
+}
+
 model SystemTag {
   id          String   @id @default(uuid())
   name        String
@@ -462,4 +498,296 @@ model TagConnection {
   to_tag   SystemTag @relation("ConnectionTo", fields: [to_tag_id], references: [id], onDelete: Cascade)
 
   @@unique([from_tag_id, to_tag_id, relationship])
+}
+
+// Generic key-value store for integration settings (API tokens, endpoints, etc.)
+model SystemConfig {
+  id         String   @id @default(uuid())
+  key        String   @unique
+  value      String
+  updated_at DateTime @updatedAt
+}
+
+// Log of inbound webhook calls from third-party platforms
+model WebhookLog {
+  id           String   @id @default(uuid())
+  source       String   // e.g. "mealprep"
+  event_type   String?  // e.g. "order.created"
+  payload      Json
+  status       String   @default("received") // received | processed | error
+  result       Json?    // what we did (plan created/updated, meal matches, etc.)
+  error        String?
+  received_at  DateTime @default(now())
+
+  @@index([source])
+  @@index([received_at])
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// CORPORATE MODULE
+// Replaces Flask + Google Sheets (betterday-app) — all data lives in Neon.
+// Role separation enforced at JWT level: CORP_EMPLOYEE / CORP_MANAGER / ADMIN.
+// Culinary staff have zero visibility into these models and vice-versa.
+// ─────────────────────────────────────────────────────────────────────────────
+
+enum CorpOrderStatus {
+  pending
+  confirmed
+  delivered
+  cancelled
+  refunded
+}
+
+enum MealTier {
+  free
+  tier1
+  tier2
+  tier3
+}
+
+// One row per client company (e.g. "SHAG", "DEMO")
+// Meaningful string ID kept from legacy system for zero-friction migration.
+model CorporateCompany {
+  id             String   @id               // e.g. "SHAG" — matches legacy CompanyID
+  name           String
+  email          String?
+  phone          String?
+  address        String?
+  city           String?
+  province       String?
+  postal_code    String?
+  contact_name   String?
+  contact_phone  String?
+  contact_email  String?
+  is_active      Boolean  @default(true)
+  plan_type      String?                    // e.g. "Standard" | "Premium"
+  delivery_day   String?                    // "Wednesday" | "Thursday"
+  delivery_notes String?
+  // Fields that didn't map to dedicated columns are preserved as JSON
+  // so we lose zero data from the 61-column Google Sheet.
+  extra          Json?
+  created_at     DateTime @default(now())
+  updated_at     DateTime @updatedAt
+
+  employees          CorporateEmployee[]
+  orders             CorporateOrder[]
+  benefit_levels     CorporateBenefitLevel[]
+  par_levels         CorporateParLevel[]
+  company_pin        CorporateCompanyPIN?
+  invoices           CompanyInvoice[]
+  credit_notes       CorporateCreditNote[]
+  monthly_statements CorporateMonthlyStatement[]
+
+  @@index([is_active])
+}
+
+// One row per employee across all companies
+model CorporateEmployee {
+  id              String   @id @default(uuid())
+  employee_code   String   @unique           // legacy "EMP55814975" format
+  company_id      String
+  email           String
+  name            String
+  pin_hash        String?                    // bcrypt hash of 4-digit PIN
+  benefit_level   String?                   // "free" | "tier1" | "tier2" | "tier3"
+  meals_remaining Int      @default(0)       // resets weekly
+  is_active       Boolean  @default(true)
+  notes           String?
+  created_at      DateTime @default(now())
+  updated_at      DateTime @updatedAt
+
+  company       CorporateCompany  @relation(fields: [company_id], references: [id])
+  orders        CorporateOrder[]
+  magic_tokens  CorporateMagicToken[]
+
+  @@unique([company_id, email])
+  @@index([company_id])
+  @@index([employee_code])
+}
+
+// Order header — one per submission (employee may order multiple meals)
+model CorporateOrder {
+  id              String           @id @default(uuid())
+  order_code      String           @unique   // legacy "10022" format (no prefix)
+  company_id      String
+  employee_id     String?                    // null = company-level / walk-in
+  delivery_date   DateTime?
+  status          CorpOrderStatus  @default(pending)
+  total_amount    Float            @default(0)
+  employee_cost   Float            @default(0)
+  company_cost    Float            @default(0)
+  bd_cost         Float            @default(0)
+  notes           String?
+  source          String           @default("portal") // "portal" | "manager" | "import"
+  created_at      DateTime         @default(now())
+  updated_at      DateTime         @updatedAt
+
+  company    CorporateCompany    @relation(fields: [company_id], references: [id])
+  employee   CorporateEmployee?  @relation(fields: [employee_id], references: [id])
+  items      CorporateOrderItem[]
+
+  @@index([company_id])
+  @@index([employee_id])
+  @@index([delivery_date])
+  @@index([status])
+}
+
+// One row per meal line within an order
+model CorporateOrderItem {
+  id                String    @id @default(uuid())
+  order_id          String
+  meal_recipe_id    String?                  // FK to culinary MealRecipe (nullable until linked)
+  meal_external_id  String?                  // legacy "#509" format from GAS
+  meal_name         String                   // denormalised snapshot at order time
+  quantity          Int       @default(1)
+  tier              MealTier  @default(free)
+  unit_price        Float     @default(0)    // what employee actually pays per meal
+  employee_subsidy  Float     @default(0)
+  company_subsidy   Float     @default(0)
+  bd_subsidy        Float     @default(0)
+  line_total        Float     @default(0)    // unit_price × quantity
+
+  order       CorporateOrder @relation(fields: [order_id], references: [id], onDelete: Cascade)
+  meal_recipe MealRecipe?    @relation(fields: [meal_recipe_id], references: [id], onDelete: SetNull)
+
+  @@index([order_id])
+  @@index([meal_recipe_id])
+  @@index([meal_external_id])
+}
+
+// Employee benefit groups per company (from BenefitLevels sheet).
+// e.g. SHAG has "Base" (level 1), DEMO has "Manager" (level 1).
+// Each group has its own free-meal quota and per-tier pricing config.
+model CorporateBenefitLevel {
+  id               String  @id @default(uuid())
+  company_id       String
+  level_id         String              // legacy LevelID, e.g. "1" or "2"
+  level_name       String?             // e.g. "Base" | "Manager" | "General"
+  level_order      Int     @default(0)
+  free_meals_week  Int     @default(0) // FreeMealsPerWeek for this group
+  max_meals_week   Int     @default(0) // MaxMealsPerWeek cap
+  full_price       Float   @default(0) // FullPrice — cost if over all tier allotments
+  // All tier pricing columns stored as JSON to stay flexible:
+  // { free: { employeePrice, bdSubsidy, companySubsidy },
+  //   tier1: { meals, employeePrice, bdSubsidy, companySubsidy }, … }
+  tier_config      Json?
+
+  company CorporateCompany @relation(fields: [company_id], references: [id], onDelete: Cascade)
+
+  @@unique([company_id, level_id])
+  @@index([company_id])
+}
+
+// Par-level targets per category per company (e.g. "Protein" = 20 meals/week)
+model CorporateParLevel {
+  id            String  @id @default(uuid())
+  company_id    String
+  category_id   String  // e.g. "protein" | "vegan" | "salad"
+  category_name String?
+  par_quantity  Int     @default(0)
+  items_json    Json?   // optional breakdown of specific meal IDs within category
+
+  company CorporateCompany @relation(fields: [company_id], references: [id], onDelete: Cascade)
+
+  @@unique([company_id, category_id])
+  @@index([company_id])
+}
+
+// One PIN per company — used by manager portal login
+// PK = company_id so there is exactly one row per company (no uuid needed)
+model CorporateCompanyPIN {
+  company_id String   @id
+  pin_hash   String                         // bcrypt hash
+  updated_at DateTime @updatedAt
+
+  company CorporateCompany @relation(fields: [company_id], references: [id], onDelete: Cascade)
+}
+
+// Short-lived magic-link tokens emailed to employees (15-min TTL)
+// Replaces the in-memory dict in the Flask app
+model CorporateMagicToken {
+  token       String   @id                  // UUID/hex token sent in the email link
+  employee_id String?                       // nullable — resolved after employee lookup
+  email       String                        // raw email used to send the link
+  company_id  String                        // which company portal this is for
+  expires_at  DateTime                      // created_at + 15 min
+  is_used     Boolean  @default(false)
+  created_at  DateTime @default(now())
+
+  employee CorporateEmployee? @relation(fields: [employee_id], references: [id], onDelete: Cascade)
+
+  @@index([employee_id])
+  @@index([email])
+  @@index([expires_at])
+}
+
+// Company invoices generated by BD admin or auto-monthly
+model CompanyInvoice {
+  id             String   @id @default(uuid())
+  invoice_number String   @unique           // e.g. "INV-2024-001"
+  company_id     String
+  period_start   DateTime
+  period_end     DateTime
+  amount_total   Float    @default(0)
+  amount_paid    Float    @default(0)
+  status         String   @default("draft") // draft | sent | paid | overdue | void
+  notes          String?
+  pdf_url        String?
+  issued_at      DateTime?
+  due_at         DateTime?
+  created_at     DateTime @default(now())
+  updated_at     DateTime @updatedAt
+
+  company CorporateCompany @relation(fields: [company_id], references: [id])
+
+  @@index([company_id])
+  @@index([status])
+}
+
+// Credit notes issued to employees or companies
+model CorporateCreditNote {
+  id               String   @id @default(uuid())
+  credit_note_code String   @unique          // e.g. "CN-2024-001"
+  company_id       String
+  employee_id      String?                   // null = company-level credit
+  amount           Float
+  reason           String?
+  applied_to_order String?                   // order_code it was applied against
+  applied_at       DateTime?
+  is_void          Boolean  @default(false)
+  created_at       DateTime @default(now())
+  updated_at       DateTime @updatedAt
+
+  company CorporateCompany @relation(fields: [company_id], references: [id])
+
+  @@index([company_id])
+  @@index([employee_id])
+}
+
+// Monthly summary statement per company
+model CorporateMonthlyStatement {
+  id               String   @id @default(uuid())
+  statement_code   String   @unique          // e.g. "STMT-SHAG-2024-01"
+  company_id       String
+  month_year       String                    // "2024-01" ISO format
+  total_meals      Int      @default(0)
+  total_employee   Float    @default(0)      // total charged to employees
+  total_company    Float    @default(0)      // total charged to company
+  total_bd         Float    @default(0)      // total BD subsidy given
+  pdf_url          String?
+  created_at       DateTime @default(now())
+  updated_at       DateTime @updatedAt
+
+  company CorporateCompany @relation(fields: [company_id], references: [id])
+
+  @@index([company_id])
+  @@index([month_year])
+}
+
+// Key-value store for corporate settings (replaces Settings sheet)
+// e.g. key="last_order_id" value="10022"
+model CorporateSetting {
+  key        String   @id
+  value      String
+  updated_at DateTime @updatedAt
 }

@@ -4,41 +4,6 @@ import { useEffect, useState, useMemo } from 'react';
 import Link from 'next/link';
 import { api, PortionSpec, MealRecipe } from '../../lib/api';
 
-function MealPhotoUpload({ meal, onUploaded }: { meal: MealRecipe | undefined; onUploaded: (url: string) => void }) {
-  const [uploading, setUploading] = useState(false);
-  if (!meal) return null;
-  return (
-    <div className="flex items-center gap-3 px-5 py-3 bg-gray-50 border-t border-gray-100">
-      {meal.image_url && (
-        <img src={meal.image_url} alt={meal.display_name} className="w-12 h-12 rounded-lg object-cover border border-gray-200" />
-      )}
-      <label className={`px-3 py-1.5 text-xs font-medium rounded-lg cursor-pointer transition-colors ${uploading ? 'bg-gray-200 text-gray-400' : 'bg-brand-500 text-white hover:bg-brand-600'}`}>
-        {uploading ? 'Uploading…' : meal.image_url ? 'Change Photo' : 'Upload Photo'}
-        <input
-          type="file"
-          accept="image/*"
-          className="hidden"
-          disabled={uploading}
-          onChange={async (e) => {
-            const file = e.target.files?.[0];
-            if (!file) return;
-            setUploading(true);
-            try {
-              const result = await api.uploadMealPhoto(meal.id, file);
-              onUploaded(result.image_url);
-            } catch (err: any) {
-              alert('Upload failed: ' + err.message);
-            } finally {
-              setUploading(false);
-            }
-          }}
-        />
-      </label>
-      {!meal.image_url && <span className="text-xs text-gray-400">Add a photo for this meal</span>}
-    </div>
-  );
-}
-
 export default function PortionSpecsPage() {
   const [specs, setSpecs] = useState<PortionSpec[]>([]);
   const [meals, setMeals] = useState<MealRecipe[]>([]);
@@ -46,7 +11,8 @@ export default function PortionSpecsPage() {
   const [search, setSearch] = useState('');
   const [filterContainer, setFilterContainer] = useState('');
   const [expandedId, setExpandedId] = useState<string | null>(null);
-  const [mealImageUrls, setMealImageUrls] = useState<Record<string, string>>({});
+  const [specPhotoUrls, setSpecPhotoUrls] = useState<Record<string, string>>({});
+  const [uploadingSpecId, setUploadingSpecId] = useState<string | null>(null);
 
   useEffect(() => {
     Promise.all([api.getPortionSpecs(), api.getMeals()]).then(([s, m]) => {
@@ -88,10 +54,34 @@ export default function PortionSpecsPage() {
     return '—';
   }
 
-  function formatPortion(c: PortionSpec['components'][0]) {
-    if (c.portion_min && c.portion_max) return `${c.portion_min}–${c.portion_max} ${c.portion_unit ?? 'g'}`;
-    if (c.portion_min) return `${c.portion_min} ${c.portion_unit ?? 'g'}`;
-    return '—';
+  function formatPortion(c: PortionSpec['components'][0], recipeQtyG?: number): { text: string; suggested: boolean } {
+    if (c.portion_min && c.portion_max)
+      return { text: `${c.portion_min}–${c.portion_max} ${c.portion_unit ?? 'g'}`, suggested: false };
+    if (c.portion_min)
+      return { text: `${c.portion_min} ${c.portion_unit ?? 'g'}`, suggested: false };
+    // Auto-suggest from recipe quantity
+    if (recipeQtyG && recipeQtyG > 0) {
+      const max = recipeQtyG;
+      const min = Math.round(recipeQtyG * 0.93);
+      return { text: `${min}–${max} g`, suggested: true };
+    }
+    return { text: '—', suggested: false };
+  }
+
+  // Build name→quantity map for a given meal's recipe components
+  function mealRecipeQtyMap(mealId: string): Record<string, number> {
+    const meal = mealMap.get(mealId);
+    if (!meal) return {};
+    const map: Record<string, number> = {};
+    meal.components.forEach(c => {
+      const name = (c.sub_recipe?.name ?? c.ingredient?.internal_name ?? '').toLowerCase().trim();
+      if (name) {
+        let qty = Number(c.quantity);
+        if (c.unit === 'kg' || c.unit === 'Kgs') qty *= 1000;
+        map[name] = qty;
+      }
+    });
+    return map;
   }
 
   const containerBadge = (ct: string | null) => {
@@ -175,6 +165,15 @@ export default function PortionSpecsPage() {
                     {meal?.meal_code ?? '—'}
                   </span>
 
+                  {/* Spec photo thumbnail */}
+                  {(specPhotoUrls[spec.id] || spec.photo_url) && (
+                    <img
+                      src={specPhotoUrls[spec.id] || spec.photo_url!}
+                      alt={meal?.display_name}
+                      className="w-10 h-10 rounded-lg object-cover border border-gray-200 flex-shrink-0"
+                    />
+                  )}
+
                   {/* Name */}
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-semibold text-gray-900 truncate">
@@ -208,8 +207,19 @@ export default function PortionSpecsPage() {
                 </button>
 
                 {/* Expanded: components table */}
-                {isExpanded && (
+                {isExpanded && (() => {
+                  const recipeQtys = mealRecipeQtyMap(spec.meal_id);
+                  return (
                   <div className="border-t border-gray-100">
+                    {(specPhotoUrls[spec.id] || spec.photo_url) && (
+                      <div className="px-5 py-4 bg-gray-50 border-b border-gray-100 flex justify-center">
+                        <img
+                          src={specPhotoUrls[spec.id] || spec.photo_url!}
+                          alt={meal?.display_name}
+                          className="max-h-64 rounded-xl object-contain border border-gray-200 shadow-sm"
+                        />
+                      </div>
+                    )}
                     {spec.general_notes && (
                       <div className="px-5 py-3 bg-amber-50 border-b border-amber-100 text-xs text-amber-800">
                         📋 {spec.general_notes}
@@ -226,15 +236,22 @@ export default function PortionSpecsPage() {
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-gray-50">
-                        {spec.components.map((c, i) => (
+                        {spec.components.map((c, i) => {
+                          const recipeQty = recipeQtys[c.ingredient_name.toLowerCase().trim()];
+                          const portion = formatPortion(c, recipeQty);
+                          return (
                           <tr key={c.id} className="hover:bg-gray-50/50">
                             <td className="px-5 py-2.5 text-xs text-gray-400">{i + 1}</td>
                             <td className="px-5 py-2.5 text-sm text-gray-900 font-medium">{c.ingredient_name}</td>
-                            <td className="px-5 py-2.5 text-xs text-gray-700 font-mono">{formatPortion(c)}</td>
+                            <td className="px-5 py-2.5 text-xs font-mono">
+                              <span className={portion.suggested ? 'text-amber-600' : 'text-gray-700'}>{portion.text}</span>
+                              {portion.suggested && <span className="ml-1 text-[10px] text-amber-400">~</span>}
+                            </td>
                             <td className="px-5 py-2.5 text-xs text-gray-500">{c.tool || '—'}</td>
                             <td className="px-5 py-2.5 text-xs text-gray-500">{c.notes || '—'}</td>
                           </tr>
-                        ))}
+                          );
+                        })}
                       </tbody>
                       {(spec.total_weight_min || spec.total_weight_max) && (
                         <tfoot className="bg-gray-50 border-t border-gray-200">
@@ -250,14 +267,34 @@ export default function PortionSpecsPage() {
                         ✓ Tasting notes: {spec.tasting_notes}
                       </div>
                     )}
-                    <MealPhotoUpload
-                      meal={mealImageUrls[spec.meal_id]
-                        ? { ...mealMap.get(spec.meal_id)!, image_url: mealImageUrls[spec.meal_id] }
-                        : mealMap.get(spec.meal_id)}
-                      onUploaded={(url) => setMealImageUrls(prev => ({ ...prev, [spec.meal_id]: url }))}
-                    />
+                    <div className="px-5 py-3 bg-gray-50 border-t border-gray-100 flex items-center gap-3">
+                      <label className={`px-3 py-1.5 text-xs font-medium rounded-lg cursor-pointer transition-colors ${uploadingSpecId === spec.id ? 'bg-gray-200 text-gray-400' : 'bg-brand-500 text-white hover:bg-brand-600'}`}>
+                        {uploadingSpecId === spec.id ? 'Uploading…' : (specPhotoUrls[spec.id] || spec.photo_url) ? 'Change Reference Photo' : 'Upload Reference Photo'}
+                        <input
+                          type="file"
+                          accept="image/*"
+                          className="hidden"
+                          disabled={uploadingSpecId === spec.id}
+                          onChange={async (e) => {
+                            const file = e.target.files?.[0];
+                            if (!file) return;
+                            setUploadingSpecId(spec.id);
+                            try {
+                              const result = await api.uploadSpecPhoto(spec.id, file);
+                              setSpecPhotoUrls(prev => ({ ...prev, [spec.id]: result.photo_url }));
+                            } catch (err: any) {
+                              alert('Upload failed: ' + err.message);
+                            } finally {
+                              setUploadingSpecId(null);
+                            }
+                          }}
+                        />
+                      </label>
+                      <span className="text-xs text-gray-400">Reference photo shown to kitchen staff</span>
+                    </div>
                   </div>
-                )}
+                  );
+                })()}
               </div>
             );
           })

@@ -187,6 +187,23 @@ export const api = {
     });
   },
 
+  uploadSpecPhoto: (specId: string, file: File) => {
+    const token = getToken();
+    const formData = new FormData();
+    formData.append('photo', file);
+    return fetch(`${API_URL}/portion-specs/${specId}/photo`, {
+      method: 'POST',
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+      body: formData,
+    }).then(async (res) => {
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ message: res.statusText }));
+        throw new Error(err.message ?? 'Upload failed');
+      }
+      return res.json() as Promise<{ photo_url: string }>;
+    });
+  },
+
   // Orders
   getOrders: (startDate?: string, endDate?: string) => {
     const params = new URLSearchParams();
@@ -250,6 +267,12 @@ export const api = {
 
   publishProductionPlan: (id: string, publish: boolean) =>
     request<ProductionPlan>(`/production-plans/${id}/publish`, {
+      method: 'PATCH',
+      body: JSON.stringify({ publish }),
+    }),
+
+  publishProductionPlanCorporate: (id: string, publish: boolean) =>
+    request<ProductionPlan>(`/production-plans/${id}/publish-corporate`, {
       method: 'PATCH',
       body: JSON.stringify({ publish }),
     }),
@@ -528,6 +551,82 @@ export const api = {
   createTag: (data: any) => request<any>('/tags', { method: 'POST', body: JSON.stringify(data) }),
   updateTag: (id: string, data: any) => request<any>(`/tags/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
   deleteTag: (id: string) => request<void>(`/tags/${id}`, { method: 'DELETE' }),
+
+  // Daily Checklist
+  getDailyChecklist: (day?: string) =>
+    request<any[]>(`/daily-checklist${day ? `?day=${day}` : ''}`),
+  seedDailyChecklist: () =>
+    request<any>('/daily-checklist/seed', { method: 'POST' }),
+  createDailyChecklistItem: (data: { title: string; day: string; station?: string; sort_order?: number }) =>
+    request<any>('/daily-checklist', { method: 'POST', body: JSON.stringify(data) }),
+  updateDailyChecklistItem: (id: string, data: any) =>
+    request<any>(`/daily-checklist/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+  deleteDailyChecklistItem: (id: string) =>
+    request<any>(`/daily-checklist/${id}`, { method: 'DELETE' }),
+  toggleDailyChecklist: (id: string, weekLabel: string, completedBy?: string) =>
+    request<any>(`/daily-checklist/${id}/toggle`, {
+      method: 'POST',
+      body: JSON.stringify({ week_label: weekLabel, completed_by: completedBy }),
+    }),
+
+  // Kitchen Stations
+  getKitchenStations: () => request<any[]>('/kitchen-stations'),
+  seedKitchenStations: () => request<any>('/kitchen-stations/seed', { method: 'POST' }),
+  createKitchenStation: (data: { name: string; sort_order?: number }) =>
+    request<any>('/kitchen-stations', { method: 'POST', body: JSON.stringify(data) }),
+  updateKitchenStation: (id: string, data: any) =>
+    request<any>(`/kitchen-stations/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+  deleteKitchenStation: (id: string) =>
+    request<any>(`/kitchen-stations/${id}`, { method: 'DELETE' }),
+
+  // Admin: update production log (fix qty)
+  updateProductionLog: (logId: string, data: { qty_cooked?: number; notes?: string }) =>
+    request<any>(`/kitchen-portal/logs/${logId}`, { method: 'PATCH', body: JSON.stringify(data) }),
+
+  // Integration / MealPrep platform
+  getIntegrationConfig: () => request<{
+    mealprep_api_endpoint: string;
+    mealprep_api_token_set: boolean;
+    mealprep_webhook_secret_set: boolean;
+    mealprep_webhook_url_hint: string;
+  }>('/mealprep-sync/config'),
+  saveIntegrationConfig: (data: Record<string, string>) =>
+    request<{ ok: boolean }>('/system-config', { method: 'PATCH', body: JSON.stringify(data) }),
+  publishToMealPrep: (planId: string) =>
+    request<any>(`/mealprep-sync/publish/${planId}`, { method: 'POST' }),
+  getWebhookLogs: () => request<any[]>('/webhooks/logs'),
+
+  // BD Admin — Corporate Management (admin role only)
+  bdGetAllCompanies: () =>
+    request<{ ok: boolean; companies: BdCompany[] }>('/corp-admin/companies'),
+  bdUpsertCompany: (data: Partial<BdCompany> & { id?: string }) =>
+    request<{ ok: boolean; company: BdCompany }>('/corp-admin/companies', {
+      method: 'POST', body: JSON.stringify(data),
+    }),
+  bdUpsertEmployee: (data: { id?: string; company_id: string; name: string; email: string; role?: string; employee_code?: string }) =>
+    request<{ ok: boolean; employee: BdEmployee }>('/corp-admin/employees', {
+      method: 'POST', body: JSON.stringify(data),
+    }),
+  bdUpdateCompanyPin: (companyId: string, pin: string) =>
+    request<{ ok: boolean }>(`/corp-admin/companies/${companyId}/pin`, {
+      method: 'PATCH', body: JSON.stringify({ pin }),
+    }),
+  bdGetCompanyEmployees: (companyId: string) =>
+    request<{ ok: boolean; employees: BdEmployee[] }>(`/corp-admin/companies/${companyId}/employees`),
+  bdGetCompanyDashboard: (companyId: string) =>
+    request<BdCompanyDashboard>(`/corp-admin/companies/${companyId}/dashboard`),
+  bdGetCompanyOrders: (companyId: string, limit?: number) =>
+    request<{ ok: boolean; orders: BdOrder[] }>(`/corp-admin/companies/${companyId}/orders${limit ? `?limit=${limit}` : ''}`),
+  bdGetCompanyInvoices: (companyId: string) =>
+    request<{ ok: boolean; invoices: BdInvoice[] }>(`/corp-admin/companies/${companyId}/invoices`),
+
+  // Corporate Sync
+  getCorporateOrders: (week?: string) =>
+    request<CorporateOrderSummary>(`/corporate-sync/orders${week ? `?week=${week}` : ''}`),
+  applyCorporateOrdersToPlan: (planId: string, week?: string) =>
+    request<CorporateApplyResult>(`/corporate-sync/apply/${planId}${week ? `?week=${week}` : ''}`, { method: 'POST' }),
+  publishMenuToCorporate: (planId: string) =>
+    request<{ ok: boolean; week: string; meals_published: number }>(`/corporate-sync/publish-menu/${planId}`, { method: 'POST' }),
 };
 
 // ─── Types ──────────────────────────────────────────────────────────────────
@@ -618,6 +717,10 @@ export interface MealRecipe {
   fat_g: number | null;
   created_at: string;
   updated_at: string;
+  allergen_tags: string[];
+  dietary_tags: string[];
+  linked_meal_id: string | null;
+  portion_score: number | null;
   components: MealComponent[];
 }
 
@@ -773,6 +876,7 @@ export interface ProductionPlan {
   status: string;
   notes: string | null;
   published_to_kitchen: boolean;
+  published_to_corporate: boolean;
   created_at: string;
   updated_at: string;
   items: {
@@ -804,6 +908,7 @@ export interface ProductionPlanDetail {
   status: string;
   notes: string | null;
   published_to_kitchen: boolean;
+  published_to_corporate: boolean;
   created_at: string;
   updated_at: string;
   items: ProductionPlanItem[];
@@ -897,6 +1002,35 @@ export interface InventoryReport {
   total_cost_all: number;
   total_cost_buffered_all: number;
   items_needing_order: number;
+}
+
+// ─── Corporate Sync types ────────────────────────────────────────────────────
+
+export interface CorporateMealCount {
+  meal_id: string;
+  meal_code: string;
+  dish_name: string;
+  diet: string;
+  count: number;
+  by_company: { company: string; count: number }[];
+  internal_meal_id: string | null;
+  internal_meal_name: string | null;
+}
+
+export interface CorporateOrderSummary {
+  ok: boolean;
+  week: string;
+  fetched_at: string;
+  total_orders: number;
+  companies: string[];
+  meals: CorporateMealCount[];
+}
+
+export interface CorporateApplyResult {
+  applied: number;
+  skipped: number;
+  unmatched: string[];
+  summary: CorporateOrderSummary;
 }
 
 // ─── Auth User ────────────────────────────────────────────────────────────────
@@ -1113,8 +1247,12 @@ export interface MenuQueueItem {
     display_name: string;
     category: string | null;
     allergen_tags: string[];
+    dietary_tags: string[];
     computed_cost: number;
     image_url: string | null;
+    meal_code: string | null;
+    linked_meal_id: string | null;
+    portion_score: number | null;
   };
 }
 
@@ -1160,6 +1298,7 @@ export interface PortionSpec {
   total_weight_max: number | null;
   general_notes: string | null;
   tasting_notes: string | null;
+  photo_url: string | null;
   created_at: string;
   updated_at: string;
   meal?: {
@@ -1189,3 +1328,73 @@ export interface UpsertPortionSpecData {
     sort_order?: number;
   }[];
 }
+
+// ─── BD Admin / Corporate types ───────────────────────────────────────────────
+
+export interface BdCompany {
+  id: string;
+  name: string;
+  delivery_day: string | null;
+  contact_email: string | null;
+  contact_name: string | null;
+  is_active: boolean;
+  extra: Record<string, unknown> | null;
+  _count?: { employees: number; orders: number };
+}
+
+export interface BdEmployee {
+  id: string;
+  company_id: string;
+  employee_code: string;
+  name: string;
+  email: string;
+  role: string;
+  is_active: boolean;
+  created_at: string;
+}
+
+export interface BdCompanyDashboard {
+  ok: boolean;
+  company: {
+    id: string;
+    name: string;
+    delivery_day: string | null;
+    employee_count: number;
+    par_levels: { category_name: string; max_meals_week: number }[];
+    extra: Record<string, unknown> | null;
+  };
+  recent_orders: number;
+  totals: { employee: number; company: number; bd: number; meals: number };
+}
+
+export interface BdOrder {
+  id: string;
+  order_code: string;
+  status: string;
+  delivery_date: string | null;
+  created_at: string;
+  employee_cost: number;
+  company_cost: number;
+  bd_cost: number;
+  employee: { name: string; email: string; employee_code: string } | null;
+  items: {
+    id: string;
+    meal_name: string;
+    quantity: number;
+    unit_price_employee: number;
+    unit_price_company: number;
+    meal_recipe: { display_name: string; category: string | null } | null;
+  }[];
+}
+
+export interface BdInvoice {
+  id: string;
+  invoice_number: string;
+  period_start: string;
+  period_end: string;
+  total_amount: number;
+  status: string;
+  pdf_url: string | null;
+  created_at: string;
+}
+

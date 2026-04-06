@@ -53,6 +53,16 @@ export default function KitchenAdminPage() {
     }
   }
 
+  async function handleSubPriorityChange(subRecipeId: string, newSubPriority: number | null) {
+    setSavingId(subRecipeId);
+    try {
+      await api.updateSubRecipe(subRecipeId, { sub_priority: newSubPriority } as any);
+      await load();
+    } finally {
+      setSavingId(null);
+    }
+  }
+
   return (
     <div className="p-6">
       <div className="flex items-center justify-between mb-6">
@@ -114,7 +124,7 @@ export default function KitchenAdminPage() {
               <tr>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Sub-Recipe</th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Station</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Production Day</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Production Day &amp; Order</th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Qty Needed</th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Scale Factor</th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Actions</th>
@@ -147,17 +157,30 @@ export default function KitchenAdminPage() {
                   </td>
                   <td className="px-4 py-3 text-gray-600">{row.station_tag ?? '—'}</td>
                   <td className="px-4 py-3">
-                    <select
-                      value={row.priority ?? ''}
-                      onChange={e => handlePriorityChange(row.id, parseInt(e.target.value))}
-                      disabled={savingId === row.id}
-                      className="border border-gray-300 rounded-lg px-2 py-1 text-xs focus:outline-none focus:ring-2 focus:ring-blue-400"
-                    >
-                      <option value="">— Unset —</option>
-                      <option value="1">Wednesday</option>
-                      <option value="2">Thursday</option>
-                      <option value="3">Friday</option>
-                    </select>
+                    <div className="flex items-center gap-1">
+                      <select
+                        value={row.priority ?? ''}
+                        onChange={e => handlePriorityChange(row.id, parseInt(e.target.value))}
+                        disabled={savingId === row.id}
+                        className="border border-gray-300 rounded-lg px-2 py-1 text-xs focus:outline-none focus:ring-2 focus:ring-blue-400"
+                      >
+                        <option value="">— Day —</option>
+                        <option value="1">Wednesday</option>
+                        <option value="2">Thursday</option>
+                        <option value="3">Friday</option>
+                      </select>
+                      <select
+                        value={row.sub_priority ?? ''}
+                        onChange={e => handleSubPriorityChange(row.id, parseInt(e.target.value) || null)}
+                        disabled={savingId === row.id}
+                        className="border border-gray-300 rounded-lg px-2 py-1 text-xs focus:outline-none focus:ring-2 focus:ring-blue-400"
+                      >
+                        <option value="">— Order —</option>
+                        <option value="1">P1 / AM</option>
+                        <option value="2">P2</option>
+                        <option value="3">P3 / PM</option>
+                      </select>
+                    </div>
                   </td>
                   <td className="px-4 py-3">
                     <span className="font-medium">{row.total_quantity ?? '—'} {row.unit}</span>

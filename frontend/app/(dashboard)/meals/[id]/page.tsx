@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback, useMemo } from 'react';
 import { useParams, useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { api, Ingredient, SubRecipe, PortionSpec, PortionSpecComponent } from '../../../lib/api';
 
 // ─── Reference constants (from BetterDay reference design) ────────────────────
@@ -273,19 +274,49 @@ export default function MealDetailPage() {
       setPsWeightMax(spec.total_weight_max?.toString() ?? '');
       setPsGeneralNotes(spec.general_notes ?? '');
       setPsTastingNotes(spec.tasting_notes ?? '');
-      setPsComponents(spec.components.map(c => ({
-        ingredient_name: c.ingredient_name,
-        portion_min: c.portion_min?.toString() ?? '',
-        portion_max: c.portion_max?.toString() ?? '',
-        portion_unit: c.portion_unit ?? 'g',
-        tool: c.tool ?? '',
-        notes: c.notes ?? '',
-        sort_order: c.sort_order,
-      })));
+
+      // Build a name→quantity map from the meal's recipe components
+      // so we can auto-suggest portion min/max from the recipe amounts
+      const recipeQtyMap: Record<string, number> = {};
+      if (meal) {
+        meal.components.forEach(c => {
+          const name = (c.sub_recipe?.name ?? c.ingredient?.internal_name ?? '').toLowerCase().trim();
+          if (name) {
+            let qty = Number(c.quantity);
+            // convert kg → g
+            if (c.unit === 'kg' || c.unit === 'Kgs') qty = qty * 1000;
+            recipeQtyMap[name] = qty;
+          }
+        });
+      }
+
+      setPsComponents(spec.components.map(c => {
+        let portionMax = c.portion_max?.toString() ?? '';
+        let portionMin = c.portion_min?.toString() ?? '';
+
+        // If not yet set, seed from recipe quantity
+        if (!portionMax) {
+          const recipeQty = recipeQtyMap[c.ingredient_name.toLowerCase().trim()];
+          if (recipeQty) {
+            portionMax = String(recipeQty);
+            portionMin = String(Math.round(recipeQty * 0.93));
+          }
+        }
+
+        return {
+          ingredient_name: c.ingredient_name,
+          portion_min: portionMin,
+          portion_max: portionMax,
+          portion_unit: c.portion_unit ?? 'g',
+          tool: c.tool ?? '',
+          notes: c.notes ?? '',
+          sort_order: c.sort_order,
+        };
+      }));
     } else {
       setPsComponents([]);
     }
-  }, [id, portionSpecLoaded]);
+  }, [id, portionSpecLoaded, meal]);
 
   async function handleSavePortionSpec() {
     setPsSaving(true);
@@ -822,7 +853,15 @@ export default function MealDetailPage() {
                             </span>
                           </td>
                           <td className="px-4 py-3 font-medium text-gray-800">
-                            {c.sub_recipe?.name ?? c.ingredient?.internal_name ?? '—'}
+                            {c.sub_recipe ? (
+                              <Link href={`/sub-recipes/${c.sub_recipe.id}`} className="text-blue-600 hover:underline">
+                                {c.sub_recipe.name}
+                              </Link>
+                            ) : c.ingredient ? (
+                              <Link href={`/ingredients/${c.ingredient.id}`} className="text-blue-600 hover:underline">
+                                {c.ingredient.internal_name}
+                              </Link>
+                            ) : '—'}
                           </td>
                           <td className="px-4 py-3 text-xs font-mono text-gray-400">
                             {c.sub_recipe?.sub_recipe_code ?? c.ingredient?.sku ?? '—'}
@@ -1286,41 +1325,49 @@ export default function MealDetailPage() {
             {tab === 'portion-specs' && (
               <div className="space-y-5">
 
-                {/* Meal Photo Upload */}
+                {/* Portioning Reference Photo */}
                 <div className="bg-white rounded-xl border border-gray-200 p-5">
-                  <h2 className="text-sm font-semibold text-gray-700 mb-3">Meal Photo</h2>
+                  <h2 className="text-sm font-semibold text-gray-700 mb-3">Portioning Reference Photo</h2>
                   <div className="flex items-start gap-4">
-                    <div className="w-32 h-32 rounded-xl overflow-hidden border border-gray-200 bg-gray-50 flex-shrink-0">
-                      {imageUrl ? (
-                        <img src={imageUrl} alt={meal.display_name} className="w-full h-full object-cover" />
-                      ) : (
-                        <div className="w-full h-full flex items-center justify-center text-3xl">🍽️</div>
-                      )}
-                    </div>
-                    <div className="flex flex-col gap-2">
-                      <label className="px-4 py-2 bg-brand-500 text-white text-sm font-medium rounded-lg hover:bg-brand-600 cursor-pointer transition-colors inline-block">
-                        {imageUrl ? 'Change Photo' : 'Upload Photo'}
-                        <input
-                          type="file"
-                          accept="image/*"
-                          className="hidden"
-                          onChange={async (e) => {
-                            const file = e.target.files?.[0];
-                            if (!file) return;
-                            try {
-                              const result = await api.uploadMealPhoto(meal.id, file);
-                              setImageUrl(result.image_url);
-                              setMeal(prev => prev ? { ...prev, image_url: result.image_url } : prev);
-                            } catch (err: any) {
-                              alert('Upload failed: ' + err.message);
-                            }
-                          }}
+                    <div className="flex-1">
+                      {portionSpec?.photo_url ? (
+                        <img
+                          src={portionSpec.photo_url}
+                          alt={`${meal.display_name} portioning reference`}
+                          className="max-h-72 rounded-xl object-contain border border-gray-200"
                         />
-                      </label>
-                      {imageUrl && (
-                        <p className="text-xs text-gray-400">Photo will appear on production plan portion specs cards.</p>
+                      ) : (
+                        <div className="w-full h-32 rounded-xl border-2 border-dashed border-gray-200 flex items-center justify-center text-sm text-gray-400">
+                          No reference photo yet
+                        </div>
                       )}
                     </div>
+                    {portionSpec && (
+                      <div className="flex-shrink-0">
+                        <label className="px-4 py-2 bg-brand-500 text-white text-sm font-medium rounded-lg hover:bg-brand-600 cursor-pointer transition-colors inline-block">
+                          {portionSpec.photo_url ? 'Change Photo' : 'Upload Photo'}
+                          <input
+                            type="file"
+                            accept="image/*"
+                            className="hidden"
+                            onChange={async (e) => {
+                              const file = e.target.files?.[0];
+                              if (!file) return;
+                              try {
+                                const result = await api.uploadSpecPhoto(portionSpec.id, file);
+                                setPortionSpec(prev => prev ? { ...prev, photo_url: result.photo_url } : prev);
+                              } catch (err: any) {
+                                alert('Upload failed: ' + err.message);
+                              }
+                            }}
+                          />
+                        </label>
+                        <p className="text-xs text-gray-400 mt-2 max-w-[160px]">Shown to kitchen staff as a plating guide</p>
+                      </div>
+                    )}
+                    {!portionSpec && (
+                      <p className="text-xs text-gray-400 mt-1">Save a portion spec first to upload a reference photo.</p>
+                    )}
                   </div>
                 </div>
 
@@ -1417,6 +1464,21 @@ export default function MealDetailPage() {
                                   ? `/ingredients/${comp.ingredient.id}`
                                   : null;
                               const placementNotes = spec?.notes || comp.portioning_notes || '';
+
+                              // Portion values: use saved spec, or auto-suggest from recipe qty
+                              let portionMin = spec?.portion_min ? String(spec.portion_min) : '';
+                              let portionMax = spec?.portion_max ? String(spec.portion_max) : '';
+                              let isSuggested = false;
+                              if (!portionMax) {
+                                let qty = Number(comp.quantity);
+                                if (comp.unit === 'kg' || comp.unit === 'Kgs') qty = qty * 1000;
+                                if (qty > 0) {
+                                  portionMax = String(qty);
+                                  portionMin = String(Math.round(qty * 0.93));
+                                  isSuggested = true;
+                                }
+                              }
+
                               return (
                                 <tr key={comp.id} className="hover:bg-gray-50/50">
                                   <td className="px-4 py-3 text-xs text-gray-400 font-medium">{idx + 1}</td>
@@ -1437,13 +1499,17 @@ export default function MealDetailPage() {
                                     </div>
                                   </td>
                                   <td className="px-4 py-3 text-sm text-gray-700">
-                                    {spec?.portion_min ? spec.portion_min : <span className="text-gray-300">—</span>}
+                                    {portionMin
+                                      ? <span className={isSuggested ? 'text-amber-600' : ''}>{portionMin}</span>
+                                      : <span className="text-gray-300">—</span>}
                                   </td>
                                   <td className="px-4 py-3 text-sm text-gray-700">
-                                    {spec?.portion_max ? spec.portion_max : <span className="text-gray-300">—</span>}
+                                    {portionMax
+                                      ? <span className={isSuggested ? 'text-amber-600' : ''}>{portionMax}</span>
+                                      : <span className="text-gray-300">—</span>}
                                   </td>
                                   <td className="px-4 py-3 text-xs text-gray-500">
-                                    {spec?.portion_unit || <span className="text-gray-300">—</span>}
+                                    {spec?.portion_unit || (portionMax ? 'g' : <span className="text-gray-300">—</span>)}
                                   </td>
                                   <td className="px-4 py-3 text-xs text-gray-600">
                                     {spec?.tool ? (
@@ -1518,7 +1584,15 @@ export default function MealDetailPage() {
                               </td>
                               <td className="px-4 py-2">
                                 <input type="number" value={comp.portion_max}
-                                  onChange={e => updatePsComponent(idx, 'portion_max', e.target.value)}
+                                  onChange={e => {
+                                    const max = e.target.value;
+                                    updatePsComponent(idx, 'portion_max', max);
+                                    // Auto-suggest min as ~93% of max if min is empty or was auto-set
+                                    if (max && !comp.portion_min) {
+                                      const suggested = Math.round(Number(max) * 0.93);
+                                      updatePsComponent(idx, 'portion_min', String(suggested));
+                                    }
+                                  }}
                                   placeholder="310"
                                   className="w-full px-2 py-1 border border-gray-200 rounded text-xs focus:outline-none focus:ring-1 focus:ring-brand-400" />
                               </td>

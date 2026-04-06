@@ -103,6 +103,9 @@ export class ProductionPlansService {
 
   async remove(id: string) {
     await this.findOne(id);
+    // Delete related records that do NOT have onDelete: Cascade
+    await this.prisma.kitchenProductionLog.deleteMany({ where: { plan_id: id } });
+    await this.prisma.stationRequest.deleteMany({ where: { plan_id: id } });
     return this.prisma.productionPlan.delete({ where: { id } });
   }
 
@@ -111,6 +114,14 @@ export class ProductionPlansService {
     return this.prisma.productionPlan.update({
       where: { id },
       data: { published_to_kitchen: publish },
+    });
+  }
+
+  async publishToCorporate(id: string, publish: boolean) {
+    await this.findOne(id);
+    return this.prisma.productionPlan.update({
+      where: { id },
+      data: { published_to_corporate: publish },
     });
   }
 
