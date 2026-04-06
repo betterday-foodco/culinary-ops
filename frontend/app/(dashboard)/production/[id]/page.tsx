@@ -369,19 +369,36 @@ export default function ProductionPlanPage() {
           >
             {publishingMealPrep ? 'Sending...' : '🚀 Publish to MealPrep'}
           </button>
-          <button
-            onClick={async () => {
-              if (!confirm(`Publish ${plan.items.length} meals to the corporate ordering app?`)) return;
-              try {
-                const r = await api.publishMenuToCorporate(id);
-                alert(`✓ ${r.meals_published} meals published to corporate app${r.week ? ` for week ${r.week}` : ''}`);
-              } catch (e: any) { alert(e.message); }
-            }}
-            title="Set which meals employees can order this week in the corporate app"
-            className="flex items-center gap-1.5 px-3 py-1.5 text-xs border border-blue-300 bg-blue-50 text-blue-700 rounded-lg hover:bg-blue-100 transition-colors font-medium"
-          >
-            🏢 Publish to Corporate
-          </button>
+          {plan.published_to_corporate ? (
+            <button
+              onClick={async () => {
+                if (!confirm('Unpublish from corporate portal? Employees will no longer see this menu.')) return;
+                try {
+                  await api.publishProductionPlanCorporate(id, false);
+                  await loadPlan();
+                } catch (e: any) { alert(e.message); }
+              }}
+              title="Employees can currently order from this plan — click to unpublish"
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-blue-50 border border-blue-300 text-blue-700 rounded-lg font-medium"
+            >
+              <span>✓</span> Published to Corporate
+            </button>
+          ) : (
+            <button
+              onClick={async () => {
+                if (!confirm(`Publish ${plan.items.length} meals to the corporate ordering portal?`)) return;
+                try {
+                  const r = await api.publishMenuToCorporate(id);
+                  await loadPlan();
+                  alert(`✓ ${r.meals_published} meals published to corporate portal for week ${r.week}`);
+                } catch (e: any) { alert(e.message); }
+              }}
+              title="Set which meals employees can order this week in the corporate portal"
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs border border-blue-300 bg-blue-50 text-blue-700 rounded-lg hover:bg-blue-100 transition-colors font-medium"
+            >
+              🏢 Publish to Corporate
+            </button>
+          )}
           <button
             onClick={() => window.print()}
             className="px-3 py-1.5 text-xs border border-gray-300 text-gray-600 rounded-lg hover:bg-gray-50"

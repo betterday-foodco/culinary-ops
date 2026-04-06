@@ -271,6 +271,12 @@ export const api = {
       body: JSON.stringify({ publish }),
     }),
 
+  publishProductionPlanCorporate: (id: string, publish: boolean) =>
+    request<ProductionPlan>(`/production-plans/${id}/publish-corporate`, {
+      method: 'PATCH',
+      body: JSON.stringify({ publish }),
+    }),
+
   deleteProductionPlan: (id: string) =>
     request<void>(`/production-plans/${id}`, { method: 'DELETE' }),
 
@@ -846,6 +852,7 @@ export interface ProductionPlan {
   status: string;
   notes: string | null;
   published_to_kitchen: boolean;
+  published_to_corporate: boolean;
   created_at: string;
   updated_at: string;
   items: {
@@ -877,6 +884,7 @@ export interface ProductionPlanDetail {
   status: string;
   notes: string | null;
   published_to_kitchen: boolean;
+  published_to_corporate: boolean;
   created_at: string;
   updated_at: string;
   items: ProductionPlanItem[];

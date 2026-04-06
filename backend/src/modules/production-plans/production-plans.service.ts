@@ -117,6 +117,14 @@ export class ProductionPlansService {
     });
   }
 
+  async publishToCorporate(id: string, publish: boolean) {
+    await this.findOne(id);
+    return this.prisma.productionPlan.update({
+      where: { id },
+      data: { published_to_corporate: publish },
+    });
+  }
+
   /** Return the production plan whose week_start falls in the current ISO week (Mon–Sun) */
   async getCurrentPlan() {
     const now = new Date();

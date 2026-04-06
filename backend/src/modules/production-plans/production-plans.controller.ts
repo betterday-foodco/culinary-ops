@@ -58,6 +58,11 @@ export class ProductionPlansController {
     return this.service.publishToKitchen(id, publish);
   }
 
+  @Patch(':id/publish-corporate')
+  publishCorporate(@Param('id') id: string, @Body('publish') publish: boolean) {
+    return this.service.publishToCorporate(id, publish);
+  }
+
   @Get(':id/sub-recipe-report')
   getSubRecipeReport(@Param('id') id: string) {
     return this.service.getSubRecipeReport(id);
