@@ -13,7 +13,7 @@ import { RolesGuard } from '../../auth/roles.guard';
 import { CorpPortalService } from './corp-portal.service';
 import { CorporateUser } from '../../auth/jwt.strategy';
 
-@Controller('api/corp-portal')
+@Controller('corp-portal')
 @UseGuards(AuthGuard('jwt'), RolesGuard)
 export class CorpPortalController {
   constructor(private readonly svc: CorpPortalService) {}

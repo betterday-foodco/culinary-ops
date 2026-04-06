@@ -19,7 +19,7 @@ type AnyUser = CorporateUser | CulinaryUser;
 
 // ── Manager routes — requires corp_manager JWT ──────────────────────────────
 
-@Controller('api/corp-manager')
+@Controller('corp-manager')
 @UseGuards(AuthGuard('jwt'), RolesGuard)
 @Roles('corp_manager')
 export class CorpManagerController {
@@ -48,7 +48,7 @@ export class CorpManagerController {
 
 // ── BD Admin routes — requires culinary admin JWT ────────────────────────────
 
-@Controller('api/corp-admin')
+@Controller('corp-admin')
 @UseGuards(AuthGuard('jwt'), RolesGuard)
 @Roles('admin')
 export class CorpBdAdminController {

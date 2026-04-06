@@ -1,17 +1,18 @@
 import { Controller, Post, Get, Body, Query, HttpCode } from '@nestjs/common';
+import { IsString, IsEmail } from 'class-validator';
 import { CorpAuthService } from './corp-auth.service';
 
 class ManagerLoginDto {
-  company_id: string;
-  pin: string;
+  @IsString() company_id: string;
+  @IsString() pin: string;
 }
 
 class MagicLinkRequestDto {
-  email: string;
-  company_id: string;
+  @IsEmail()  email: string;
+  @IsString() company_id: string;
 }
 
-@Controller('api/corp-auth')
+@Controller('corp-auth')
 export class CorpAuthController {
   constructor(private readonly svc: CorpAuthService) {}
 
