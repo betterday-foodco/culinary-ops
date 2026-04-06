@@ -187,6 +187,23 @@ export const api = {
     });
   },
 
+  uploadSpecPhoto: (specId: string, file: File) => {
+    const token = getToken();
+    const formData = new FormData();
+    formData.append('photo', file);
+    return fetch(`${API_URL}/portion-specs/${specId}/photo`, {
+      method: 'POST',
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+      body: formData,
+    }).then(async (res) => {
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ message: res.statusText }));
+        throw new Error(err.message ?? 'Upload failed');
+      }
+      return res.json() as Promise<{ photo_url: string }>;
+    });
+  },
+
   // Orders
   getOrders: (startDate?: string, endDate?: string) => {
     const params = new URLSearchParams();
@@ -572,6 +589,14 @@ export const api = {
   publishToMealPrep: (planId: string) =>
     request<any>(`/mealprep-sync/publish/${planId}`, { method: 'POST' }),
   getWebhookLogs: () => request<any[]>('/webhooks/logs'),
+
+  // Corporate Sync
+  getCorporateOrders: (week?: string) =>
+    request<CorporateOrderSummary>(`/corporate-sync/orders${week ? `?week=${week}` : ''}`),
+  applyCorporateOrdersToPlan: (planId: string, week?: string) =>
+    request<CorporateApplyResult>(`/corporate-sync/apply/${planId}${week ? `?week=${week}` : ''}`, { method: 'POST' }),
+  publishMenuToCorporate: (planId: string) =>
+    request<{ ok: boolean; week: string; meals_published: number }>(`/corporate-sync/publish-menu/${planId}`, { method: 'POST' }),
 };
 
 // ─── Types ──────────────────────────────────────────────────────────────────
@@ -662,6 +687,10 @@ export interface MealRecipe {
   fat_g: number | null;
   created_at: string;
   updated_at: string;
+  allergen_tags: string[];
+  dietary_tags: string[];
+  linked_meal_id: string | null;
+  portion_score: number | null;
   components: MealComponent[];
 }
 
@@ -943,6 +972,35 @@ export interface InventoryReport {
   items_needing_order: number;
 }
 
+// ─── Corporate Sync types ────────────────────────────────────────────────────
+
+export interface CorporateMealCount {
+  meal_id: string;
+  meal_code: string;
+  dish_name: string;
+  diet: string;
+  count: number;
+  by_company: { company: string; count: number }[];
+  internal_meal_id: string | null;
+  internal_meal_name: string | null;
+}
+
+export interface CorporateOrderSummary {
+  ok: boolean;
+  week: string;
+  fetched_at: string;
+  total_orders: number;
+  companies: string[];
+  meals: CorporateMealCount[];
+}
+
+export interface CorporateApplyResult {
+  applied: number;
+  skipped: number;
+  unmatched: string[];
+  summary: CorporateOrderSummary;
+}
+
 // ─── Auth User ────────────────────────────────────────────────────────────────
 
 export interface AuthUser {
@@ -1157,8 +1215,12 @@ export interface MenuQueueItem {
     display_name: string;
     category: string | null;
     allergen_tags: string[];
+    dietary_tags: string[];
     computed_cost: number;
     image_url: string | null;
+    meal_code: string | null;
+    linked_meal_id: string | null;
+    portion_score: number | null;
   };
 }
 
@@ -1204,6 +1266,7 @@ export interface PortionSpec {
   total_weight_max: number | null;
   general_notes: string | null;
   tasting_notes: string | null;
+  photo_url: string | null;
   created_at: string;
   updated_at: string;
   meal?: {

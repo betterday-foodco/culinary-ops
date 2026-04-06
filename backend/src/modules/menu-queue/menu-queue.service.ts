@@ -9,18 +9,18 @@ import {
 
 // The 12 fixed column slots
 export const QUEUE_COLUMNS = [
-  { id: 'meat_1',  label: 'Meat 1',  type: 'meat' },
-  { id: 'meat_2',  label: 'Meat 2',  type: 'meat' },
-  { id: 'meat_3',  label: 'Meat 3',  type: 'meat' },
-  { id: 'meat_4',  label: 'Meat 4',  type: 'meat' },
-  { id: 'meat_5',  label: 'Meat 5',  type: 'meat' },
-  { id: 'omni_1',  label: 'Omni 1',  type: 'omni' },
-  { id: 'omni_2',  label: 'Omni 2',  type: 'omni' },
-  { id: 'omni_3',  label: 'Omni 3',  type: 'omni' },
-  { id: 'omni_4',  label: 'Omni 4',  type: 'omni' },
-  { id: 'omni_5',  label: 'Omni 5',  type: 'omni' },
-  { id: 'omni_6',  label: 'Omni 6',  type: 'omni' },
-  { id: 'vegan_1', label: 'Vegan',   type: 'vegan' },
+  { id: 'meat_1',  label: 'Signature A',    type: 'meat' },
+  { id: 'meat_2',  label: 'Signature B',    type: 'meat' },
+  { id: 'meat_3',  label: 'Signature C',    type: 'meat' },
+  { id: 'meat_4',  label: 'Signature D',    type: 'meat' },
+  { id: 'meat_5',  label: 'Wildcard Meat',  type: 'meat' },
+  { id: 'omni_1',  label: 'Pasta Omni',     type: 'omni' },
+  { id: 'omni_2',  label: 'Curry Omni',     type: 'omni' },
+  { id: 'omni_3',  label: 'Comfort Omni',   type: 'omni' },
+  { id: 'omni_4',  label: 'Asian Omni',     type: 'omni' },
+  { id: 'omni_5',  label: 'Powerbowl Omni', type: 'omni' },
+  { id: 'omni_6',  label: 'Grocery Omni',   type: 'omni' },
+  { id: 'vegan_1', label: 'Wildcard Vegan', type: 'vegan' },
 ];
 
 @Injectable()
@@ -37,8 +37,12 @@ export class MenuQueueService {
             display_name: true,
             category: true,
             allergen_tags: true,
+            dietary_tags: true,
             computed_cost: true,
             image_url: true,
+            meal_code: true,
+            linked_meal_id: true,
+            portion_score: true,
           },
         },
       },

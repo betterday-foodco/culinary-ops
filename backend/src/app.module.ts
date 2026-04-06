@@ -21,6 +21,7 @@ import { DailyChecklistModule } from './modules/daily-checklist/daily-checklist.
 import { SystemConfigModule } from './modules/system-config/system-config.module';
 import { MealPrepWebhookModule } from './modules/mealprep-webhook/mealprep-webhook.module';
 import { MealPrepSyncModule } from './modules/mealprep-sync/mealprep-sync.module';
+import { CorporateSyncModule } from './modules/corporate-sync/corporate-sync.module';
 import { ShopifyWebhookController } from './webhooks/shopify.controller';
 import { CostEngineService } from './services/cost-engine.service';
 import { ProductionEngineService } from './services/production-engine.service';
@@ -49,6 +50,7 @@ import { ProductionEngineService } from './services/production-engine.service';
     SystemConfigModule,
     MealPrepWebhookModule,
     MealPrepSyncModule,
+    CorporateSyncModule,
   ],
   controllers: [ShopifyWebhookController],
   providers: [CostEngineService, ProductionEngineService],

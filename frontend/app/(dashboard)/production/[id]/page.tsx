@@ -11,9 +11,25 @@ import {
   MealRecipe,
   StationTask,
   PortionSpec,
+  CorporateOrderSummary,
+  CorporateApplyResult,
 } from '../../../lib/api';
 
-type Tab = 'plan' | 'sub-recipes' | 'shopping' | 'tasks' | 'portion-specs' | 'numbers';
+type Tab = 'plan' | 'sub-recipes' | 'shopping' | 'tasks' | 'portion-specs' | 'numbers' | 'corporate';
+
+// Smart quantity formatter: shows grams instead of Kgs for tiny values, avoids toLocaleString() rounding to 0
+function fmtQty(value: number, unit: string): { qty: string; unit: string } {
+  const u = (unit ?? '').toLowerCase();
+  if ((u === 'kgs' || u === 'kg') && value > 0 && value < 0.01) {
+    const g = value * 1000;
+    return { qty: g < 1 ? g.toFixed(2) : g.toFixed(1), unit: 'g' };
+  }
+  if (value > 0 && value < 0.001) {
+    return { qty: value.toFixed(5), unit };
+  }
+  const digits = value >= 100 ? 1 : value >= 1 ? 2 : 3;
+  return { qty: value.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: digits }), unit };
+}
 
 const STATUS_OPTIONS = ['draft', 'confirmed', 'completed'];
 const STATUS_STYLES: Record<string, string> = {
@@ -77,6 +93,12 @@ export default function ProductionPlanPage() {
   const [productionNumbers, setProductionNumbers] = useState<any[]>([]);
   const [numbersLoaded, setNumbersLoaded] = useState(false);
   const [shortages, setShortages] = useState<any[]>([]);
+
+  // Corporate orders
+  const [corporateOrders, setCorporateOrders] = useState<CorporateOrderSummary | null>(null);
+  const [corporateLoading, setCorporateLoading] = useState(false);
+  const [corporateApplying, setCorporateApplying] = useState(false);
+  const [corporateApplyResult, setCorporateApplyResult] = useState<CorporateApplyResult | null>(null);
 
   // Station tasks
   const [stationTasks, setStationTasks] = useState<StationTask[]>([]);
@@ -162,12 +184,35 @@ export default function ProductionPlanPage() {
     }
   }, [loading]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  const loadCorporateOrders = useCallback(async () => {
+    setCorporateLoading(true);
+    setCorporateApplyResult(null);
+    try {
+      const data = await api.getCorporateOrders();
+      setCorporateOrders(data);
+    } catch (e: any) { alert('Could not reach corporate app: ' + e.message); }
+    finally { setCorporateLoading(false); }
+  }, []);
+
+  async function handleApplyCorporateOrders() {
+    if (!confirm(`Apply ${corporateOrders?.total_orders ?? 0} corporate orders as production quantities for this plan?`)) return;
+    setCorporateApplying(true);
+    try {
+      const result = await api.applyCorporateOrdersToPlan(id);
+      setCorporateApplyResult(result);
+      // Reload plan to reflect updated quantities
+      await loadPlan();
+    } catch (e: any) { alert(e.message); }
+    finally { setCorporateApplying(false); }
+  }
+
   function handleTabChange(t: Tab) {
     setTab(t);
     if (t === 'sub-recipes' && !subRecipeReport) loadSubRecipeReport();
     if (t === 'shopping' && !shoppingList) loadShoppingList();
     if (t === 'tasks') loadStationTasks();
     if (t === 'portion-specs') loadPortionSpecs();
+    if (t === 'corporate' && !corporateOrders) loadCorporateOrders();
     if (t === 'numbers' && !numbersLoaded) {
       Promise.all([api.getProductionNumbers(id), api.getProductionShortages(id)])
         .then(([nums, shorts]) => { setProductionNumbers(nums); setShortages(shorts); setNumbersLoaded(true); })
@@ -325,6 +370,19 @@ export default function ProductionPlanPage() {
             {publishingMealPrep ? 'Sending...' : '🚀 Publish to MealPrep'}
           </button>
           <button
+            onClick={async () => {
+              if (!confirm(`Publish ${plan.items.length} meals to the corporate ordering app?`)) return;
+              try {
+                const r = await api.publishMenuToCorporate(id);
+                alert(`✓ ${r.meals_published} meals published to corporate app${r.week ? ` for week ${r.week}` : ''}`);
+              } catch (e: any) { alert(e.message); }
+            }}
+            title="Set which meals employees can order this week in the corporate app"
+            className="flex items-center gap-1.5 px-3 py-1.5 text-xs border border-blue-300 bg-blue-50 text-blue-700 rounded-lg hover:bg-blue-100 transition-colors font-medium"
+          >
+            🏢 Publish to Corporate
+          </button>
+          <button
             onClick={() => window.print()}
             className="px-3 py-1.5 text-xs border border-gray-300 text-gray-600 rounded-lg hover:bg-gray-50"
           >
@@ -343,6 +401,7 @@ export default function ProductionPlanPage() {
             ['shopping', '🛒 Shopping List'],
             ['tasks', '✅ Station Tasks'],
             ['portion-specs', '⚖️ Portion Specs'],
+            ['corporate', '🏢 Corporate Orders'],
           ] as const
         ).map(([key, label]) => (
           <button
@@ -776,9 +835,9 @@ export default function ProductionPlanPage() {
                             <td className="px-4 py-2.5 font-medium text-gray-900">{row.internal_name}</td>
                             <td className="px-4 py-2.5 font-mono text-gray-500 text-xs">{row.sku}</td>
                             <td className="px-4 py-2.5 text-right font-semibold text-gray-900">
-                              {row.total_quantity.toLocaleString()}
+                              {fmtQty(row.total_quantity, row.unit).qty}
                             </td>
-                            <td className="px-4 py-2.5 text-gray-500">{row.unit}</td>
+                            <td className="px-4 py-2.5 text-gray-500">{fmtQty(row.total_quantity, row.unit).unit}</td>
                             <td className="px-4 py-2.5 text-gray-500 text-xs">
                               {row.supplier_name ?? '—'}
                             </td>
@@ -1319,6 +1378,114 @@ export default function ProductionPlanPage() {
         </div>
         )}
 
+      {/* ── Tab: Corporate Orders ── */}
+      {tab === 'corporate' && (
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <h2 className="text-sm font-semibold text-gray-700">Corporate App Orders</h2>
+              {corporateOrders && (
+                <p className="text-xs text-gray-400 mt-0.5">
+                  Week: {corporateOrders.week} · Fetched: {new Date(corporateOrders.fetched_at).toLocaleTimeString()} · {corporateOrders.total_orders} total portions · {corporateOrders.companies.length} companies
+                </p>
+              )}
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={loadCorporateOrders}
+                disabled={corporateLoading}
+                className="px-3 py-1.5 text-xs border border-gray-300 text-gray-600 rounded-lg hover:bg-gray-50 disabled:opacity-50"
+              >
+                {corporateLoading ? 'Fetching...' : '🔄 Sync Orders'}
+              </button>
+              {corporateOrders && (
+                <button
+                  onClick={handleApplyCorporateOrders}
+                  disabled={corporateApplying}
+                  className="px-3 py-1.5 text-xs bg-brand-500 text-white font-medium rounded-lg hover:bg-brand-600 disabled:opacity-50 transition-colors"
+                >
+                  {corporateApplying ? 'Applying...' : '✓ Apply to Plan'}
+                </button>
+              )}
+            </div>
+          </div>
+
+          {/* Apply result banner */}
+          {corporateApplyResult && (
+            <div className="bg-green-50 border border-green-200 rounded-lg px-4 py-3 text-sm">
+              <div className="font-semibold text-green-800 mb-1">Orders applied to plan</div>
+              <div className="flex gap-4 text-xs text-green-700">
+                <span>✓ {corporateApplyResult.applied} meals updated</span>
+                {corporateApplyResult.skipped > 0 && <span>— {corporateApplyResult.skipped} skipped (already set)</span>}
+                {corporateApplyResult.unmatched.length > 0 && (
+                  <span className="text-orange-600">⚠ {corporateApplyResult.unmatched.length} unmatched meal codes</span>
+                )}
+              </div>
+              {corporateApplyResult.unmatched.length > 0 && (
+                <div className="mt-1 text-xs text-orange-600">Unmatched: {corporateApplyResult.unmatched.join(', ')}</div>
+              )}
+            </div>
+          )}
+
+          {/* Orders table */}
+          {corporateLoading ? (
+            <div className="text-center text-gray-400 py-12">Connecting to corporate app...</div>
+          ) : !corporateOrders ? (
+            <div className="text-center text-gray-400 py-12">
+              <div className="text-3xl mb-2">🏢</div>
+              <div className="text-sm">Click &quot;Sync Orders&quot; to pull this week&apos;s employee meal orders</div>
+            </div>
+          ) : corporateOrders.meals.length === 0 ? (
+            <div className="text-center text-gray-400 py-12">No orders found for this week</div>
+          ) : (
+            <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+              <table className="w-full text-sm">
+                <thead className="bg-gray-50">
+                  <tr>
+                    {['Diet', 'Meal Code', 'Dish Name', 'Count', 'Companies', 'Match'].map((h) => (
+                      <th key={h} className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        {h}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100">
+                  {corporateOrders.meals.map((m) => (
+                    <tr key={m.meal_id} className="hover:bg-gray-50">
+                      <td className="px-4 py-2.5">
+                        <span className={`px-1.5 py-0.5 rounded text-xs font-semibold ${m.diet === 'vegan' ? 'bg-green-100 text-green-700' : 'bg-orange-100 text-orange-700'}`}>
+                          {m.diet === 'vegan' ? 'PLANT' : 'MEAT'}
+                        </span>
+                      </td>
+                      <td className="px-4 py-2.5 font-mono text-xs text-gray-500">{m.meal_code}</td>
+                      <td className="px-4 py-2.5 font-medium text-gray-900">{m.dish_name}</td>
+                      <td className="px-4 py-2.5 font-semibold text-gray-900">{m.count}</td>
+                      <td className="px-4 py-2.5 text-xs text-gray-400">
+                        {m.by_company?.map((c: any) => `${c.company}: ${c.count}`).join(', ') ?? '—'}
+                      </td>
+                      <td className="px-4 py-2.5">
+                        {m.internal_meal_id ? (
+                          <span className="text-green-600 text-xs font-medium">✓ {m.internal_meal_name}</span>
+                        ) : (
+                          <span className="text-red-400 text-xs">⚠ No match</span>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+                <tfoot className="bg-gray-50 border-t border-gray-200">
+                  <tr>
+                    <td colSpan={3} className="px-4 py-2.5 text-xs font-semibold text-gray-600">Total</td>
+                    <td className="px-4 py-2.5 font-bold text-gray-900">{corporateOrders.total_orders}</td>
+                    <td colSpan={2} className="px-4 py-2.5 text-xs text-gray-400">{corporateOrders.companies.join(', ')}</td>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+          )}
+        </div>
+      )}
+
     </div>
   );
 }
@@ -1373,12 +1540,12 @@ function SubRecipeReportRow({
         <td className="px-4 py-2.5 font-mono text-gray-500 text-xs">{row.sub_recipe_code}</td>
         <td className="px-4 py-2.5 text-gray-500">{row.production_day ?? '—'}</td>
         <td className="px-4 py-2.5 text-right">
-          <span className="font-semibold text-gray-900">{row.total_quantity.toLocaleString()}</span>
+          <span className="font-semibold text-gray-900">{fmtQty(row.total_quantity, row.unit).qty}</span>
           {row.scale_factor !== 1 && (
             <span className="ml-1 text-xs text-gray-400">×{row.scale_factor}</span>
           )}
         </td>
-        <td className="px-4 py-2.5 text-gray-500">{row.unit}</td>
+        <td className="px-4 py-2.5 text-gray-500">{fmtQty(row.total_quantity, row.unit).unit}</td>
         <td className="px-4 py-2.5">
           {hasIngredients ? (
             <button
@@ -1404,7 +1571,7 @@ function SubRecipeReportRow({
             <div className="flex flex-wrap gap-x-4 gap-y-0.5 text-xs text-gray-400">
               {row.meal_breakdown.map((b, i) => (
                 <span key={i}>
-                  {b.meal}: {b.qty.toLocaleString()} {row.unit}
+                  {b.meal}: {fmtQty(b.qty, row.unit).qty} {fmtQty(b.qty, row.unit).unit}
                 </span>
               ))}
             </div>
@@ -1422,7 +1589,7 @@ function SubRecipeReportRow({
                 <span className="text-gray-500 font-medium mr-1">Meals:</span>
                 {row.meal_breakdown.map((b, i) => (
                   <span key={i}>
-                    {b.meal}: {b.qty.toLocaleString()} {row.unit}
+                    {b.meal}: {fmtQty(b.qty, row.unit).qty} {fmtQty(b.qty, row.unit).unit}
                   </span>
                 ))}
               </div>
@@ -1452,9 +1619,9 @@ function SubRecipeReportRow({
                     </td>
                     <td className="py-1 font-mono text-gray-400">{ing.sku}</td>
                     <td className="py-1 text-right font-semibold text-gray-900">
-                      {ing.quantity.toLocaleString()}
+                      {fmtQty(ing.quantity, ing.unit).qty}
                     </td>
-                    <td className="py-1 pl-2 text-gray-500">{ing.unit}</td>
+                    <td className="py-1 pl-2 text-gray-500">{fmtQty(ing.quantity, ing.unit).unit}</td>
                   </tr>
                 ))}
               </tbody>

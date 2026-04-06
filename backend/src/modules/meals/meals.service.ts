@@ -65,17 +65,17 @@ export class MealsService {
   }
 
   private async generateMealCode(tx: any): Promise<string> {
-    const last = await tx.mealRecipe.findFirst({
+    // Fetch all BD-xxx codes and find the true numeric max (avoids string-sort bug)
+    const rows = await tx.mealRecipe.findMany({
       where: { meal_code: { not: null } },
-      orderBy: { meal_code: 'desc' },
       select: { meal_code: true },
     });
-    let next = 1;
-    if (last?.meal_code) {
-      const num = parseInt(last.meal_code.replace('BD-', ''), 10);
-      if (!isNaN(num)) next = num + 1;
+    let max = 0;
+    for (const r of rows) {
+      const num = parseInt((r.meal_code as string).replace('BD-', ''), 10);
+      if (!isNaN(num) && num > max) max = num;
     }
-    return `BD-${String(next).padStart(3, '0')}`;
+    return `BD-${String(max + 1).padStart(3, '0')}`;
   }
 
   async create(dto: CreateMealDto) {
@@ -83,24 +83,37 @@ export class MealsService {
 
     const { components, ...mealData } = dto;
 
-    const meal = await this.prisma.$transaction(async (tx) => {
-      const meal_code = await this.generateMealCode(tx);
-      const created = await tx.mealRecipe.create({ data: { ...mealData, meal_code } });
+    // Retry up to 5 times on meal_code collision (race condition guard)
+    let meal: any;
+    for (let attempt = 0; attempt < 5; attempt++) {
+      try {
+        meal = await this.prisma.$transaction(async (tx) => {
+          const meal_code = await this.generateMealCode(tx);
+          const created = await tx.mealRecipe.create({ data: { ...mealData, meal_code } });
 
-      if (components?.length) {
-        await tx.mealComponent.createMany({
-          data: components.map((c) => ({
-            meal_id: created.id,
-            ingredient_id: c.ingredient_id ?? null,
-            sub_recipe_id: c.sub_recipe_id ?? null,
-            quantity: c.quantity,
-            unit: c.unit,
-          })),
+          if (components?.length) {
+            await tx.mealComponent.createMany({
+              data: components.map((c) => ({
+                meal_id: created.id,
+                ingredient_id: c.ingredient_id ?? null,
+                sub_recipe_id: c.sub_recipe_id ?? null,
+                quantity: c.quantity,
+                unit: c.unit,
+              })),
+            });
+          }
+
+          return created;
         });
+        break; // success — exit retry loop
+      } catch (e: any) {
+        // P2002 = unique constraint violation; retry with next code
+        if (e?.code === 'P2002' && e?.meta?.target?.includes('meal_code') && attempt < 4) {
+          continue;
+        }
+        throw e;
       }
-
-      return created;
-    });
+    }
 
     const cost = await this.costEngine.calculateMealCost(meal.id);
     await this.prisma.mealRecipe.update({

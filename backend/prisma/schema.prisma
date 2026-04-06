@@ -158,6 +158,7 @@ model PortionSpec {
   total_weight_max Float?
   general_notes    String?
   tasting_notes    String?
+  photo_url        String?
   created_at       DateTime @default(now())
   updated_at       DateTime @updatedAt
 
