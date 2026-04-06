@@ -23,6 +23,7 @@ import { MealPrepWebhookModule } from './modules/mealprep-webhook/mealprep-webho
 import { MealPrepSyncModule } from './modules/mealprep-sync/mealprep-sync.module';
 import { CorporateSyncModule } from './modules/corporate-sync/corporate-sync.module';
 import { CorporateModule } from './modules/corporate/corporate.module';
+import { HealthController } from './health.controller';
 import { ShopifyWebhookController } from './webhooks/shopify.controller';
 import { CostEngineService } from './services/cost-engine.service';
 import { ProductionEngineService } from './services/production-engine.service';
@@ -54,7 +55,7 @@ import { ProductionEngineService } from './services/production-engine.service';
     CorporateSyncModule,
     CorporateModule,
   ],
-  controllers: [ShopifyWebhookController],
+  controllers: [HealthController, ShopifyWebhookController],
   providers: [CostEngineService, ProductionEngineService],
 })
 export class AppModule {}
