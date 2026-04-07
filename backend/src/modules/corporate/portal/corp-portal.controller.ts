@@ -2,7 +2,10 @@ import {
   Controller,
   Get,
   Post,
+  Patch,
   Body,
+  Param,
+  Query,
   UseGuards,
   Request,
   HttpCode,
@@ -58,5 +61,32 @@ export class CorpPortalController {
   @Roles('corp_employee', 'corp_manager')
   getProfile(@Request() req: { user: CorporateUser }) {
     return this.svc.getMyProfile(req.user);
+  }
+
+  /**
+   * GET /api/corp-portal/order-counts?week=YYYY-MM-DD
+   * Returns this employee's meal counts per tier for the given week,
+   * along with their tier allowances. Used to enforce ordering caps.
+   */
+  @Get('order-counts')
+  @Roles('corp_employee', 'corp_manager')
+  getOrderCounts(@Request() req: { user: CorporateUser }, @Query('week') week?: string) {
+    return this.svc.getOrderCounts(req.user, week);
+  }
+
+  /**
+   * PATCH /api/corp-portal/orders/:id/items/:itemId
+   * Body: { meal_id }
+   * Swap a meal on an existing pending order line.
+   */
+  @Patch('orders/:id/items/:itemId')
+  @Roles('corp_employee', 'corp_manager')
+  swapOrderItem(
+    @Request() req: { user: CorporateUser },
+    @Param('id') id: string,
+    @Param('itemId') itemId: string,
+    @Body() body: { meal_id: string },
+  ) {
+    return this.svc.swapOrderItem(req.user, id, itemId, body.meal_id);
   }
 }

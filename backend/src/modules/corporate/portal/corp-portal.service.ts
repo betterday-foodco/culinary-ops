@@ -240,4 +240,103 @@ export class CorpPortalService {
     });
     return { ok: true, type: 'employee', employee: emp };
   }
+
+  // ── Order counts (allowance enforcement) ───────────────────────────────────
+
+  /**
+   * Returns how many meals the current employee has already ordered this week
+   * per tier — used by the frontend to enforce free / tier1 / tier2 / tier3 caps.
+   *
+   * `week` is an ISO date string for any day inside the target week (defaults to today).
+   * Counts are scoped to orders created during that ISO-week (Mon → Sun).
+   */
+  async getOrderCounts(user: CorporateUser, week?: string) {
+    if (user.role === 'corp_manager') {
+      // Managers don't have personal allowances — return zeros
+      return { ok: true, counts: { free: 0, tier1: 0, tier2: 0, tier3: 0 }, allowances: null };
+    }
+
+    // Compute start/end of the ISO week containing `week`
+    const ref = week ? new Date(week) : new Date();
+    const day = ref.getDay() || 7; // Sunday = 7 for ISO
+    const start = new Date(ref);
+    start.setHours(0, 0, 0, 0);
+    start.setDate(ref.getDate() - day + 1); // Monday
+    const end = new Date(start);
+    end.setDate(start.getDate() + 7);
+
+    const items = await this.prisma.corporateOrderItem.findMany({
+      where: {
+        order: {
+          employee_id: user.id,
+          created_at:  { gte: start, lt: end },
+        },
+      },
+      select: { tier: true, quantity: true },
+    });
+
+    const counts = { free: 0, tier1: 0, tier2: 0, tier3: 0 };
+    for (const it of items) {
+      const tier = String(it.tier ?? 'free').toLowerCase();
+      if (tier in counts) (counts as any)[tier] += it.quantity ?? 1;
+    }
+
+    const allowances = await this.getEmployeeTierConfig(user);
+
+    return {
+      ok: true,
+      week_start: start.toISOString(),
+      week_end:   end.toISOString(),
+      counts,
+      allowances,
+    };
+  }
+
+  // ── Swap a meal on an existing pending order ───────────────────────────────
+
+  /**
+   * Replaces the meal on a single line of an existing pending order.
+   * Only the order's owner (or company manager) can swap, and only while
+   * the order is still in 'pending' status.
+   */
+  async swapOrderItem(
+    user: CorporateUser,
+    order_id: string,
+    item_id: string,
+    new_meal_id: string,
+  ) {
+    const order = await this.prisma.corporateOrder.findUnique({
+      where:   { id: order_id },
+      include: { items: true },
+    });
+    if (!order) throw new NotFoundException('Order not found');
+
+    // Authorization
+    if (order.company_id !== user.company_id) {
+      throw new ForbiddenException('Order belongs to a different company');
+    }
+    if (user.role === 'corp_employee' && order.employee_id !== user.id) {
+      throw new ForbiddenException('You can only edit your own orders');
+    }
+    if (order.status !== 'pending') {
+      throw new BadRequestException('Order is no longer editable');
+    }
+
+    const item = order.items.find(i => i.id === item_id);
+    if (!item) throw new NotFoundException('Order item not found');
+
+    const newMeal = await this.prisma.mealRecipe.findUnique({ where: { id: new_meal_id } });
+    if (!newMeal) throw new NotFoundException('New meal not found');
+
+    const updated = await this.prisma.corporateOrderItem.update({
+      where: { id: item_id },
+      data: {
+        meal_recipe_id:   newMeal.id,
+        meal_external_id: newMeal.meal_code?.replace('BD-', '#') ?? null,
+        meal_name:        newMeal.display_name ?? newMeal.name,
+      },
+    });
+
+    return { ok: true, item: updated };
+  }
 }
