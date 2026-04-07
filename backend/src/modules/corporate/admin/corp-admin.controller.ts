@@ -93,14 +93,27 @@ export class CorpManagerController {
   updateAllowances(
     @Request() req: { user: CorporateUser },
     @Param('id') id: string,
-    @Body() body: { tier_config: any },
+    @Body() body: { tier_config: any; changed_by?: string },
   ) {
-    return this.svc.updateBenefitLevelAllowances(req.user.company_id, id, body.tier_config);
+    return this.svc.updateBenefitLevelAllowances(
+      req.user.company_id,
+      id,
+      body.tier_config,
+      body.changed_by || req.user.email,
+    );
   }
 
   @Get('benefit-levels/:id/employee-count')
   getLevelEmployeeCount(@Request() req: { user: CorporateUser }, @Param('id') id: string) {
     return this.svc.getBenefitLevelEmployeeCount(req.user.company_id, id);
+  }
+
+  @Get('meal-change-log')
+  getMealChangeLog(
+    @Request() req: { user: CorporateUser },
+    @Query('limit') limit?: string,
+  ) {
+    return this.svc.getMealChangeLog(req.user.company_id, limit ? parseInt(limit) : 50);
   }
 
   // ── Company self-service ─────────────────────────────────────────────────

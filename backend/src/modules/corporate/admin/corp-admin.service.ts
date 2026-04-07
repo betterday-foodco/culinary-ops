@@ -346,22 +346,110 @@ export class CorpAdminService {
     return { ok: true };
   }
 
-  /** Update only the tier_config (meal allowances) for a single benefit level */
+  /** Update only the tier_config (meal allowances) for a single benefit level.
+   *  Diffs old vs new and writes one CorporateMealAllowanceLog row per changed
+   *  field — replaces the GAS "MealEditLog" sheet so the manager dashboard's
+   *  Change History tab keeps working.
+   */
   async updateBenefitLevelAllowances(
     company_id: string,
     level_id: string,
     tier_config: any,
+    changed_by?: string,
   ) {
     const level = await this.prisma.corporateBenefitLevel.findUnique({ where: { id: level_id } });
     if (!level) throw new NotFoundException('Benefit level not found');
     if (level.company_id !== company_id) {
       throw new ForbiddenException('Benefit level belongs to a different company');
     }
-    const updated = await this.prisma.corporateBenefitLevel.update({
-      where: { id: level_id },
-      data:  { tier_config },
+
+    // Build the per-field diff in the same shape the GAS handler emitted
+    // (Tier1_Meals, Tier2_Meals, Tier3_Meals, FreeMealsPerWeek, MaxMealsPerWeek).
+    const oldCfg: any = level.tier_config ?? {};
+    const newCfg: any = tier_config ?? {};
+    const levelName = level.level_name || 'General';
+    const author = (changed_by || 'manager').trim();
+
+    type Diff = { field: string; oldValue: string; newValue: string };
+    const diffs: Diff[] = [];
+
+    // 1) Per-tier "meals" counts inside tier_config (free/tier1/tier2/tier3 → Tier{N}_Meals)
+    const tierKeys: Array<{ key: string; field: string }> = [
+      { key: 'free',  field: 'FreeMealsPerWeek' },
+      { key: 'tier1', field: 'Tier1_Meals' },
+      { key: 'tier2', field: 'Tier2_Meals' },
+      { key: 'tier3', field: 'Tier3_Meals' },
+    ];
+    for (const { key, field } of tierKeys) {
+      const o = oldCfg?.[key]?.meals;
+      const n = newCfg?.[key]?.meals;
+      if (n === undefined) continue; // caller didn't touch this tier
+      const oldStr = String(o ?? 0);
+      const newStr = String(n ?? 0);
+      if (oldStr !== newStr) diffs.push({ field, oldValue: oldStr, newValue: newStr });
+    }
+
+    // 2) Top-level allowance fields the manager dashboard sometimes posts directly
+    //    (free_meals_week / max_meals_week mirrored on the column itself)
+    const topLevel: Array<{ key: string; field: string }> = [
+      { key: 'free_meals_week', field: 'FreeMealsPerWeek' },
+      { key: 'max_meals_week',  field: 'MaxMealsPerWeek' },
+    ];
+    for (const { key, field } of topLevel) {
+      if (newCfg?.[key] === undefined) continue;
+      const oldStr = String((oldCfg as any)?.[key] ?? (level as any)?.[key] ?? 0);
+      const newStr = String(newCfg[key] ?? 0);
+      if (oldStr !== newStr && !diffs.find(d => d.field === field)) {
+        diffs.push({ field, oldValue: oldStr, newValue: newStr });
+      }
+    }
+
+    // Single transaction: persist tier_config + insert all log rows atomically
+    const [updated] = await this.prisma.$transaction([
+      this.prisma.corporateBenefitLevel.update({
+        where: { id: level_id },
+        data:  { tier_config },
+      }),
+      ...diffs.map(d =>
+        this.prisma.corporateMealAllowanceLog.create({
+          data: {
+            company_id,
+            level_id,
+            level_name:  levelName,
+            changed_by:  author,
+            field:       d.field,
+            old_value:   d.oldValue,
+            new_value:   d.newValue,
+            description: `${levelName} ${d.field}: ${d.oldValue} → ${d.newValue}`,
+          },
+        }),
+      ),
+    ]);
+
+    return { ok: true, benefit_level: updated, changes_logged: diffs.length };
+  }
+
+  /** Manager-facing meal-allowance change log. Most-recent first, capped at 50 rows.
+   *  Replaces the GAS "MealEditLog" sheet read in get_meal_change_log.
+   */
+  async getMealChangeLog(company_id: string, limit = 50) {
+    const rows = await this.prisma.corporateMealAllowanceLog.findMany({
+      where:   { company_id },
+      orderBy: { created_at: 'desc' },
+      take:    Math.min(Math.max(limit, 1), 200),
     });
-    return { ok: true, benefit_level: updated };
+    return {
+      ok: true,
+      log: rows.map(r => ({
+        timestamp:   r.created_at.toISOString().slice(0, 16).replace('T', ' '),
+        changedBy:   r.changed_by,
+        levelName:   r.level_name || 'General',
+        field:       r.field,
+        oldValue:    r.old_value,
+        newValue:    r.new_value,
+        description: r.description,
+      })),
+    };
   }
 
   /** How many active employees use a given benefit level */
