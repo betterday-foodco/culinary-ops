@@ -1,0 +1,35 @@
+{
+  "_comment": "BetterDay brand palette. Source of truth for all brand colors across every product. Consumed by frontend/tailwind.config.ts (imports this file into theme.colors.brand) and by brand/tokens.css (same values exposed as CSS custom properties for standalone HTML). When you change a color here, update design-tokens.md and tokens.css in the same commit so the three views stay in sync.",
+
+  "primary":    "#4EA2FD",
+  "navy":       "#00465E",
+  "navy-dark":  "#003141",
+  "cream":      "#FAEBDA",
+  "yellow":     "#FFC600",
+  "yellow-dark":"#E6B300",
+  "purple":     "#C8A4F5",
+  "purple-dark":"#7C3AED",
+  "green":      "#6BBD52",
+  "green-dark": "#167421",
+  "red":        "#D93025",
+  "red-dark":   "#B91C1C",
+
+  "_functional_comment": "Functional / semantic tokens derived from the palette above. These are the colors components should reach for by MEANING, not by hue. Having this layer lets you rebrand by only changing the palette above — the functional layer stays stable.",
+
+  "bg-page":       "#FAEBDA",
+  "bg-card":       "#FFFFFF",
+  "bg-nav":        "#4EA2FD",
+  "bg-sidebar":    "#FFFFFF",
+  "bg-footer-dark":"#1A1A1A",
+  "bg-incart":     "#C8A4F5",
+
+  "text-primary":   "#003141",
+  "text-secondary": "#00465E",
+  "text-muted":     "rgba(0, 49, 65, 0.45)",
+  "text-on-brand":  "#FAEBDA",
+  "text-on-dark":   "#FFFFFF",
+  "text-incart":    "#FAEBDA",
+
+  "border-section": "#E0D0BC",
+  "border-tab":     "rgba(0, 49, 65, 0.25)"
+}

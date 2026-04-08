@@ -1,0 +1,32 @@
+{
+  "_comment": "LAYER 2 seed values. These get loaded into Gurleen's SystemConfig database table on the first seed run. After initial seed, these values are edited via the admin dashboard — this file is NOT the live source of truth, just the starting values.",
+  "_security": "Every key MUST start with 'public.' — the /api/system-config/public endpoint only returns keys with that prefix. This is the convention that prevents accidentally exposing secrets. If you need to add a sensitive key (API secret, webhook signing key, etc.), do NOT put it in this file — put it directly in the database with NO public. prefix.",
+  "_update_process": "Editing this file only affects NEW seeds (fresh databases). Editing values on an existing live database means logging into the admin dashboard and saving there — the seed does not overwrite existing rows. See backend/prisma/seed.ts for the exact upsert behavior.",
+
+  "public.company.legalName":   "BetterDay Food Co.",
+  "public.company.displayName": "BetterDay",
+  "public.company.city":        "Calgary",
+  "public.company.province":    "AB",
+  "public.company.country":     "Canada",
+
+  "public.contact.email":       "hello@eatbetterday.ca",
+  "public.contact.phone":       "(403) 371-2258",
+  "public.contact.phoneRaw":    "+14033712258",
+  "public.contact.hoursText":   "Mon–Fri 9am–5pm MT",
+
+  "public.social.instagram":    "https://www.instagram.com/betterdayfood/",
+  "public.social.facebook":     "https://www.facebook.com/betterdayfood",
+  "public.social.tiktok":       "",
+
+  "public.delivery.areas":      "Calgary & surrounding",
+  "public.delivery.schedule":   "Every Sunday",
+
+  "public.legal.copyrightYear": "2026",
+  "public.legal.copyrightText": "© 2026 BetterDay Food Co.",
+  "public.legal.termsUrl":      "/legal/terms",
+  "public.legal.privacyUrl":    "/legal/privacy",
+
+  "public.announcement.enabled": "false",
+  "public.announcement.text":    "",
+  "public.announcement.link":    ""
+}
