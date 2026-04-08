@@ -1,0 +1,944 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Sign In — BetterDay</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+<style>
+@font-face{font-family:'BDSupper';src:url('fonts/BDSupperBold.otf') format('opentype');font-weight:700;font-style:normal;font-display:swap}
+@font-face{font-family:'Gaya';src:url('fonts/Gaya.otf') format('opentype');font-weight:400;font-style:normal;font-display:swap}
+@font-face{font-family:'Sofia Pro';src:url('fonts/SofiaProSoftRegular.otf') format('opentype');font-weight:400;font-style:normal;font-display:swap}
+@font-face{font-family:'Sofia Pro';src:url('fonts/SofiaProSoftBold.otf') format('opentype');font-weight:700;font-style:normal;font-display:swap}
+
+/* ======= RESET & BASE ======= */
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html,body{min-height:100%}
+body{font-family:'Sofia Pro','Inter',-apple-system,sans-serif;background:#faebda;color:#1a1a1a;line-height:1.5;-webkit-font-smoothing:antialiased;display:flex;flex-direction:column;min-height:100vh}
+button{font-family:inherit;cursor:pointer;border:none;background:none}
+input{font-family:inherit}
+img{display:block;max-width:100%}
+a{color:inherit;text-decoration:none}
+
+/* ======= TOP NAV (matches subscriber-hub-2.0 pattern) ======= */
+.ecc-top-bar{background:#4EA2FD;padding:0 32px;display:flex;align-items:center;height:52px;gap:24px;position:sticky;top:0;z-index:100}
+.ecc-logo{display:flex;align-items:center;gap:0;cursor:pointer}
+.ecc-logo-text{font-family:'Gaya',serif;font-size:22px;font-weight:400;color:#fff;letter-spacing:.01em;line-height:1}
+.ecc-logo-sub{font-size:8px;font-weight:800;color:#ffc600;letter-spacing:3px;text-transform:uppercase;display:block;text-align:center;margin-top:2px}
+.ecc-nav-links{display:flex;gap:26px;margin-left:auto}
+.ecc-nav-link{color:#fff;font-size:13px;font-weight:600;letter-spacing:.5px;text-transform:uppercase;transition:color .2s}
+.ecc-nav-link:hover{color:#ffc600}
+.ecc-order-btn{background:#ffc600;color:#003141;font-size:12px;font-weight:800;padding:10px 22px;border-radius:100px;letter-spacing:.5px;text-transform:uppercase;transition:all .2s}
+.ecc-order-btn:hover{background:#e6b300;transform:translateY(-1px)}
+.ecc-nav-icons{display:flex;align-items:center;gap:14px;margin-left:8px}
+.ecc-signup-link{color:#fff;font-size:12px;font-weight:700;letter-spacing:.4px;text-transform:uppercase;border:1.5px solid rgba(255,255,255,.45);padding:8px 16px;border-radius:100px;transition:all .2s}
+.ecc-signup-link:hover{background:rgba(255,255,255,.12);border-color:#fff}
+
+/* ======= PAGE LAYOUT ======= */
+.login-page{flex:1;display:flex;align-items:center;justify-content:center;padding:48px 20px 80px}
+.login-wrap{width:100%;max-width:1040px;display:grid;grid-template-columns:minmax(0,1.15fr) minmax(0,1fr);gap:28px;align-items:stretch}
+@media(max-width:860px){.login-wrap{grid-template-columns:1fr;max-width:520px}.login-page{padding:28px 16px 60px}}
+
+/* ======= CARDS ======= */
+.card{background:#fff;border-radius:20px;box-shadow:0 4px 24px rgba(0,49,65,.08);border:1.5px solid rgba(0,49,65,.08);overflow:hidden}
+.login-card{padding:40px 40px 32px;position:relative;display:flex;flex-direction:column;min-height:560px}
+@media(max-width:520px){.login-card{padding:28px 22px 24px;min-height:auto}}
+
+/* ======= WELCOME / HEADER ======= */
+.welcome-head{text-align:center;margin-bottom:22px}
+.welcome-title{font-family:'Gaya',serif;font-size:42px;font-weight:400;color:#003141;letter-spacing:.01em;line-height:1;margin-bottom:10px}
+@media(max-width:520px){.welcome-title{font-size:34px}}
+.welcome-sub{font-size:14px;font-weight:500;color:#5a6b75;line-height:1.4}
+
+/* ======= SOCIAL BUTTONS (Apple + Google) ======= */
+.social-row{display:flex;gap:10px;margin-bottom:18px}
+.social-btn{flex:1;display:flex;align-items:center;justify-content:center;gap:10px;padding:13px 14px;border-radius:100px;background:#fff;border:1.5px solid #e0d0bc;font-size:13.5px;font-weight:700;color:#1a1a1a;transition:all .18s;letter-spacing:.01em}
+.social-btn:hover{border-color:#00465e;transform:translateY(-1px);box-shadow:0 4px 12px rgba(0,49,65,.08)}
+.social-btn svg{width:18px;height:18px;flex-shrink:0}
+.social-btn.apple{background:#000;color:#fff;border-color:#000}
+.social-btn.apple:hover{background:#1a1a1a}
+@media(max-width:380px){.social-btn{font-size:12.5px;padding:12px 10px}}
+
+/* ======= DIVIDER ======= */
+.divider{display:flex;align-items:center;gap:12px;margin:18px 0;color:#9a8a76;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1.5px}
+.divider::before,.divider::after{content:'';flex:1;height:1px;background:#e8dcc6}
+
+/* ======= METHOD TOGGLE (Phone / Email) ======= */
+.method-toggle{display:grid;grid-template-columns:1fr 1fr;gap:4px;background:#f5ecdb;border-radius:100px;padding:4px;margin-bottom:18px}
+.method-tab{padding:10px 16px;border-radius:100px;font-size:13px;font-weight:700;color:#8a7a6a;transition:all .2s;cursor:pointer;font-family:inherit;background:none;border:none}
+.method-tab.active{background:#fff;color:#003141;box-shadow:0 2px 6px rgba(0,49,65,.08)}
+.method-tab:not(.active):hover{color:#00465e}
+
+/* ======= INPUTS ======= */
+.field{margin-bottom:16px}
+.field-label{display:block;font-size:12px;font-weight:700;color:#003141;margin-bottom:7px;letter-spacing:.2px}
+.field-input-wrap{position:relative}
+.field-input{width:100%;padding:14px 16px;font-size:15px;font-weight:500;color:#1a1a1a;background:#faf7f1;border:1.5px solid #ece5d4;border-radius:12px;transition:all .18s;font-family:inherit}
+.field-input::placeholder{color:#b4a590;font-weight:400}
+.field-input:focus{outline:none;border-color:#4EA2FD;background:#fff;box-shadow:0 0 0 4px rgba(78,162,253,.12)}
+.field-input.error{border-color:#dc2626;background:#fef2f2;animation:shake .4s}
+@keyframes shake{0%,100%{transform:translateX(0)}25%{transform:translateX(-6px)}75%{transform:translateX(6px)}}
+.field-error{display:none;font-size:12px;font-weight:600;color:#dc2626;margin-top:6px;align-items:center;gap:4px}
+.field-error.show{display:flex}
+.field-error svg{width:13px;height:13px;flex-shrink:0}
+
+/* Phone field with country code */
+.phone-wrap{display:flex;gap:8px}
+.phone-cc{flex-shrink:0;padding:14px 14px;font-size:15px;font-weight:600;color:#003141;background:#faf7f1;border:1.5px solid #ece5d4;border-radius:12px;display:flex;align-items:center;gap:6px;white-space:nowrap}
+.phone-cc-flag{font-size:16px;line-height:1}
+.phone-wrap .field-input{flex:1;min-width:0}
+
+/* ======= PRIMARY CTA ======= */
+.cta-primary{width:100%;background:#ffc600;color:#003141;font-size:15px;font-weight:800;padding:16px 24px;border-radius:100px;letter-spacing:.3px;text-transform:uppercase;transition:all .2s;font-family:inherit;display:flex;align-items:center;justify-content:center;gap:10px;min-height:52px}
+.cta-primary:hover{background:#ffd23a;transform:translateY(-2px);box-shadow:0 6px 18px rgba(255,198,0,.4)}
+.cta-primary:active{transform:translateY(0)}
+.cta-primary:disabled{background:#ece5d4;color:#9a8a76;cursor:not-allowed;transform:none;box-shadow:none}
+.cta-primary.loading{pointer-events:none}
+.cta-primary .spinner{width:18px;height:18px;border:2.5px solid rgba(0,49,65,.2);border-top-color:#003141;border-radius:50%;animation:spin .7s linear infinite;display:none}
+.cta-primary.loading .spinner{display:block}
+.cta-primary.loading .cta-label{display:none}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+/* ======= REMEMBER ME + HELPER ======= */
+.remember-row{display:flex;align-items:center;justify-content:space-between;gap:8px;margin:14px 0 18px;flex-wrap:wrap}
+.remember-check{display:flex;align-items:center;gap:8px;cursor:pointer;user-select:none;font-size:13px;font-weight:600;color:#00465e}
+.remember-check input{display:none}
+.remember-check .box{width:18px;height:18px;border:2px solid #c4b8a3;border-radius:5px;background:#fff;position:relative;transition:all .15s;flex-shrink:0}
+.remember-check input:checked+.box{background:#4EA2FD;border-color:#4EA2FD}
+.remember-check input:checked+.box::after{content:'';position:absolute;left:4px;top:0px;width:6px;height:11px;border:solid #fff;border-width:0 2.5px 2.5px 0;transform:rotate(45deg)}
+.cta-helper{text-align:center;font-size:12px;color:#8a7a6a;font-weight:500;margin-top:12px}
+
+/* ======= SIGNUP LINK ======= */
+.signup-line{text-align:center;margin-top:auto;padding-top:22px;font-size:14px;color:#5a6b75;font-weight:500}
+.signup-line a{color:#4EA2FD;font-weight:800;text-decoration:none}
+.signup-line a:hover{color:#003141;text-decoration:underline}
+
+/* ======= BENEFITS PANEL (right side) ======= */
+.benefits-card{padding:36px 32px;background:linear-gradient(160deg,#fff 0%,#fdf8ec 100%);display:flex;flex-direction:column;gap:20px}
+.benefits-title{font-family:'Gaya',serif;font-size:28px;font-weight:400;color:#003141;letter-spacing:.01em;line-height:1.1;margin-bottom:6px}
+.benefits-list{display:flex;flex-direction:column;gap:16px;flex:1}
+.benefit-row{display:flex;align-items:flex-start;gap:14px}
+.benefit-icon{width:40px;height:40px;flex-shrink:0;border-radius:50%;background:#4EA2FD;color:#fff;display:flex;align-items:center;justify-content:center;box-shadow:0 4px 12px rgba(78,162,253,.3)}
+.benefit-icon svg{width:20px;height:20px}
+.benefit-row:nth-child(2) .benefit-icon{background:#00465e;box-shadow:0 4px 12px rgba(0,70,94,.3)}
+.benefit-row:nth-child(3) .benefit-icon{background:#c8a4f5;box-shadow:0 4px 12px rgba(200,164,245,.4)}
+.benefit-row:nth-child(4) .benefit-icon{background:#ffc600;color:#003141;box-shadow:0 4px 12px rgba(255,198,0,.35)}
+.benefit-row:nth-child(5) .benefit-icon{background:#16a34a;box-shadow:0 4px 12px rgba(22,163,74,.3)}
+.benefit-text{flex:1;min-width:0}
+.benefit-name{font-size:14px;font-weight:800;color:#003141;line-height:1.2;margin-bottom:3px}
+.benefit-desc{font-size:12.5px;color:#5a6b75;line-height:1.4;font-weight:500}
+.secure-note{display:flex;align-items:flex-start;gap:12px;padding:14px 16px;background:#fff;border-radius:14px;border:1.5px solid #ece5d4;margin-top:4px}
+.secure-note svg{width:18px;height:18px;color:#4EA2FD;flex-shrink:0;margin-top:1px}
+.secure-note .sn-title{font-size:12.5px;font-weight:800;color:#003141;margin-bottom:2px}
+.secure-note .sn-desc{font-size:11.5px;color:#5a6b75;line-height:1.4}
+
+/* ============================================================
+   STEP SYSTEM — fade/slide transitions between welcome, otp, success
+   ============================================================ */
+.step{display:none;flex-direction:column;flex:1;opacity:0;transform:translateY(8px);transition:opacity .28s ease,transform .28s ease}
+.step.active{display:flex;opacity:1;transform:translateY(0)}
+
+/* ======= OTP STEP ======= */
+.otp-head{text-align:center;margin-bottom:24px}
+.otp-icon{width:62px;height:62px;margin:0 auto 14px;border-radius:50%;background:linear-gradient(135deg,#4EA2FD,#00465e);color:#fff;display:flex;align-items:center;justify-content:center;box-shadow:0 8px 24px rgba(78,162,253,.3)}
+.otp-icon svg{width:28px;height:28px}
+.otp-title{font-family:'Gaya',serif;font-size:32px;font-weight:400;color:#003141;line-height:1;margin-bottom:8px}
+.otp-sub{font-size:14px;color:#5a6b75;font-weight:500;line-height:1.5}
+.otp-sub strong{color:#003141;font-weight:800;display:inline-block}
+.otp-change{display:inline-flex;align-items:center;gap:4px;font-size:12px;font-weight:700;color:#4EA2FD;margin-top:6px;cursor:pointer;background:none;border:none;padding:4px 8px;border-radius:6px;transition:background .15s}
+.otp-change:hover{background:rgba(78,162,253,.08)}
+.otp-change svg{width:12px;height:12px}
+
+/* 6-digit code grid */
+.code-grid{display:grid;grid-template-columns:repeat(6,1fr);gap:8px;margin:22px 0 6px}
+@media(max-width:380px){.code-grid{gap:6px}}
+.code-cell{width:100%;aspect-ratio:1/1.1;text-align:center;font-size:26px;font-weight:800;color:#003141;background:#faf7f1;border:2px solid #ece5d4;border-radius:12px;transition:all .18s;font-family:inherit}
+.code-cell:focus{outline:none;border-color:#4EA2FD;background:#fff;box-shadow:0 0 0 4px rgba(78,162,253,.15);transform:translateY(-1px)}
+.code-cell.filled{border-color:#4EA2FD;background:#fff}
+.code-cell.error{border-color:#dc2626;background:#fef2f2;animation:shake .4s}
+@media(max-width:520px){.code-cell{font-size:22px}}
+
+/* Resend timer */
+.resend-row{text-align:center;margin:18px 0 20px;font-size:13px;color:#8a7a6a;font-weight:600}
+.resend-timer{color:#003141;font-weight:800}
+.resend-btn{background:none;border:none;color:#4EA2FD;font-weight:800;font-size:13px;cursor:pointer;padding:4px 6px;border-radius:6px;transition:background .15s;font-family:inherit;text-decoration:underline;text-underline-offset:3px}
+.resend-btn:hover{background:rgba(78,162,253,.08)}
+.resend-btn:disabled{color:#b4a590;cursor:not-allowed;text-decoration:none}
+
+/* Dev banner — shows demo OTP */
+.dev-banner{background:linear-gradient(135deg,#fff8d6,#ffe9a8);border:1.5px dashed #d97706;border-radius:10px;padding:8px 14px;font-size:11.5px;color:#78350f;font-weight:700;text-align:center;margin-bottom:16px;display:flex;align-items:center;justify-content:center;gap:6px}
+.dev-banner svg{width:13px;height:13px;flex-shrink:0}
+.dev-banner code{background:#003141;color:#ffc600;padding:2px 8px;border-radius:4px;font-family:'Courier New',monospace;font-weight:800;letter-spacing:1px}
+
+/* ======= SUCCESS STEP ======= */
+.success-wrap{display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;flex:1;padding:40px 10px}
+.success-circle{width:100px;height:100px;border-radius:50%;background:linear-gradient(135deg,#4ade80,#16a34a);display:flex;align-items:center;justify-content:center;margin-bottom:22px;box-shadow:0 12px 36px rgba(22,163,74,.35);animation:pop .5s cubic-bezier(.18,.89,.32,1.28)}
+.success-circle svg{width:52px;height:52px;color:#fff;stroke-width:3.5;stroke-dasharray:50;stroke-dashoffset:50;animation:draw .5s .25s ease forwards}
+@keyframes pop{0%{transform:scale(.3);opacity:0}60%{transform:scale(1.08)}100%{transform:scale(1);opacity:1}}
+@keyframes draw{to{stroke-dashoffset:0}}
+.success-title{font-family:'Gaya',serif;font-size:36px;font-weight:400;color:#003141;line-height:1;margin-bottom:10px}
+.success-sub{font-size:14.5px;color:#5a6b75;font-weight:500;margin-bottom:24px;max-width:320px;line-height:1.5}
+.success-dots{display:flex;gap:6px;align-items:center;font-size:12px;color:#8a7a6a;font-weight:600}
+.success-dots span{width:6px;height:6px;border-radius:50%;background:#4EA2FD;animation:bounce 1.2s infinite}
+.success-dots span:nth-child(2){animation-delay:.15s}
+.success-dots span:nth-child(3){animation-delay:.3s}
+@keyframes bounce{0%,60%,100%{transform:translateY(0);opacity:.4}30%{transform:translateY(-6px);opacity:1}}
+
+/* ======= TOAST ======= */
+.toast{position:fixed;bottom:30px;left:50%;transform:translateX(-50%) translateY(100px);background:#003141;color:#fff;font-size:13px;font-weight:700;padding:12px 22px;border-radius:100px;box-shadow:0 10px 30px rgba(0,49,65,.3);z-index:1000;opacity:0;transition:all .3s cubic-bezier(.4,0,.2,1);pointer-events:none;display:flex;align-items:center;gap:8px;max-width:calc(100vw - 40px)}
+.toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+.toast.error{background:#dc2626}
+.toast.success{background:#16a34a}
+.toast svg{width:15px;height:15px;flex-shrink:0}
+
+/* ======= FOOTER ======= */
+.site-footer{background:#012030;color:#fff;padding:42px 32px 28px;margin-top:auto}
+.footer-inner{max-width:1200px;margin:0 auto;display:flex;justify-content:space-between;align-items:flex-start;gap:40px;flex-wrap:wrap}
+.footer-brand{display:flex;flex-direction:column;gap:10px}
+.footer-logo{font-family:'Gaya',serif;font-size:28px;font-weight:400;color:#fff;line-height:1}
+.footer-tag{font-size:12px;color:rgba(255,255,255,.55);font-weight:500;letter-spacing:.01em;max-width:260px;line-height:1.5}
+.footer-links{display:flex;gap:28px;flex-wrap:wrap;font-size:12.5px;font-weight:600;text-transform:uppercase;letter-spacing:.5px}
+.footer-links a{color:rgba(255,255,255,.7);transition:color .15s}
+.footer-links a:hover{color:#ffc600}
+.footer-bottom{max-width:1200px;margin:28px auto 0;padding-top:20px;border-top:1px solid rgba(255,255,255,.08);font-size:11px;color:rgba(255,255,255,.4);text-align:center;letter-spacing:.2px}
+
+/* ======= HIDDEN STATE SWAPPING (email vs phone) ======= */
+.method-body{display:none}
+.method-body.active{display:block}
+</style>
+</head>
+<body>
+
+<!-- ======= TOP NAV ======= -->
+<nav class="ecc-top-bar">
+  <a class="ecc-logo" href="#" onclick="event.preventDefault()">
+    <div>
+      <div class="ecc-logo-text">BetterDay</div>
+      <div class="ecc-logo-sub">Food Co.</div>
+    </div>
+  </a>
+  <div class="ecc-nav-links">
+    <a class="ecc-nav-link" href="#">How It Works</a>
+    <a class="ecc-nav-link" href="menu-overlay.html">This Week's Menu</a>
+    <a class="ecc-nav-link" href="#">Pricing</a>
+    <a class="ecc-nav-link" href="#">Our Store</a>
+  </div>
+  <button class="ecc-order-btn" onclick="window.location='menu-overlay.html'">Order Now</button>
+  <div class="ecc-nav-icons">
+    <a class="ecc-signup-link" href="menu-overlay.html">Sign Up</a>
+  </div>
+</nav>
+
+<!-- ======= MAIN ======= -->
+<main class="login-page">
+  <div class="login-wrap">
+
+    <!-- ======= LEFT: LOGIN CARD ======= -->
+    <div class="card login-card">
+
+      <!-- ====== STEP 1: WELCOME ====== -->
+      <div class="step active" id="stepWelcome">
+        <div class="welcome-head">
+          <h1 class="welcome-title">Welcome Back</h1>
+          <p class="welcome-sub">Sign in to manage your meals, orders & rewards</p>
+        </div>
+
+        <!-- Social sign-in -->
+        <div class="social-row">
+          <button class="social-btn apple" onclick="handleSocial('apple')">
+            <svg viewBox="0 0 24 24" fill="currentColor"><path d="M17.05 12.536c-.031-3.13 2.554-4.63 2.672-4.708-1.455-2.126-3.725-2.417-4.535-2.448-1.93-.196-3.766 1.135-4.748 1.135-.98 0-2.486-1.105-4.09-1.073-2.105.031-4.045 1.225-5.128 3.108-2.185 3.79-.56 9.408 1.57 12.49 1.04 1.507 2.277 3.201 3.897 3.14 1.568-.062 2.157-1.013 4.05-1.013 1.893 0 2.42 1.013 4.073.982 1.683-.03 2.749-1.536 3.776-3.053 1.19-1.75 1.68-3.445 1.71-3.533-.037-.017-3.28-1.261-3.317-5.027zM13.94 3.373c.856-1.05 1.438-2.498 1.28-3.95-1.238.054-2.745.83-3.629 1.864-.793.921-1.492 2.4-1.305 3.824 1.383.108 2.795-.708 3.654-1.738z"/></svg>
+            <span>Continue with Apple</span>
+          </button>
+          <button class="social-btn google" onclick="handleSocial('google')">
+            <svg viewBox="0 0 24 24"><path fill="#4285f4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/><path fill="#34a853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/><path fill="#fbbc05" d="M5.84 14.1c-.22-.66-.35-1.36-.35-2.1s.13-1.44.35-2.1V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l3.66-2.83z"/><path fill="#ea4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84C6.71 7.31 9.14 5.38 12 5.38z"/></svg>
+            <span>Continue with Google</span>
+          </button>
+        </div>
+
+        <div class="divider">or sign in with</div>
+
+        <!-- Phone / Email toggle -->
+        <div class="method-toggle">
+          <button class="method-tab active" data-method="phone" onclick="switchMethod('phone')">Phone</button>
+          <button class="method-tab" data-method="email" onclick="switchMethod('email')">Email</button>
+        </div>
+
+        <!-- Phone body -->
+        <div class="method-body active" id="bodyPhone">
+          <div class="field">
+            <label class="field-label" for="phoneInput">Phone Number</label>
+            <div class="phone-wrap">
+              <div class="phone-cc"><span class="phone-cc-flag">🇨🇦</span> +1</div>
+              <input class="field-input" id="phoneInput" type="tel" inputmode="numeric" placeholder="(403) 555-1234" maxlength="14" autocomplete="tel-national">
+            </div>
+            <div class="field-error" id="phoneError">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+              <span>Please enter a valid 10-digit phone number</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Email body -->
+        <div class="method-body" id="bodyEmail">
+          <div class="field">
+            <label class="field-label" for="emailInput">Email Address</label>
+            <input class="field-input" id="emailInput" type="email" placeholder="you@example.com" autocomplete="email">
+            <div class="field-error" id="emailError">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+              <span>Please enter a valid email address</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="remember-row">
+          <label class="remember-check">
+            <input type="checkbox" id="rememberMe" checked>
+            <span class="box"></span>
+            <span>Remember me on this device</span>
+          </label>
+        </div>
+
+        <button class="cta-primary" id="btnContinue" onclick="submitIdentifier()">
+          <span class="cta-label">Send Code</span>
+          <span class="spinner"></span>
+        </button>
+
+        <p class="cta-helper">We'll text you a 6-digit code. Standard rates may apply.</p>
+
+        <p class="signup-line">
+          New to BetterDay? <a href="menu-overlay.html">Create an account →</a>
+        </p>
+      </div>
+
+      <!-- ====== STEP 2: OTP ====== -->
+      <div class="step" id="stepOtp">
+        <div class="dev-banner">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+          <span>Demo mode — use code</span> <code>123456</code>
+        </div>
+
+        <div class="otp-head">
+          <div class="otp-icon">
+            <svg id="otpIconSvg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="2" width="14" height="20" rx="2"/><line x1="12" y1="18" x2="12.01" y2="18"/></svg>
+          </div>
+          <h2 class="otp-title">Enter your code</h2>
+          <p class="otp-sub">We sent a 6-digit code to <strong id="otpDestination">+1 (403) 555-1234</strong></p>
+          <button class="otp-change" onclick="goBackToWelcome()">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>
+            Use a different one
+          </button>
+        </div>
+
+        <div class="code-grid" id="codeGrid">
+          <input class="code-cell" type="text" inputmode="numeric" maxlength="1" data-idx="0" autocomplete="one-time-code">
+          <input class="code-cell" type="text" inputmode="numeric" maxlength="1" data-idx="1">
+          <input class="code-cell" type="text" inputmode="numeric" maxlength="1" data-idx="2">
+          <input class="code-cell" type="text" inputmode="numeric" maxlength="1" data-idx="3">
+          <input class="code-cell" type="text" inputmode="numeric" maxlength="1" data-idx="4">
+          <input class="code-cell" type="text" inputmode="numeric" maxlength="1" data-idx="5">
+        </div>
+
+        <div class="resend-row" id="resendRow">
+          Didn't receive it?
+          <span id="resendTimerWrap">Resend in <span class="resend-timer" id="resendTimer">0:30</span></span>
+          <button class="resend-btn" id="resendBtn" onclick="resendCode()" disabled style="display:none">Resend code</button>
+        </div>
+
+        <button class="cta-primary" id="btnVerify" onclick="verifyCode()" disabled>
+          <span class="cta-label">Verify & Sign In</span>
+          <span class="spinner"></span>
+        </button>
+      </div>
+
+      <!-- ====== STEP 3: SUCCESS ====== -->
+      <div class="step" id="stepSuccess">
+        <div class="success-wrap">
+          <div class="success-circle">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+          </div>
+          <h2 class="success-title" id="successTitle">Welcome back!</h2>
+          <p class="success-sub" id="successSub">Loading your subscription dashboard…</p>
+          <div class="success-dots">
+            <span></span><span></span><span></span>
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- ======= RIGHT: BENEFITS PANEL ======= -->
+    <aside class="card benefits-card">
+      <div>
+        <div style="font-size:11px;font-weight:800;color:#4EA2FD;text-transform:uppercase;letter-spacing:1.5px;margin-bottom:6px">Member Benefits</div>
+        <h2 class="benefits-title">Why Sign In?</h2>
+      </div>
+      <div class="benefits-list">
+        <div class="benefit-row">
+          <div class="benefit-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+          </div>
+          <div class="benefit-text">
+            <div class="benefit-name">Manage Your Plan</div>
+            <div class="benefit-desc">Skip a week, pause deliveries, or swap meals anytime before cutoff</div>
+          </div>
+        </div>
+        <div class="benefit-row">
+          <div class="benefit-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+          </div>
+          <div class="benefit-text">
+            <div class="benefit-name">Track Every Delivery</div>
+            <div class="benefit-desc">See your next box, order history, and past favorites all in one place</div>
+          </div>
+        </div>
+        <div class="benefit-row">
+          <div class="benefit-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>
+          </div>
+          <div class="benefit-text">
+            <div class="benefit-name">Save Your Favorites</div>
+            <div class="benefit-desc">Heart meals you love — they're auto-added to next week's cart</div>
+          </div>
+        </div>
+        <div class="benefit-row">
+          <div class="benefit-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+          </div>
+          <div class="benefit-text">
+            <div class="benefit-name">Earn Rewards & Points</div>
+            <div class="benefit-desc">Every order earns points. Redeem for free meals, upgrades & merch</div>
+          </div>
+        </div>
+        <div class="benefit-row">
+          <div class="benefit-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+          </div>
+          <div class="benefit-text">
+            <div class="benefit-name">Get Help Fast</div>
+            <div class="benefit-desc">Message our team directly with any question about your order</div>
+          </div>
+        </div>
+      </div>
+      <div class="secure-note">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+        <div>
+          <div class="sn-title">Secure & Private</div>
+          <div class="sn-desc">We never store passwords. Sign-in codes expire in 5 minutes and we never share your info.</div>
+        </div>
+      </div>
+    </aside>
+
+  </div>
+</main>
+
+<!-- ======= FOOTER ======= -->
+<footer class="site-footer">
+  <div class="footer-inner">
+    <div class="footer-brand">
+      <div class="footer-logo">BetterDay</div>
+      <div class="footer-tag">Chef-crafted meals, delivered fresh in Calgary. Real food, real ingredients, your better day.</div>
+    </div>
+    <nav class="footer-links">
+      <a href="#">About</a>
+      <a href="#">FAQ</a>
+      <a href="#">Contact</a>
+      <a href="#">Rewards</a>
+      <a href="#">Privacy</a>
+      <a href="#">Terms</a>
+    </nav>
+  </div>
+  <div class="footer-bottom">© 2026 BetterDay Food Co. All rights reserved.</div>
+</footer>
+
+<!-- Toast -->
+<div class="toast" id="toast">
+  <svg id="toastIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+  <span id="toastMsg">Signed in</span>
+</div>
+
+<script>
+/* ============================================================
+   LOGIN FLOW — state machine, mock auth, session persistence
+   ============================================================ */
+
+/* ---------- CONFIG ---------- */
+const CONFIG = {
+  DEMO_CODE: '123456',          // mock OTP — any other 6-digit code fails
+  RESEND_SECONDS: 30,           // countdown before resend button enables
+  CODE_LIFETIME_MS: 5 * 60_000, // 5 min code expiry
+  SESSION_KEY: 'bd_session',    // localStorage key
+  SEND_DELAY_MS: 850,           // simulated "sending code" time
+  VERIFY_DELAY_MS: 950,         // simulated "verifying" time
+  SUCCESS_HOLD_MS: 1400,        // time to show success screen before redirect
+  STEP_TRANSITION_MS: 280,      // fade/slide between steps
+  REMEMBER_DAYS: 30,            // remember-me session duration
+  NON_REMEMBER_HOURS: 24,       // regular session duration
+  HUB_URL: 'subscriber-hub-2.0.html',
+  NEW_USER_URL: 'menu-overlay.html'
+};
+
+/* ---------- MOCK USER DATABASE ---------- */
+/* Normalized phone = digits only, no country code prefix */
+const MOCK_USERS = {
+  phones: {
+    '4035551234': { name: 'Conner K.',    role: 'founder'    },
+    '4035552222': { name: 'Amy M.',       role: 'founder'    },
+    '4035550000': { name: 'Test User',    role: 'subscriber' },
+    '5875551111': { name: 'Jordan R.',    role: 'subscriber' }
+  },
+  emails: {
+    'conner@betterday.ca': { name: 'Conner K.', role: 'founder'    },
+    'amy@betterday.ca':    { name: 'Amy M.',    role: 'founder'    },
+    'test@test.com':       { name: 'Test User', role: 'subscriber' },
+    'demo@betterday.ca':   { name: 'Demo User', role: 'subscriber' }
+  }
+};
+
+/* ---------- STATE ---------- */
+const state = {
+  method: 'phone',          // 'phone' | 'email'
+  identifier: null,         // raw identifier: phone digits or email
+  displayIdentifier: null,  // formatted for display on OTP screen
+  codeSentAt: null,
+  resendTimerId: null,
+  codeExpiryId: null,
+  isExistingUser: false,
+  userProfile: null
+};
+
+/* ============================================================
+   SESSION — check on page load, bounce if already logged in
+   ============================================================ */
+function getSession(){
+  try{
+    const raw = localStorage.getItem(CONFIG.SESSION_KEY);
+    if(!raw) return null;
+    const s = JSON.parse(raw);
+    if(!s.expiresAt || Date.now() > s.expiresAt) {
+      localStorage.removeItem(CONFIG.SESSION_KEY);
+      return null;
+    }
+    return s;
+  }catch{ return null; }
+}
+
+function saveSession(profile, remember){
+  const ms = remember
+    ? CONFIG.REMEMBER_DAYS * 24 * 60 * 60 * 1000
+    : CONFIG.NON_REMEMBER_HOURS * 60 * 60 * 1000;
+  const session = {
+    profile,
+    loggedInAt: Date.now(),
+    expiresAt: Date.now() + ms,
+    remember
+  };
+  localStorage.setItem(CONFIG.SESSION_KEY, JSON.stringify(session));
+  return session;
+}
+
+/* Bounce already-logged-in users unless ?preview=1 (matches hub escape hatch) */
+(function bounceIfLoggedIn(){
+  const qs = new URLSearchParams(location.search);
+  if(qs.has('preview')) return;  // dev escape hatch — view login even while signed in
+  if(qs.has('logout')) {
+    localStorage.removeItem(CONFIG.SESSION_KEY);
+    return;
+  }
+  const session = getSession();
+  if(session) {
+    // Already signed in — go straight to hub
+    window.location.replace(CONFIG.HUB_URL);
+  }
+})();
+
+/* ============================================================
+   STEP TRANSITIONS
+   ============================================================ */
+function gotoStep(id){
+  const steps = document.querySelectorAll('.step');
+  const current = document.querySelector('.step.active');
+  const next = document.getElementById(id);
+  if(!next || current === next) return;
+
+  // Fade current out
+  if(current){
+    current.style.opacity = '0';
+    current.style.transform = 'translateY(-8px)';
+  }
+  setTimeout(() => {
+    steps.forEach(s => s.classList.remove('active'));
+    next.classList.add('active');
+    // Allow a tick so the transition re-fires
+    requestAnimationFrame(() => {
+      next.style.opacity = '';
+      next.style.transform = '';
+    });
+  }, CONFIG.STEP_TRANSITION_MS);
+}
+
+/* ============================================================
+   METHOD TOGGLE (Phone ↔ Email)
+   ============================================================ */
+function switchMethod(method){
+  state.method = method;
+  document.querySelectorAll('.method-tab').forEach(t => {
+    t.classList.toggle('active', t.dataset.method === method);
+  });
+  document.getElementById('bodyPhone').classList.toggle('active', method === 'phone');
+  document.getElementById('bodyEmail').classList.toggle('active', method === 'email');
+  // Clear errors
+  document.getElementById('phoneError').classList.remove('show');
+  document.getElementById('emailError').classList.remove('show');
+  document.getElementById('phoneInput').classList.remove('error');
+  document.getElementById('emailInput').classList.remove('error');
+  // Focus the appropriate input after swap
+  setTimeout(() => {
+    const el = method === 'phone' ? 'phoneInput' : 'emailInput';
+    document.getElementById(el).focus();
+  }, 50);
+}
+
+/* ============================================================
+   PHONE INPUT FORMATTING — (403) 555-1234
+   ============================================================ */
+const phoneInput = document.getElementById('phoneInput');
+phoneInput.addEventListener('input', e => {
+  const digits = e.target.value.replace(/\D/g, '').slice(0, 10);
+  let formatted = digits;
+  if(digits.length > 6)       formatted = `(${digits.slice(0,3)}) ${digits.slice(3,6)}-${digits.slice(6)}`;
+  else if(digits.length > 3)  formatted = `(${digits.slice(0,3)}) ${digits.slice(3)}`;
+  else if(digits.length > 0)  formatted = `(${digits}`;
+  e.target.value = formatted;
+  e.target.classList.remove('error');
+  document.getElementById('phoneError').classList.remove('show');
+});
+phoneInput.addEventListener('keydown', e => { if(e.key === 'Enter') submitIdentifier(); });
+document.getElementById('emailInput').addEventListener('keydown', e => { if(e.key === 'Enter') submitIdentifier(); });
+document.getElementById('emailInput').addEventListener('input', e => {
+  e.target.classList.remove('error');
+  document.getElementById('emailError').classList.remove('show');
+});
+
+/* ============================================================
+   VALIDATE + SUBMIT (send OTP)
+   ============================================================ */
+function submitIdentifier(){
+  const btn = document.getElementById('btnContinue');
+  if(btn.classList.contains('loading')) return;
+
+  if(state.method === 'phone'){
+    const digits = phoneInput.value.replace(/\D/g, '');
+    if(digits.length !== 10){
+      phoneInput.classList.add('error');
+      document.getElementById('phoneError').classList.add('show');
+      return;
+    }
+    state.identifier = digits;
+    state.displayIdentifier = `+1 (${digits.slice(0,3)}) ${digits.slice(3,6)}-${digits.slice(6)}`;
+    state.isExistingUser = !!MOCK_USERS.phones[digits];
+    state.userProfile = MOCK_USERS.phones[digits] || null;
+  } else {
+    const email = document.getElementById('emailInput').value.trim().toLowerCase();
+    if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)){
+      document.getElementById('emailInput').classList.add('error');
+      document.getElementById('emailError').classList.add('show');
+      return;
+    }
+    state.identifier = email;
+    state.displayIdentifier = email;
+    state.isExistingUser = !!MOCK_USERS.emails[email];
+    state.userProfile = MOCK_USERS.emails[email] || null;
+  }
+
+  btn.classList.add('loading');
+  btn.querySelector('.cta-label').textContent = 'Sending code…';
+
+  setTimeout(() => {
+    btn.classList.remove('loading');
+    btn.querySelector('.cta-label').textContent = 'Send Code';
+    sendCodeAndMoveToOtp();
+  }, CONFIG.SEND_DELAY_MS);
+}
+
+function sendCodeAndMoveToOtp(){
+  state.codeSentAt = Date.now();
+
+  // Update OTP screen destination display
+  const destEl = document.getElementById('otpDestination');
+  destEl.textContent = state.displayIdentifier;
+
+  // Update icon based on method
+  const iconSvg = document.getElementById('otpIconSvg');
+  if(state.method === 'email'){
+    iconSvg.innerHTML = '<path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/>';
+  } else {
+    iconSvg.innerHTML = '<rect x="5" y="2" width="14" height="20" rx="2"/><line x1="12" y1="18" x2="12.01" y2="18"/>';
+  }
+
+  // Reset OTP inputs
+  document.querySelectorAll('.code-cell').forEach(c => { c.value = ''; c.classList.remove('filled','error'); });
+  document.getElementById('btnVerify').disabled = true;
+
+  gotoStep('stepOtp');
+  startResendTimer();
+  startCodeExpiry();
+
+  // Focus first cell after transition
+  setTimeout(() => document.querySelector('.code-cell').focus(), CONFIG.STEP_TRANSITION_MS + 60);
+
+  console.log(`%c[BetterDay Auth] Mock code sent to ${state.displayIdentifier}: ${CONFIG.DEMO_CODE}`, 'color:#4EA2FD;font-weight:bold');
+}
+
+/* ============================================================
+   OTP GRID — auto-advance, backspace, paste
+   ============================================================ */
+const codeCells = document.querySelectorAll('.code-cell');
+codeCells.forEach((cell, idx) => {
+  cell.addEventListener('input', e => {
+    const v = e.target.value.replace(/\D/g, '').slice(-1);
+    e.target.value = v;
+    if(v){
+      cell.classList.add('filled');
+      cell.classList.remove('error');
+      if(idx < codeCells.length - 1) codeCells[idx + 1].focus();
+    } else {
+      cell.classList.remove('filled');
+    }
+    updateVerifyButton();
+  });
+  cell.addEventListener('keydown', e => {
+    if(e.key === 'Backspace' && !e.target.value && idx > 0){
+      codeCells[idx - 1].focus();
+      codeCells[idx - 1].value = '';
+      codeCells[idx - 1].classList.remove('filled');
+      updateVerifyButton();
+      e.preventDefault();
+    }
+    if(e.key === 'ArrowLeft' && idx > 0) codeCells[idx - 1].focus();
+    if(e.key === 'ArrowRight' && idx < codeCells.length - 1) codeCells[idx + 1].focus();
+    if(e.key === 'Enter' && [...codeCells].every(c => c.value)) verifyCode();
+  });
+  cell.addEventListener('paste', e => {
+    e.preventDefault();
+    const pasted = (e.clipboardData || window.clipboardData).getData('text').replace(/\D/g, '').slice(0, 6);
+    [...pasted].forEach((ch, i) => {
+      if(codeCells[i]){
+        codeCells[i].value = ch;
+        codeCells[i].classList.add('filled');
+      }
+    });
+    updateVerifyButton();
+    if(pasted.length === 6){
+      codeCells[5].focus();
+      setTimeout(verifyCode, 150);
+    } else if(codeCells[pasted.length]){
+      codeCells[pasted.length].focus();
+    }
+  });
+});
+
+function updateVerifyButton(){
+  const allFilled = [...codeCells].every(c => c.value);
+  document.getElementById('btnVerify').disabled = !allFilled;
+}
+
+/* ============================================================
+   VERIFY CODE
+   ============================================================ */
+function verifyCode(){
+  const btn = document.getElementById('btnVerify');
+  if(btn.disabled || btn.classList.contains('loading')) return;
+
+  const entered = [...codeCells].map(c => c.value).join('');
+
+  // Check expiry first
+  if(state.codeSentAt && Date.now() - state.codeSentAt > CONFIG.CODE_LIFETIME_MS){
+    showError('Code expired. Request a new one.');
+    flashCodeError();
+    return;
+  }
+
+  btn.classList.add('loading');
+  btn.querySelector('.cta-label').textContent = 'Verifying…';
+
+  setTimeout(() => {
+    btn.classList.remove('loading');
+    btn.querySelector('.cta-label').textContent = 'Verify & Sign In';
+
+    if(entered !== CONFIG.DEMO_CODE){
+      flashCodeError();
+      showError('Invalid code. Try again.');
+      return;
+    }
+
+    // Success — clear any timers, save session, advance
+    clearTimers();
+    const profile = state.userProfile || {
+      name: state.method === 'email' ? state.identifier.split('@')[0] : 'New Friend',
+      role: 'new'
+    };
+    profile.identifier = state.identifier;
+    profile.method = state.method;
+
+    const remember = document.getElementById('rememberMe').checked;
+    saveSession(profile, remember);
+
+    // Populate success screen based on user type
+    const titleEl = document.getElementById('successTitle');
+    const subEl = document.getElementById('successSub');
+    if(state.isExistingUser){
+      titleEl.textContent = `Welcome back${profile.name ? ', ' + profile.name.split(' ')[0] : ''}!`;
+      subEl.textContent = 'Loading your subscription dashboard…';
+    } else {
+      titleEl.textContent = 'Account verified!';
+      subEl.textContent = "Let's build your first cart — taking you to this week's menu…";
+    }
+
+    gotoStep('stepSuccess');
+
+    setTimeout(() => {
+      const dest = state.isExistingUser ? CONFIG.HUB_URL : CONFIG.NEW_USER_URL;
+      window.location.href = dest;
+    }, CONFIG.SUCCESS_HOLD_MS);
+
+  }, CONFIG.VERIFY_DELAY_MS);
+}
+
+function flashCodeError(){
+  codeCells.forEach(c => c.classList.add('error'));
+  setTimeout(() => {
+    codeCells.forEach(c => { c.classList.remove('error'); c.value=''; c.classList.remove('filled'); });
+    codeCells[0].focus();
+    updateVerifyButton();
+  }, 500);
+}
+
+/* ============================================================
+   RESEND TIMER + CODE EXPIRY
+   ============================================================ */
+function startResendTimer(){
+  clearInterval(state.resendTimerId);
+  let remaining = CONFIG.RESEND_SECONDS;
+  const wrap = document.getElementById('resendTimerWrap');
+  const timerEl = document.getElementById('resendTimer');
+  const btn = document.getElementById('resendBtn');
+  wrap.style.display = '';
+  btn.style.display = 'none';
+  btn.disabled = true;
+
+  const render = () => {
+    const m = Math.floor(remaining / 60);
+    const s = (remaining % 60).toString().padStart(2, '0');
+    timerEl.textContent = `${m}:${s}`;
+  };
+  render();
+
+  state.resendTimerId = setInterval(() => {
+    remaining--;
+    if(remaining <= 0){
+      clearInterval(state.resendTimerId);
+      wrap.style.display = 'none';
+      btn.style.display = '';
+      btn.disabled = false;
+    } else {
+      render();
+    }
+  }, 1000);
+}
+
+function startCodeExpiry(){
+  clearTimeout(state.codeExpiryId);
+  state.codeExpiryId = setTimeout(() => {
+    showError('Your code expired. Tap resend to get a new one.');
+  }, CONFIG.CODE_LIFETIME_MS);
+}
+
+function resendCode(){
+  // Reset code, restart timers, show toast
+  codeCells.forEach(c => { c.value=''; c.classList.remove('filled','error'); });
+  document.getElementById('btnVerify').disabled = true;
+  state.codeSentAt = Date.now();
+  startResendTimer();
+  startCodeExpiry();
+  showSuccess('New code sent');
+  codeCells[0].focus();
+  console.log(`%c[BetterDay Auth] Mock code resent: ${CONFIG.DEMO_CODE}`, 'color:#4EA2FD;font-weight:bold');
+}
+
+function clearTimers(){
+  clearInterval(state.resendTimerId);
+  clearTimeout(state.codeExpiryId);
+}
+
+/* ============================================================
+   BACK NAVIGATION
+   ============================================================ */
+function goBackToWelcome(){
+  clearTimers();
+  gotoStep('stepWelcome');
+  setTimeout(() => {
+    const el = state.method === 'phone' ? 'phoneInput' : 'emailInput';
+    document.getElementById(el).focus();
+  }, CONFIG.STEP_TRANSITION_MS + 60);
+}
+
+/* ============================================================
+   SOCIAL SIGN-IN (simulated)
+   ============================================================ */
+function handleSocial(provider){
+  const providerName = provider === 'apple' ? 'Apple' : 'Google';
+  showInfo(`Authenticating with ${providerName}…`);
+  // Simulate popup + verification delay
+  setTimeout(() => {
+    // Mock: assume social always returns an "existing" account
+    const profile = {
+      name: provider === 'apple' ? 'Apple User' : 'Google User',
+      role: 'subscriber',
+      identifier: `${provider}_user@example.com`,
+      method: provider
+    };
+    state.userProfile = profile;
+    state.isExistingUser = true;
+    const remember = document.getElementById('rememberMe').checked;
+    saveSession(profile, remember);
+
+    document.getElementById('successTitle').textContent = `Welcome back!`;
+    document.getElementById('successSub').textContent = `Signed in with ${providerName}. Loading your dashboard…`;
+    gotoStep('stepSuccess');
+
+    setTimeout(() => window.location.href = CONFIG.HUB_URL, CONFIG.SUCCESS_HOLD_MS);
+  }, 1100);
+}
+
+/* ============================================================
+   TOAST HELPERS
+   ============================================================ */
+let toastTimerId = null;
+function showToast(msg, type = 'default'){
+  const t = document.getElementById('toast');
+  const msgEl = document.getElementById('toastMsg');
+  const iconEl = document.getElementById('toastIcon');
+  msgEl.textContent = msg;
+  t.className = 'toast';
+  if(type !== 'default') t.classList.add(type);
+
+  // Icon by type
+  if(type === 'error') iconEl.innerHTML = '<circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>';
+  else if(type === 'success') iconEl.innerHTML = '<polyline points="20 6 9 17 4 12"/>';
+  else iconEl.innerHTML = '<circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/>';
+
+  requestAnimationFrame(() => t.classList.add('show'));
+  clearTimeout(toastTimerId);
+  toastTimerId = setTimeout(() => t.classList.remove('show'), 2800);
+}
+const showError   = msg => showToast(msg, 'error');
+const showSuccess = msg => showToast(msg, 'success');
+const showInfo    = msg => showToast(msg, 'default');
+
+/* Focus phone input on page load */
+window.addEventListener('load', () => {
+  setTimeout(() => phoneInput.focus(), 150);
+});
+</script>
+</body>
+</html>

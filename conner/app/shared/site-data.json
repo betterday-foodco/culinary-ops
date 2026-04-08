@@ -1,0 +1,21 @@
+{
+  "_comment": "Phase 1.5 site-wide facts. Local stub that mirrors the eventual GET /api/system-config/public response from culinary-ops. When that endpoint ships, set window.BETTERDAY_API_BASE in a <script> tag before site-shell.js and this file is no longer read. Keys are flat (no nesting) — matches SystemConfig.key/value storage exactly.",
+
+  "company.legalName":    "BetterDay Food Co.",
+  "company.displayName":  "BetterDay",
+  "company.city":         "Calgary",
+  "company.province":     "AB",
+
+  "contact.email":        "hello@eatbetterday.ca",
+  "contact.phone":        "(403) 371-2258",
+  "contact.phoneRaw":     "+14033712258",
+
+  "social.instagram":     "https://www.instagram.com/betterdayfood/",
+  "social.facebook":      "https://www.facebook.com/betterdayfood",
+
+  "legal.copyrightYear":  "2026",
+  "legal.copyrightText":  "© 2026 BetterDay Food Co.",
+
+  "delivery.areas":       "Calgary & surrounding",
+  "delivery.schedule":    "Every Sunday"
+}

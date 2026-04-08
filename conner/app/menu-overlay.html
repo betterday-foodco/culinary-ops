@@ -1,0 +1,2398 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Edit Your Meals</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+@font-face {
+  font-family: 'BDSupper';
+  src: url('fonts/BDSupperBold.otf') format('opentype');
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Gaya';
+  src: url('fonts/Gaya.otf') format('opentype');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Sofia Pro';
+  src: url('fonts/SofiaProSoftRegular.otf') format('opentype');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Sofia Pro';
+  src: url('fonts/SofiaProSoftBold.otf') format('opentype');
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+html, body {
+  height: 100%; width: 100%;
+  overflow: hidden;
+  font-family: 'Sofia Pro', 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  color: #1a1a1a;
+  background: #faebda;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ── OUTER WRAPPER ── */
+.page-wrapper {
+  display: flex; flex-direction: column; height: 100vh; overflow: hidden;
+}
+.page-body {
+  display: flex; flex: 1; overflow: hidden;
+}
+.page-left {
+  flex: 1; display: flex; flex-direction: column; overflow: hidden;
+}
+
+/* ── TOP BAR ── */
+.top-bar {
+  display: flex; align-items: center; justify-content: space-between;
+  height: 64px; padding: 0 32px;
+  background: #4EA2FD;
+  border-bottom: none; flex-shrink: 0;
+  z-index: 100;
+}
+.nav-logo {
+  font-family: 'Gaya', serif; font-size: 22px; font-weight: 400;
+  color: #faebda; text-decoration: none; letter-spacing: -0.01em;
+}
+.nav-links {
+  display: flex; align-items: center; gap: 32px; list-style: none;
+}
+.nav-links a {
+  font-family: 'Sofia Pro', sans-serif; font-size: 14px; font-weight: 400;
+  color: rgba(250,235,218,0.85); text-decoration: none; transition: color 0.2s;
+}
+.nav-links a:hover { color: #faebda; }
+.nav-right {
+  display: flex; align-items: center; gap: 12px;
+}
+.nav-btn-outline {
+  padding: 8px 20px; border-radius: 100px;
+  border: 1.5px solid rgba(250,235,218,0.5); background: transparent;
+  color: #faebda; font-family: 'Sofia Pro', sans-serif;
+  font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.2s;
+}
+.nav-btn-outline:hover { border-color: #faebda; }
+.done-btn {
+  display: flex; align-items: center; gap: 4px;
+  padding: 9px 22px; border: none; border-radius: 100px;
+  background: #ffc600; color: #003141; font-family: inherit;
+  font-size: 14px; font-weight: 700; cursor: pointer; white-space: nowrap;
+  transition: all .15s;
+}
+.done-btn:hover { background: #e6b300; transform: translateY(-1px); box-shadow: 0 4px 12px rgba(255,198,0,.4); }
+.nav-icons {
+  display: flex; align-items: center; gap: 16px; color: #faebda;
+}
+.nav-cart-icon {
+  position: relative; cursor: pointer;
+}
+.nav-cart-count {
+  position: absolute; top: -6px; right: -10px;
+  background: #ff4444; color: #fff; font-size: 10px; font-weight: 700;
+  width: 18px; height: 18px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+}
+/* Hide old search wrappers */
+.search-wrap { display: none; }
+.tabs-search-wrap { display: none; }
+
+/* ── CATEGORY TABS ── */
+.tabs-bar {
+  display: flex; align-items: center; gap: 8px;
+  height: 48px; padding: 0 24px; margin-top: 16px;
+  background: #faebda; border-bottom: none;
+  overflow-x: auto; scrollbar-width: none; flex-shrink: 0;
+}
+.tabs-bar::-webkit-scrollbar { display: none; }
+.tab-pill {
+  flex-shrink: 0; padding: 7px 16px;
+  border: 1.5px solid rgba(0,49,65,.25); border-radius: 100px;
+  background: #fff; color: #00465e; font-family: inherit;
+  font-size: 13px; font-weight: 600; cursor: pointer;
+  transition: all .15s;
+}
+.tab-pill:hover { background: #e8f4f8; border-color: rgba(0,49,65,.4); }
+.tab-pill.active {
+  background: #00465e; color: #fff; border-color: transparent;
+  font-weight: 700;
+}
+.tabs-spacer { flex: 1; }
+.sort-filter-btn {
+  flex-shrink: 0; display: flex; align-items: center; gap: 6px;
+  padding: 7px 14px; border: 1.5px solid #00465e; border-radius: 100px;
+  background: #fff; color: #00465e; font-family: inherit;
+  font-size: 13px; font-weight: 600; cursor: pointer; transition: all .15s;
+}
+.sort-filter-btn:hover { background: #e8f4f8; }
+.sort-filter-btn.open { background: #00465e; color: #fff; }
+
+/* ── FILTER DROPDOWN ── */
+.filter-dropdown {
+  display: none; position: absolute; top: 0; left: 24px;
+  width: 360px; background: #fff; border-radius: 16px;
+  box-shadow: 0 8px 40px rgba(0,0,0,.18); border: 1px solid #e8e5e0;
+  z-index: 200; overflow: hidden;
+}
+.filter-dropdown.open { display: block; }
+.filter-header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 16px 20px 12px; border-bottom: 1px solid #f0f0f0;
+}
+.filter-header h3 { font-family: 'Gaya', 'Inter', sans-serif; font-size: 20px; color: #00465e; }
+.filter-clear { font-size: 12px; font-weight: 600; color: #d93025; cursor: pointer; background: none; border: none; font-family: inherit; }
+.filter-clear:hover { text-decoration: underline; }
+.filter-body { padding: 16px 20px; max-height: 400px; overflow-y: auto; }
+.filter-group { margin-bottom: 16px; }
+.filter-group:last-child { margin-bottom: 0; }
+.filter-group-label {
+  font-size: 10px; font-weight: 700; text-transform: uppercase;
+  letter-spacing: 1px; color: #999; margin-bottom: 8px;
+}
+.filter-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.filter-chip {
+  padding: 6px 14px; border-radius: 20px; font-size: 12px; font-weight: 600;
+  border: 1.5px solid #e0dcd6; background: #fff; color: #555;
+  cursor: pointer; transition: all .15s; font-family: inherit;
+}
+.filter-chip:hover { border-color: #4ea2fd; color: #4ea2fd; background: #f0f7ff; }
+.filter-chip.active { background: #00465e; color: #fff; border-color: #00465e; }
+.filter-chip.active:hover { background: #006a8e; border-color: #006a8e; }
+/* Tag-specific active colors */
+.filter-chip.active[data-type="vegan"] { background: #16a34a; border-color: #16a34a; }
+.filter-chip.active[data-type="spicy"] { background: #dc2626; border-color: #dc2626; }
+.filter-chip.active[data-type="freezer"] { background: #0891b2; border-color: #0891b2; }
+.filter-chip.active[data-type="protein"] { background: #4ea2fd; border-color: #4ea2fd; }
+.filter-footer {
+  display: flex; gap: 8px; padding: 12px 20px 16px;
+  border-top: 1px solid #f0f0f0;
+}
+.filter-apply {
+  flex: 1; padding: 10px; border-radius: 100px; border: none;
+  background: #00465e; color: #fff; font-family: inherit;
+  font-size: 14px; font-weight: 700; cursor: pointer; transition: all .15s;
+}
+.filter-apply:hover { background: #006a8e; transform: translateY(-1px); }
+.filter-count-badge {
+  display: inline-flex; align-items: center; justify-content: center;
+  background: #ffc600; color: #00465e; font-size: 10px; font-weight: 800;
+  width: 18px; height: 18px; border-radius: 50%; margin-left: 6px;
+}
+
+/* ── MAIN LAYOUT ── */
+.main-layout {
+  flex: 1; overflow: hidden;
+}
+.grid-area {
+  height: 100%; overflow-y: auto; padding: 8px 24px 100px;
+  scroll-padding-top: 16px;
+}
+.grid-area::-webkit-scrollbar { width: 6px; }
+.grid-area::-webkit-scrollbar-thumb { background: #d0c0a8; border-radius: 3px; }
+
+/* ── SECTION HEADERS ── */
+.section-header {
+  display: flex; align-items: baseline; gap: 8px;
+  margin: 24px 0 12px; padding-bottom: 8px;
+  border-bottom: 1px solid #e0d0bc;
+}
+.section-header:first-child { margin-top: 0; }
+.section-header h3 {
+  font-family: 'Gaya', 'Inter', sans-serif; font-size: 22px; font-weight: 400; letter-spacing: .01em; color: #00465e; text-transform: none;
+}
+.section-header .cart-count {
+  font-size: 12px; font-weight: 700; color: #00465e;
+}
+
+/* ── MEAL GRID ── */
+.meal-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 20px;
+}
+
+/* ── MEAL CARD ── */
+.meal-card {
+  background: #fff; border-radius: 20px;
+  box-shadow: 0 2px 8px rgba(0,49,65,.08);
+  border: none;
+  overflow: hidden; cursor: pointer;
+  transition: transform .18s, box-shadow .18s;
+}
+.meal-card:hover {
+  transform: translateY(-3px);
+  box-shadow: 7px 7px 0 #003141;
+}
+.card-img {
+  width: 100%; aspect-ratio: 1; display: block;
+  object-fit: cover;
+}
+.card-body { padding: 12px 14px 14px; display:flex; flex-direction:column; }
+.card-name-wrap {
+  min-height: 48px; display:flex; align-items:center; justify-content:center; text-align:center;
+}
+.card-name {
+  font-family: 'BDSupper', 'Inter', sans-serif; font-size: 15px; font-weight: 700; line-height: 1.25;
+  text-transform: uppercase; letter-spacing: .03em; color: #00465e;
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.card-macros {
+  display: flex; width: 100%;
+  background: rgba(0,49,65,0.04);
+}
+.macro-cell {
+  flex: 1; display: flex; flex-direction: column; align-items: center;
+  padding: 7px 2px 6px; gap: 1px;
+  border-right: 1px solid rgba(0,49,65,0.07);
+}
+.macro-cell:last-child { border-right: none; }
+.macro-val {
+  font-family: 'Sofia Pro', sans-serif;
+  font-size: 11.5px; font-weight: 800; color: #003141; line-height: 1;
+}
+.macro-label {
+  font-family: 'Sofia Pro', sans-serif;
+  font-size: 8px; font-weight: 600; color: rgba(0,49,65,0.45);
+  text-transform: uppercase; letter-spacing: .03em; line-height: 1;
+}
+.meal-card.in-cart .card-macros { background: #b48ee6; }
+.meal-card.in-cart .macro-cell { border-color: rgba(250,235,218,0.15); }
+.meal-card.in-cart .macro-val { color: #faebda; }
+.meal-card.in-cart .macro-label { color: rgba(250,235,218,0.55); }
+/* Photo badges */
+.card-img-wrap {
+  position: relative; overflow: hidden;
+}
+.card-badges {
+  position: absolute; bottom: 8px; left: 8px;
+  display: flex; flex-wrap: wrap; gap: 4px; z-index: 2;
+}
+.card-badge {
+  padding: 4px 10px; border-radius: 100px;
+  font-size: 10px; font-weight: 700; letter-spacing: .03em;
+  text-transform: uppercase; line-height: 1;
+  backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px);
+}
+.card-badge.vegan { background: rgba(22,163,74,.9); color: #fff; }
+.card-badge.protein { background: rgba(0,70,94,.9); color: #fff; }
+.card-badge.spicy { background: rgba(220,38,38,.85); color: #fff; }
+.card-badge.dairy { background: rgba(217,119,6,.85); color: #fff; }
+.card-badge.new { background: rgba(255,198,0,.95); color: #00465e; }
+.card-badge.popular { background: rgba(0,70,94,.85); color: #fff; }
+.card-btn-area { margin-top: 10px; height: 36px; position: relative; }
+
+/* ADD button */
+.add-btn {
+  width: 100%; height: 36px; border: none; border-radius: 100px;
+  background: #00465e; color: #fff; font-family: inherit;
+  font-size: 13px; font-weight: 700; cursor: pointer;
+  letter-spacing: .02em; transition: all .15s;
+  display: flex; align-items: center; justify-content: center;
+}
+.add-btn:hover { background: #003a4e; transform: translateY(-1px); box-shadow: 0 4px 12px rgba(0,49,65,.3); }
+.add-btn-divider {
+  width: 1px; height: 16px; background: rgba(255,255,255,0.25); margin: 0 10px;
+}
+.add-btn-price {
+  font-weight: 500; font-size: 12.5px; letter-spacing: 0;
+}
+
+/* QTY CONTROL */
+.qty-ctrl {
+  display: flex; width: 100%; height: 36px; border-radius: 100px; overflow: hidden;
+}
+.qty-minus, .qty-plus {
+  width: 36px; flex-shrink: 0; border: none;
+  background: #00465e; color: #fff; font-size: 18px; font-weight: 600;
+  cursor: pointer; display: flex; align-items: center; justify-content: center;
+  font-family: inherit; transition: background .12s;
+}
+.qty-minus:hover, .qty-plus:hover { background: #003a4e; }
+.qty-num {
+  flex: 1; background: #4EA2FD !important; color: #fff !important;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 14px; font-weight: 700; font-family: inherit;
+}
+
+/* ── SELECTED CARD (in-cart) ── */
+.meal-card.in-cart .card-body {
+  background: #c8a4f5;
+  color: #faebda;
+}
+.meal-card.in-cart .card-name { color: #faebda; }
+
+/* ── CART SIDEBAR ── */
+.cart-sidebar {
+  width: 340px; flex-shrink: 0;
+  border-left: none;
+  box-shadow: -8px 0 30px rgba(0,49,65,.18);
+  display: flex; flex-direction: column;
+  background: #fff;
+  padding: 0;
+}
+.cart-panel {
+  flex: 1; display: flex; flex-direction: column;
+  background: #fff;
+  border-radius: 0;
+  box-shadow: none;
+  overflow: hidden;
+}
+/* Cart header — clean, on white */
+.cart-header-top {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 16px 18px 10px; flex-shrink: 0;
+  background: #fff;
+}
+.cart-header-top h2 {
+  font-family: 'Gaya', 'Inter', sans-serif; font-size: 20px; font-weight: 400; color: #003141;
+}
+.clear-cart {
+  font-size: 12px; color: rgba(0,49,65,.7); cursor: pointer;
+  background: none; border: none; font-family: inherit;
+  font-weight: 700;
+}
+.clear-cart:hover { text-decoration: underline; color: #003141; }
+
+/* Subscribe Toggle (header of perks box) */
+.sub-toggle {
+  display: flex; font-size: 13px; font-weight: 700;
+  margin: 0; border-radius: 0;
+  overflow: hidden; flex-shrink: 0;
+  border-bottom: 1px solid rgba(0,49,65,0.1);
+}
+.sub-toggle-opt {
+  flex: 1; padding: 13px 8px; text-align: center;
+  cursor: pointer; transition: all .15s; background: rgba(0,49,65,0.06);
+  border: none; font-family: inherit; font-size: 13px; font-weight: 700;
+  color: rgba(0,49,65,.6); letter-spacing: .01em;
+}
+.sub-toggle-opt.active-onetime { background: #003141; color: #fff; }
+.sub-toggle-opt.active-sub { background: #003141; color: #ffc600; }
+.sub-toggle-opt small { display: block; font-size: 11.5px; font-weight: 500; margin-top: 2px; opacity: 0.7; }
+
+/* Cart items */
+.cart-items-area {
+  flex: 1;
+  overflow-y: auto; padding: 4px 14px 14px;
+  position: relative;
+  mask-image: linear-gradient(to bottom, transparent 0%, black 6px, black calc(100% - 20px), transparent 100%);
+  -webkit-mask-image: linear-gradient(to bottom, transparent 0%, black 6px, black calc(100% - 20px), transparent 100%);
+}
+.cart-items-area::-webkit-scrollbar { width: 4px; }
+.cart-items-area::-webkit-scrollbar-thumb { background: #d0c0a8; border-radius: 2px; }
+.cart-cat-header {
+  font-family: 'Gaya', serif; font-size: 15px; font-weight: 400;
+  letter-spacing: .02em; color: #00465e;
+  margin: 14px 0 6px; display: flex; align-items: baseline; gap: 6px;
+  padding-bottom: 6px; border-bottom: 1px solid rgba(0,49,65,.08);
+}
+.cart-cat-header:first-child { margin-top: 4px; }
+.cart-cat-header .cat-total {
+  font-family: 'Sofia Pro', 'Inter', sans-serif;
+  font-size: 11px; font-weight: 500; color: rgba(0,49,65,.4);
+}
+/* Scroll indicator */
+.cart-scroll-hint {
+  display: flex; align-items: center; justify-content: center; gap: 5px;
+  padding: 10px 0 16px;
+}
+.cart-scroll-hint span {
+  width: 6px; height: 6px; border-radius: 50%; background: #00465e;
+}
+.cart-scroll-hint span:nth-child(2) { opacity: .45; }
+.cart-scroll-hint span:nth-child(3) { opacity: .2; }
+
+/* Cart item row — rebuilt with inline qty controls */
+.cart-item {
+  display: flex; align-items: flex-start; gap: 10px;
+  padding: 8px 4px; border-radius: 10px;
+  transition: background .12s;
+}
+.cart-item:hover { background: rgba(0,49,65,.04); }
+.cart-thumb-wrap {
+  position: relative; flex-shrink: 0; cursor: pointer;
+}
+.cart-item-thumb {
+  width: 46px; height: 46px; border-radius: 10px;
+  object-fit: cover; display: block;
+}
+.cart-item-info { flex: 1; min-width: 0; }
+.cart-item-name {
+  font-size: 13px; font-weight: 700; color: #003141;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  line-height: 1.2;
+}
+.cart-item-price { font-size: 12px; color: #888; margin-top: 1px; }
+
+/* Info pill on cart thumbnails */
+.cart-info-pill {
+  position: absolute; bottom: -4px; left: 50%; transform: translateX(-50%);
+  background: #00465e; color: #fff; font-size: 8px; font-weight: 700;
+  padding: 2px 8px; border-radius: 100px; opacity: 0;
+  transition: opacity .15s; white-space: nowrap; pointer-events: none; letter-spacing: .3px;
+}
+.cart-thumb-wrap:hover .cart-info-pill { opacity: 1; }
+
+/* Price formatting */
+.cart-item-unit { font-size: 10px; color: #888; }
+.cart-item-total { font-size: 12px; font-weight: 700; color: #555; }
+
+/* Stacked actions */
+.cart-item-actions {
+  display: flex; flex-direction: column; gap: 4px;
+  align-items: flex-end; flex-shrink: 0;
+}
+
+/* Inline qty stepper in cart */
+.cart-qty-ctrl {
+  display: flex; align-items: center; gap: 0;
+  flex-shrink: 0;
+  border-radius: 100px; overflow: hidden;
+  border: 1.5px solid #e0d8cc;
+  height: 26px;
+}
+.cart-qty-btn {
+  width: 26px; height: 100%; border: none;
+  background: transparent; color: #003141;
+  font-size: 14px; font-weight: 600; cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  font-family: inherit; transition: background .12s;
+}
+.cart-qty-btn:hover { background: rgba(0,49,65,.08); }
+.cart-qty-num {
+  width: 22px; text-align: center;
+  font-size: 12px; font-weight: 700; color: #003141;
+  font-family: inherit;
+}
+/* Remove button (trash) when qty = 1 */
+.cart-qty-btn.remove { color: #00465e; }
+.cart-qty-btn.remove:hover { background: rgba(220,38,38,.08); color: #dc2626; }
+.cart-qty-btn.remove svg { width: 13px; height: 13px; }
+
+/* ── REWARDS MODULE (unified savings + delivery) ── */
+.rewards-module {
+  flex: 0 0 auto;
+  margin: 6px 16px 14px;
+  border-radius: 18px;
+  border: 1.5px solid rgba(0,49,65,0.14);
+  box-shadow: 0 6px 28px rgba(0,49,65,.16), 0 1px 4px rgba(0,49,65,.08);
+  overflow: hidden;
+  background: #faebda;
+  display: flex;
+  flex-direction: column;
+}
+.rewards-box {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  background: transparent;
+}
+.toggle-desc {
+  font-size: 12.5px; color: rgba(0,49,65,0.65); line-height: 1.2;
+  text-align: center; padding: 8px 14px 0;
+}
+.rewards-box-title {
+  position: absolute; top: -9px; left: 14px;
+  font-family: 'Sofia Pro', 'Inter', sans-serif;
+  font-size: 12px; font-weight: 600;
+  text-transform: none; letter-spacing: normal;
+  background: #00465e; color: #fff;
+  padding: 6px 16px; border-radius: 100px;
+  line-height: 1; white-space: nowrap;
+}
+
+/* ── Reward Row (each track inside the shared box) ── */
+.reward-row {
+  padding: 8px 0 6px;
+}
+.reward-row:first-of-type { padding-top: 4px; }
+.reward-row:last-child { padding-bottom: 2px; }
+.reward-row + .reward-row { }
+.reward-row-title {
+  font-size: 11px; font-weight: 700; color: #003141;
+  margin-bottom: 6px; line-height: 1.3;
+}
+.reward-row-title.unlocked { color: #167421; }
+
+/* ── Unified Race Track ── */
+.race-track-wrap { padding: 10px 0 4px; }
+.race-track-title {
+  font-size: 11.5px; font-weight: 700; color: #003141;
+  margin-bottom: 9px; line-height: 1.3;
+}
+.race-track-title.delivery-earned { color: #167421; }
+.race-track-outer { display: flex; align-items: center; gap: 8px; }
+.race-track-bar {
+  flex: 1; position: relative; height: 10px;
+  background: rgba(0,49,65,.1); border-radius: 100px; overflow: visible;
+}
+.race-track-fill {
+  height: 100%; border-radius: 100px;
+  background: linear-gradient(90deg, #4EA2FD 0%, #6BBD52 100%);
+  transition: width .5s cubic-bezier(.4,0,.2,1); position: relative;
+  position: relative; min-width: 14px;
+}
+.race-track-van {
+  position: absolute; right: -4px; top: 50%;
+  transform: translateY(-50%);
+  filter: drop-shadow(1px 1px 2px rgba(0,0,0,.15));
+  animation: vanBob 2s ease-in-out infinite;
+  z-index: 4;
+}
+@keyframes vanBob {
+  0%, 100% { transform: translateY(-50%); }
+  50% { transform: translateY(calc(-50% - 2px)); }
+}
+.race-track-flag {
+  position: absolute; top: 50%; transform: translate(-50%, -58%);
+  font-size: 15px; z-index: 3; transition: all 0.3s;
+}
+.race-track-flag.earned { opacity: 0.45; filter: grayscale(0.3); }
+.race-track-max {
+  font-family: 'Sofia Pro', sans-serif;
+  font-size: 10px; font-weight: 700;
+  color: rgba(0,49,65,0.3); white-space: nowrap; flex-shrink: 0;
+  transition: color 0.3s;
+}
+.race-track-max.reached { color: #167421; }
+/* tiers-labels removed — title line handles messaging */
+
+/* ── Hide sidebar when sheet is open ── */
+body.sheet-open #cartSidebar { visibility: hidden; pointer-events: none; }
+
+/* ── Track Hero (cream context, no dark bg) ── */
+.track-hero {
+  background: transparent;
+  padding: 16px 16px 14px;
+  margin-bottom: 0;
+}
+.track-nudge {
+  font-family: 'Sofia Pro', sans-serif;
+  font-size: 16px; font-weight: 600;
+  color: rgba(0,49,65,0.65);
+  line-height: 1.35; margin-bottom: 14px;
+}
+.track-nudge em { color: #003141; font-style: normal; white-space: nowrap; font-weight: 800; }
+.track-nudge em.del-em { color: #167421; font-style: normal; white-space: nowrap; font-weight: 800; }
+.track-nudge.max-state { color: #003141; font-size: 14px; }
+.track-outer { display: flex; align-items: center; gap: 10px; }
+.track-bar {
+  flex: 1; position: relative; height: 14px;
+  background: rgba(0,49,65,0.14); border-radius: 100px; overflow: visible;
+}
+.track-fill {
+  height: 100%; border-radius: 100px;
+  background: linear-gradient(90deg, #4EA2FD 0%, #6BBD52 100%);
+  transition: width .5s cubic-bezier(.4,0,.2,1);
+  position: relative; min-width: 16px;
+}
+.track-end {
+  font-family: 'Sofia Pro', sans-serif; font-size: 12px; font-weight: 800;
+  color: rgba(0,49,65,0.55); white-space: nowrap; flex-shrink: 0; transition: color 0.3s;
+}
+.track-end.reached { color: #167421; }
+
+/* ── Stat Grid ── */
+.rewards-stats {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 8px;
+  padding: 10px 16px 0;
+}
+.rewards-stat {
+  background: #fff;
+  border: 1.5px solid rgba(0,49,65,0.1);
+  border-radius: 12px; padding: 13px 14px;
+}
+.rewards-stat-label {
+  font-size: 10px; font-weight: 700; color: rgba(0,49,65,0.62);
+  text-transform: uppercase; letter-spacing: .08em; margin-bottom: 5px;
+}
+.rewards-stat-val {
+  font-family: 'Sofia Pro', sans-serif; font-size: 24px; font-weight: 800;
+  color: #003141; line-height: 1; letter-spacing: -.5px;
+}
+.rewards-stat-val.green { color: #167421; }
+.rewards-stat-val.muted { font-size: 22px; color: #003141; font-weight: 800; }
+.rewards-stat-sub { font-size: 11.5px; color: rgba(0,49,65,0.65); margin-top: 4px; }
+.rewards-stat-sub.green { color: #167421; font-weight: 600; }
+
+/* Checkout inside rewards box — pinned to bottom */
+.rewards-checkout { margin: auto 16px 0 !important; width: calc(100% - 32px) !important; }
+
+/* ── Micro Card Upsell (one-time mode) ── */
+.micro-card-upsell {
+  padding: 14px 16px 4px;
+  text-align: center;
+  border-top: 1px solid rgba(0,49,65,0.1);
+  margin-top: 4px;
+}
+.micro-card-top-row {
+  display: flex; align-items: center; justify-content: center;
+  margin-bottom: 10px;
+}
+.micro-card-tag {
+  background: #003141; color: #fff;
+  font-family: 'Sofia Pro', sans-serif;
+  font-size: 10px; font-weight: 700; letter-spacing: .08em;
+  padding: 3px 10px; border-radius: 100px;
+}
+.micro-card-save-pill {
+  background: #ffc600; color: #003141;
+  font-family: 'Sofia Pro', sans-serif;
+  font-size: 11px; font-weight: 700;
+  padding: 3px 10px; border-radius: 100px;
+}
+.micro-card-headline {
+  font-family: 'Sofia Pro', sans-serif; font-size: 14.5px; font-weight: 700;
+  color: #003141; margin-bottom: 4px; line-height: 1.25;
+}
+.micro-card-sub {
+  font-size: 12.5px; color: rgba(0,49,65,0.5); line-height: 1.2; margin-bottom: 14px;
+}
+.micro-card-cta {
+  display: block; width: 100%;
+  background: none; border: 1.5px solid #003141; color: #003141;
+  padding: 10px 18px; border-radius: 100px;
+  font-family: 'Sofia Pro', sans-serif; font-size: 13px; font-weight: 600;
+  cursor: pointer; transition: all 0.15s;
+}
+.micro-card-cta:hover { background: rgba(0,49,65,0.06); transform: translateY(-1px); }
+
+/* ── Member Popup Overlay ── */
+/* ── Member Popup Overlay ── */
+.member-popup-overlay {
+  position: fixed; inset: 0; background: rgba(0,20,30,0.72);
+  z-index: 2000; display: flex; align-items: center; justify-content: center;
+  opacity: 0; pointer-events: none; transition: opacity 0.2s ease;
+}
+.member-popup-overlay.active {
+  opacity: 1; pointer-events: all;
+}
+.member-popup {
+  background: #fff; border-radius: 20px;
+  max-width: 420px; width: 92%;
+  overflow: hidden; position: relative;
+  box-shadow: 8px 8px 0px #003141;
+  animation: popupIn 0.25s ease-out;
+}
+@keyframes popupIn {
+  from { opacity: 0; transform: translateY(14px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+/* Blue header */
+.popup-header {
+  background: #4EA2FD; padding: 26px 24px 22px; position: relative;
+}
+.member-popup-close {
+  position: absolute; top: 12px; right: 12px;
+  background: rgba(255,255,255,0.25); border: none;
+  font-size: 14px; color: #fff; cursor: pointer;
+  width: 28px; height: 28px; display: flex;
+  align-items: center; justify-content: center; border-radius: 50%;
+  transition: all 0.15s; line-height: 1;
+}
+.member-popup-close:hover { background: rgba(255,255,255,0.4); }
+.member-popup h2 {
+  font-family: 'Gaya', serif; font-size: 30px; font-weight: 400;
+  color: #fff; line-height: 1.1; margin-bottom: 10px; padding-right: 36px;
+}
+.member-popup h2 em { font-style: italic; color: #ffc600; }
+.member-popup .popup-intro {
+  font-size: 13px; color: rgba(255,255,255,0.82); line-height: 1.35; margin: 0;
+}
+/* Perks body */
+.popup-body {
+  padding: 6px 20px 10px;
+}
+.member-popup .perk-list { list-style: none; margin: 0; }
+.member-popup .perk-list li {
+  display: flex; align-items: center; gap: 10px;
+  padding: 9px 0; font-size: 14px; color: #003141; line-height: 1.2;
+  border-bottom: 1px solid rgba(0,49,65,0.07);
+}
+.member-popup .perk-list li:last-child { border-bottom: none; }
+.member-popup .perk-list li .perk-icon {
+  font-size: 17px; flex-shrink: 0; width: 24px; text-align: center;
+}
+.member-popup .perk-list li strong { font-weight: 700; }
+/* Cream footer */
+.popup-footer {
+  background: #faebda; padding: 14px 20px 20px;
+}
+.member-popup .popup-save-row {
+  display: flex; align-items: center; gap: 10px; margin-bottom: 10px;
+}
+.member-popup .popup-save-badge {
+  background: #ffc600; color: #003141;
+  font-family: 'Sofia Pro', sans-serif; font-size: 15px; font-weight: 700;
+  padding: 4px 12px; border-radius: 100px;
+  white-space: nowrap;
+}
+.member-popup .popup-save-context {
+  font-size: 12px; color: rgba(0,49,65,0.5); line-height: 1.3;
+}
+.member-popup .popup-price-compare {
+  display: flex; align-items: baseline; gap: 8px; margin-bottom: 14px;
+}
+.member-popup .popup-your-price {
+  font-family: 'Sofia Pro', sans-serif; font-size: 26px; font-weight: 700; color: #003141;
+}
+.member-popup .popup-vs-price {
+  font-size: 13px; color: rgba(0,49,65,0.4);
+}
+.member-popup .popup-vs-price s { text-decoration: line-through; }
+.member-popup .popup-convert-btn {
+  display: block; width: 100%; padding: 14px;
+  background: #ffc600; color: #003141; border: none; border-radius: 100px;
+  font-family: 'Sofia Pro', sans-serif; font-size: 15px; font-weight: 700;
+  cursor: pointer; transition: all 0.15s;
+  box-shadow: 3px 3px 0 #003141;
+}
+.member-popup .popup-convert-btn:hover {
+  transform: translateY(-1px); box-shadow: 4px 4px 0 #003141;
+}
+.member-popup .popup-reassurance {
+  text-align: center; font-size: 11px; color: rgba(0,49,65,0.4);
+  margin-top: 10px;
+}
+
+/* Cart Footer */
+.cart-footer {
+  padding: 0;
+  border-top: none; background: #fff;
+}
+.cart-line {
+  display: flex; justify-content: space-between; align-items: center;
+  font-size: 13px; padding: 1px 0;
+}
+.cart-line.savings { color: #167421; font-weight: 600; font-size: 12px; }
+.cart-line.total {
+  font-family: 'Sofia Pro', sans-serif;
+  font-size: 18px; font-weight: 700;
+  padding: 0; margin: 0; border: none;
+}
+.checkout-btn {
+  width: 100%; height: 46px; margin-top: 0;
+  border: none; border-radius: 100px;
+  background: #ffc600; color: #003141;
+  font-family: 'Sofia Pro', 'Inter', sans-serif;
+  font-size: 14px; font-weight: 700;
+  letter-spacing: 0; cursor: pointer;
+  transition: all .15s;
+  box-shadow: 4px 4px 0 #003141;
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 0 20px;
+}
+.checkout-btn:hover { transform: translateY(-1px); box-shadow: 5px 5px 0 #003141; }
+.checkout-btn-label { font-weight: 800; }
+.checkout-btn-div {
+  width: 1px; height: 18px; background: rgba(0,49,65,0.2); margin: 0 12px; flex-shrink: 0;
+}
+.checkout-btn-price {
+  font-size: 14px; font-weight: 500; letter-spacing: 0; line-height: 1;
+}
+.checkout-btn-solo {
+  justify-content: center !important; display: flex !important; align-items: center !important;
+  width: 100% !important; margin-top: 0 !important;
+}
+
+/* ── Save-anchored checkout area (subscribe mode with discount) ── */
+.checkout-save-area { padding: 12px 16px 0; }
+.checkout-save-row {
+  display: flex; align-items: center; gap: 10px; margin-bottom: 8px; flex-wrap: wrap;
+}
+.checkout-save-badge {
+  background: #003141; color: #FFC600;
+  border: none;
+  font-family: 'Sofia Pro', sans-serif; font-size: 13px; font-weight: 800;
+  padding: 4px 13px; border-radius: 100px; white-space: nowrap;
+  box-shadow: none;
+}
+.checkout-save-context {
+  font-size: 12px; color: rgba(0,49,65,0.55); font-weight: 600; line-height: 1.3;
+}
+.checkout-price-row {
+  display: flex; align-items: baseline; gap: 9px; margin-bottom: 12px;
+}
+.checkout-main-price {
+  font-family: 'Sofia Pro', sans-serif; font-size: 32px; font-weight: 800;
+  color: #003141; letter-spacing: -.5px; line-height: 1;
+}
+.checkout-vs-price {
+  font-size: 13px; color: rgba(0,49,65,0.5); font-weight: 600;
+}
+.checkout-vs-price s { text-decoration: line-through; color: rgba(0,49,65,0.38); }
+.checkout-sub-note {
+  text-align: center; font-size: 11.5px; color: rgba(0,49,65,0.45);
+  font-weight: 600; margin-top: 9px; letter-spacing: .01em;
+}
+.checkout-btn-locked {
+  justify-content: center !important; width: 100% !important; margin-top: 0 !important;
+  background: rgba(0,49,65,0.12) !important;
+  color: rgba(0,49,65,0.4) !important;
+  box-shadow: none !important;
+  cursor: not-allowed !important;
+  font-size: 12.5px !important; letter-spacing: .02em;
+  white-space: nowrap;
+}
+
+/* ── Save+Delivery merged row ── */
+.rewards-stats-row {
+  display: flex; gap: 10px; padding: 12px 16px 0; align-items: center;
+}
+.save-info-block {
+  flex: 1; display: flex; flex-direction: column; justify-content: center; gap: 3px;
+}
+.save-info-block .checkout-save-badge { align-self: flex-start; margin-bottom: 2px; }
+.save-info-block .checkout-main-price { line-height: 1; }
+.delivery-card-sm {
+  flex: 0 0 118px;
+  border-radius: 12px;
+  border: 1.5px solid rgba(0,49,65,0.1);
+  padding: 8px 10px;
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  text-align: center; gap: 4px;
+}
+.delivery-lit {
+  background: linear-gradient(135deg, #4EA2FD 0%, #6BBD52 100%);
+  border-color: transparent;
+  box-shadow: none;
+}
+.delivery-unlit {
+  background: rgba(0,49,65,0.05);
+  border-color: rgba(0,49,65,0.08);
+}
+.delivery-icon { font-size: 18px; line-height: 1; }
+.delivery-unlit .delivery-icon { filter: grayscale(1) opacity(0.3); }
+.delivery-title {
+  font-size: 10.5px; font-weight: 800; letter-spacing: .04em;
+  text-transform: uppercase; line-height: 1.2; white-space: nowrap;
+}
+.delivery-lit .delivery-title { color: #fff; }
+.delivery-unlit .delivery-title { color: rgba(0,49,65,0.3); }
+.delivery-sub-sm { font-size: 10px; font-weight: 600; line-height: 1.2; }
+.delivery-lit .delivery-sub-sm { color: rgba(255,255,255,0.88); }
+.delivery-unlit .delivery-sub-sm { color: rgba(0,49,65,0.3); }
+
+/* Checkout button area — pinned to bottom of card */
+.checkout-btn-area {
+  padding: 10px 14px 16px;
+  margin-top: auto;
+}
+
+/* ── Savings Hero (subscribe mode, inside rewards-box) ── */
+.savings-hero {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 12px 4px 14px;
+  border-bottom: 1px solid rgba(0,49,65,0.09);
+  margin-bottom: 12px;
+}
+.savings-hero-left { display: flex; align-items: baseline; gap: 5px; }
+.savings-hero-amount {
+  font-family: 'Sofia Pro', sans-serif;
+  font-size: 34px; font-weight: 800;
+  color: #167421; line-height: 1; letter-spacing: -1px;
+}
+.savings-hero-saved {
+  font-size: 13px; font-weight: 700; color: rgba(0,49,65,0.45);
+}
+.savings-hero-right { text-align: right; }
+.savings-hero-pct {
+  display: inline-block;
+  background: #003141; color: #fff;
+  font-family: 'Sofia Pro', sans-serif;
+  font-size: 12px; font-weight: 700; letter-spacing: .04em;
+  padding: 4px 11px; border-radius: 100px; margin-bottom: 5px;
+}
+.savings-hero-vs {
+  display: block; font-size: 11px; color: rgba(0,49,65,0.38); font-style: italic;
+}
+
+/* ── DETAIL MODAL ── */
+.modal-overlay {
+  position: fixed; inset: 0; z-index: 200;
+  background: rgba(0,0,0,.5); display: none;
+  align-items: center; justify-content: center;
+  backdrop-filter: blur(2px);
+}
+.modal-overlay.open { display: flex; }
+.modal {
+  background: #fff; border-radius: 16px; width: 100%; max-width: 700px;
+  max-height: 90vh; overflow: hidden; position: relative;
+  box-shadow: 0 20px 60px rgba(0,0,0,.2);
+  animation: modalIn .2s ease;
+  display: flex; flex-direction: row;
+}
+@keyframes modalIn { from { opacity: 0; transform: scale(.96) translateY(12px); } }
+.modal-close {
+  position: absolute; top: 12px; right: 12px; z-index: 10;
+  width: 32px; height: 32px; border-radius: 50%;
+  background: rgba(0,0,0,.5); border: none; color: #fff;
+  font-size: 18px; cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+}
+.modal-close:hover { background: rgba(0,0,0,.7); }
+.modal-img-side {
+  width: 55%; flex-shrink: 0; position: relative; overflow: hidden;
+}
+.modal-img-side img {
+  width: 100%; height: 100%; object-fit: cover; display: block;
+  min-height: 350px;
+}
+.modal-detail-side {
+  width: 45%; padding: 24px 24px 24px 20px; display: flex; flex-direction: column;
+  overflow-y: auto;
+}
+.modal-cat {
+  font-size: 11px; font-weight: 600; letter-spacing: .06em;
+  text-transform: uppercase; color: #999; margin-bottom: 4px;
+}
+.modal-name { font-family: 'BDSupper', 'Inter', sans-serif; font-size: 20px; font-weight: 700; color: #00465e; text-transform: uppercase; letter-spacing: .03em; }
+.modal-price { font-size: 18px; font-weight: 700; margin-top: 6px; }
+.modal-tags { display: flex; gap: 6px; margin-top: 10px; flex-wrap: wrap; }
+.tag-pill {
+  padding: 3px 10px; border-radius: 12px;
+  font-size: 11px; font-weight: 600;
+}
+.tag-pill.vegan { background: #dcfce7; color: #166534; }
+.tag-pill.high-protein { background: #dbeafe; color: #1e40af; }
+.tag-pill.spicy { background: #fee2e2; color: #991b1b; }
+.tag-pill.freezer-friendly { background: #ccfbf1; color: #115e59; }
+.tag-pill.vegetarian { background: #dcfce7; color: #166534; }
+.tag-pill.dairy { background: #fef3c7; color: #92400e; }
+.tag-pill.shellfish { background: #fef3c7; color: #92400e; }
+.modal-allergens { display: flex; gap: 6px; margin-top: 8px; flex-wrap: wrap; }
+.allergen-pill {
+  padding: 3px 10px; border-radius: 12px;
+  background: #fef3c7; color: #92400e;
+  font-size: 11px; font-weight: 600;
+}
+.modal-desc { font-size: 14px; color: #555; line-height: 1.6; margin-top: 12px; }
+.modal-macros {
+  display: flex; gap: 0; margin-top: 14px;
+  border: 1.5px solid rgba(0,49,65,0.12); border-radius: 10px;
+  overflow: hidden;
+}
+.modal-macro-cell {
+  flex: 1; display: flex; flex-direction: column; align-items: center;
+  padding: 10px 6px 9px; gap: 2px;
+  border-right: 1.5px solid rgba(0,49,65,0.08);
+}
+.modal-macro-cell:last-child { border-right: none; }
+.modal-macro-val {
+  font-family: 'Sofia Pro', sans-serif;
+  font-size: 15px; font-weight: 800; color: #003141; line-height: 1;
+}
+.modal-macro-label {
+  font-family: 'Sofia Pro', sans-serif;
+  font-size: 9.5px; font-weight: 600; color: rgba(0,49,65,0.45);
+  text-transform: uppercase; letter-spacing: .03em; line-height: 1;
+}
+.modal-ingredients-label {
+  font-family: 'Sofia Pro', sans-serif; font-size: 11px; font-weight: 700;
+  text-transform: uppercase; letter-spacing: .05em; color: rgba(0,49,65,0.4);
+  margin-top: 16px; margin-bottom: 6px;
+}
+.modal-ingredients {
+  font-family: 'Sofia Pro', sans-serif; font-size: 11.5px; font-weight: 500;
+  color: rgba(0,49,65,0.55); line-height: 0.95;
+}
+.modal-instructions {
+  font-size: 12.5px; color: #999; margin-top: 12px;
+  display: flex; align-items: center; gap: 6px;
+}
+.modal-instructions svg { width: 15px; height: 15px; flex-shrink: 0; }
+.modal-btn-area { margin-top: auto; padding-top: 16px; height: auto; }
+.modal-btn-area .add-btn { height: 44px; font-size: 14px; border-radius: 100px; }
+.modal-btn-area .qty-ctrl { height: 44px; border-radius: 100px; }
+.modal-btn-area .qty-minus, .modal-btn-area .qty-plus { width: 44px; font-size: 20px; }
+.modal-btn-area .qty-num { font-size: 16px; }
+
+/* ── MOBILE BOTTOM BAR ── */
+.mobile-bottom-bar {
+  display: none;
+  position: fixed; bottom: 0; left: 0; right: 0; z-index: 150;
+  background: #fff; border-top: 1px solid #eee;
+  padding: 10px 16px; align-items: center; gap: 8px;
+  box-shadow: 0 -2px 12px rgba(0,0,0,.08);
+}
+.mobile-cart-info {
+  flex: 1; font-size: 14px; font-weight: 600; cursor: pointer;
+}
+.mobile-cart-info small { display: block; font-size: 11px; color: #888; font-weight: 500; }
+.mobile-sub-toggle {
+  display: flex; border: 1.5px solid #ddd; border-radius: 16px;
+  overflow: hidden; font-size: 11px; font-weight: 600;
+}
+.mobile-sub-toggle.subscribe-active { border-color: #4ea2fd; }
+.mobile-sub-opt {
+  padding: 5px 10px; cursor: pointer; background: #fff;
+  border: none; font-family: inherit; font-size: 11px; font-weight: 600; color: #999;
+}
+.mobile-sub-opt.active-onetime { background: #f5f5f5; color: #00465e; }
+.mobile-sub-opt.active-sub { background: #e8f4ff; color: #4ea2fd; }
+.mobile-checkout-btn {
+  padding: 10px 18px; border: none; border-radius: 100px;
+  background: #ffc600; color: #003141; font-family: inherit;
+  font-size: 13px; font-weight: 700; cursor: pointer; white-space: nowrap;
+}
+
+/* ── MOBILE BOTTOM SHEET ── */
+.sheet-overlay {
+  position: fixed; inset: 0; z-index: 160;
+  background: rgba(0,0,0,.4); display: none;
+}
+.sheet-overlay.open { display: block; }
+.bottom-sheet {
+  position: fixed; bottom: 0; left: 0; right: 0; z-index: 170;
+  background: #fff; border-radius: 16px 16px 0 0;
+  max-height: 80vh; overflow-y: auto;
+  transform: translateY(100%);
+  transition: transform .3s ease;
+  box-shadow: 0 -4px 24px rgba(0,0,0,.12);
+}
+.bottom-sheet.open { transform: translateY(0); }
+.sheet-handle {
+  display: flex; justify-content: center; padding: 10px 0 6px;
+  cursor: grab;
+}
+.sheet-handle span {
+  width: 36px; height: 4px; border-radius: 2px; background: #ddd;
+}
+.sheet-header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 4px 20px 12px; border-bottom: 1px solid #f0f0f0;
+}
+.sheet-header h3 { font-size: 16px; font-weight: 700; }
+.sheet-close {
+  background: none; border: none; font-size: 22px; cursor: pointer; color: #888;
+  padding: 4px;
+}
+.sheet-body { padding: 8px 20px 16px; }
+.sheet-footer { padding: 10px 14px 22px; border-top: 1px solid #eee; }
+
+/* ── RESPONSIVE ── */
+@media (max-width: 1100px) {
+  .meal-grid { grid-template-columns: repeat(3, 1fr); }
+}
+@media (max-width: 767px) {
+  .top-bar { padding: 0 16px; }
+  .search-wrap { display: none; }
+  .tabs-bar { top: 64px; padding: 0 16px; }
+  .tabs-search-wrap { display: none; }
+  .mobile-search {
+    display: block !important; padding: 8px 16px;
+    background: #faebda; border-bottom: 1px solid #e8d5c0;
+    position: sticky; top: 108px; z-index: 98;
+  }
+  .mobile-search input {
+    width: 100%; height: 36px; padding: 0 12px 0 36px;
+    border: none; border-radius: 20px; background: #fff;
+    font-family: inherit; font-size: 14px; outline: none;
+  }
+  .mobile-search svg {
+    position: absolute; left: 28px; top: 50%; transform: translateY(-50%);
+    width: 16px; height: 16px; color: #999;
+  }
+  .cart-sidebar { display: none; }
+  .main-layout { height: calc(100vh - 116px); }
+  .grid-area { padding: 12px 16px 100px; }
+  .meal-grid { grid-template-columns: repeat(2, 1fr); }
+  .mobile-bottom-bar { display: flex; }
+  /* Modal stacks vertically on mobile */
+  .modal {
+    flex-direction: column; max-width: 95vw; max-height: 90vh;
+  }
+  .modal-img-side {
+    width: 100%; height: auto;
+  }
+  .modal-img-side img {
+    min-height: 200px; max-height: 250px;
+  }
+  .modal-detail-side {
+    width: 100%; padding: 16px;
+  }
+}
+@media (max-width: 400px) {
+  .meal-grid { gap: 8px; }
+  .card-body { padding: 10px 12px 12px; }
+  .card-name { font-size: 14px; min-height: 36px; }
+}
+
+/* Utility */
+.hidden { display: none !important; }
+.mobile-search { display: none; position: relative; }
+
+
+/* ── One-Time Clean Pitch Section ── */
+.ot-clean {
+  display: flex; flex-direction: column; gap: 12px;
+  padding: 18px 14px 28px;
+  text-align: center;
+}
+.ot-clean-headline {
+  font-family: 'Gaya', serif;
+  font-size: 16px; font-weight: 700;
+  color: #003141; line-height: 1.25; letter-spacing: .01em;
+}
+.ot-clean-body {
+  font-family: 'Sofia Pro', sans-serif;
+  font-size: 11.5px; font-weight: 500;
+  color: rgba(0,49,65,0.6); line-height: 1.3;
+  margin-top: -4px;
+}
+
+/* savings card */
+.ot-savings-wrap {
+  position: relative; padding-top: 14px;
+}
+.ot-savings-pill {
+  position: absolute; top: 4px; left: 50%; transform: translateX(-50%);
+  background: rgba(78,162,253,0.7); color: #fff;
+  padding: 4px 10px; border-radius: 100px;
+  font-size: 10px; font-weight: 700; letter-spacing: .03em;
+  text-transform: uppercase; line-height: 1;
+  white-space: nowrap; z-index: 1;
+}
+.ot-savings-block {
+  background: rgba(0,49,65,0.09);
+  border-radius: 13px; padding: 18px 14px 13px;
+  display: flex; flex-direction: column; align-items: center; gap: 8px;
+  text-align: center;
+}
+.ot-switch-line {
+  font-family: 'Sofia Pro', sans-serif; font-size: 12.5px; font-weight: 600;
+  color: rgba(0,49,65,0.75); line-height: 1.4;
+}
+.ot-switch-line strong { color: #003141; font-weight: 800; }
+.ot-learn-btn {
+  width: 100%; padding: 9px 16px;
+  border: 1.5px solid rgba(0,49,65,0.25); border-radius: 100px;
+  background: rgba(78,162,253,0.08); color: #003141;
+  font-family: 'Sofia Pro', sans-serif; font-size: 12.5px; font-weight: 700;
+  cursor: pointer; transition: all .15s;
+}
+.ot-learn-btn:hover { border-color: rgba(0,49,65,0.4); background: rgba(78,162,253,0.14); }
+
+/* checkout button */
+.ot-checkout-btn {
+  width: 100%; padding: 14px 20px; border: none; border-radius: 100px;
+  background: #FFC600;
+  display: flex; align-items: center; justify-content: center;
+  cursor: pointer; transition: transform .15s, box-shadow .15s;
+  box-shadow: 3px 3px 0 #003141;
+}
+.ot-checkout-btn:hover { transform: translateY(-1px); box-shadow: 4px 4px 0 #003141; }
+.ot-checkout-main {
+  font-family: 'Sofia Pro', sans-serif; font-size: 14px; font-weight: 800;
+  color: #003141; letter-spacing: .01em;
+}
+.ot-checkout-price {
+  font-family: 'Sofia Pro', sans-serif; font-size: 14px; font-weight: 500;
+  color: #003141;
+}
+.ot-checkout-wrap {
+  display: flex; flex-direction: column; gap: 6px; align-items: center;
+}
+.ot-checkout-vs {
+  font-family: 'Sofia Pro', sans-serif; font-size: 11.5px; font-weight: 500;
+  color: rgba(0,49,65,0.45); text-align: center; margin-top: 8px;
+}
+.ot-checkout-sub-note {
+  font-family: 'Sofia Pro', sans-serif; font-size: 11px; font-weight: 500;
+  color: rgba(0,49,65,0.35); text-align: center;
+}
+
+/* ── Weeklies Slide-Up Panel ── */
+.weeklies-panel {
+  position: fixed; right: 0; bottom: 0;
+  width: 340px;
+  background: #FAEBDA;
+  border-radius: 20px 20px 0 0;
+  box-shadow: 0 -6px 40px rgba(0,49,65,0.18);
+  z-index: 500;
+  transform: translateY(100%);
+  transition: transform 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+  overflow: hidden;
+  display: flex; flex-direction: column;
+  max-height: 86vh;
+}
+.weeklies-panel.wp-active { transform: translateY(0); }
+.wp-header {
+  background: #003141;
+  padding: 20px 20px 18px;
+  position: relative; flex-shrink: 0; text-align: center;
+}
+.wp-close {
+  position: absolute; top: 14px; right: 16px;
+  background: rgba(255,255,255,0.15); border: none;
+  color: #fff; font-size: 13px; font-weight: 700;
+  width: 26px; height: 26px; border-radius: 50%;
+  cursor: pointer; display: flex; align-items: center; justify-content: center;
+  transition: background .15s;
+}
+.wp-close:hover { background: rgba(255,255,255,0.3); }
+.wp-title {
+  font-family: 'Gaya', Georgia, serif;
+  font-size: 21px; color: #fff; line-height: 1.2;
+}
+.wp-title em {
+  font-style: italic; color: #FFC600; display: block; margin-top: 1px;
+}
+.wp-body {
+  padding: 16px 20px; overflow-y: auto; flex: 1;
+}
+.wp-section-label {
+  font-family: 'Sofia Pro', sans-serif;
+  font-size: 13px; font-weight: 800; letter-spacing: .01em;
+  color: #003141;
+  margin-bottom: 10px;
+}
+.wp-section-label + .wp-section-label { margin-top: 14px; }
+.wp-steps, .wp-perks {
+  list-style: none; padding: 0; margin: 0 0 14px;
+  display: flex; flex-direction: column; gap: 9px;
+}
+.wp-steps li, .wp-perks li {
+  font-family: 'Sofia Pro', sans-serif;
+  font-size: 12.5px; color: rgba(0,49,65,0.8); line-height: 1.35;
+  display: flex; gap: 8px; align-items: flex-start;
+}
+.wp-steps li strong, .wp-perks li strong { color: #003141; font-weight: 800; }
+.wp-footer {
+  padding: 14px 20px 20px; border-top: 1px solid rgba(0,49,65,0.08);
+  flex-shrink: 0; background: #FAEBDA;
+}
+.wp-save-row {
+  display: flex; align-items: center; gap: 8px; margin-bottom: 4px;
+}
+.wp-save-badge {
+  background: #003141; color: #FFC600;
+  font-family: 'Sofia Pro', sans-serif; font-size: 12px; font-weight: 800;
+  padding: 3px 10px; border-radius: 100px;
+}
+.wp-price {
+  font-family: 'Sofia Pro', sans-serif; font-size: 26px; font-weight: 800;
+  color: #003141; letter-spacing: -.5px; line-height: 1;
+}
+.wp-vs {
+  font-size: 12px; color: rgba(0,49,65,0.45); font-weight: 600; margin-bottom: 14px;
+}
+.wp-vs s { color: rgba(0,49,65,0.35); }
+.wp-btn-primary {
+  width: 100%; padding: 14px; border: none; border-radius: 100px;
+  background: #FFC600; color: #003141;
+  font-family: 'Sofia Pro', sans-serif; font-size: 14px; font-weight: 800;
+  cursor: pointer; letter-spacing: .02em;
+  box-shadow: 3px 3px 0 #003141; transition: all .15s;
+  margin-bottom: 10px;
+}
+.wp-btn-primary:hover { transform: translateY(-1px); box-shadow: 4px 4px 0 #003141; }
+.wp-btn-secondary {
+  width: 100%; padding: 10px; border: 1.5px solid rgba(0,49,65,0.2); border-radius: 100px;
+  background: transparent; color: rgba(0,49,65,0.6);
+  font-family: 'Sofia Pro', sans-serif; font-size: 12.5px; font-weight: 700;
+  cursor: pointer; transition: all .15s;
+}
+.wp-btn-secondary:hover { border-color: rgba(0,49,65,0.4); color: #003141; }
+
+/* ── Perk Strip (cards design) ── */
+.perk-strip-row {
+  display: flex; gap: 3px;
+  margin: 8px 14px 0;
+  border-radius: 11px; overflow: hidden;
+  background: rgba(0,49,65,0.02);
+  height: 46px; align-items: stretch;
+}
+.perk-cell {
+  flex: 1; padding: 7px 2px 5px; text-align: center;
+  position: relative; border-radius: 0;
+  display: flex; flex-direction: column; justify-content: center; align-items: center;
+  transition: background 0.3s, box-shadow 0.3s, flex 0.3s;
+  min-width: 0;
+}
+.perk-cell::after {
+  content: ''; position: absolute; bottom: 0; left: 0; right: 0;
+  height: 2.5px; background: transparent; transition: all 0.3s;
+}
+.perk-cell-label {
+  font-family: 'Sofia Pro', sans-serif;
+  font-size: 7px; font-weight: 800; text-transform: uppercase;
+  letter-spacing: .06em; line-height: 1; margin-bottom: 2px;
+  color: rgba(0,49,65,0.15); transition: all 0.3s;
+}
+.perk-cell-val {
+  font-family: 'Sofia Pro', sans-serif; font-size: 15px; font-weight: 900;
+  line-height: 1; color: #003141; transition: all 0.3s;
+}
+/* Locked */
+.perk-cell.pc-locked { background: transparent; }
+.perk-cell.pc-locked .perk-cell-val { color: rgba(0,49,65,0.25); }
+.perk-cell.pc-locked .perk-cell-label { color: rgba(0,49,65,0.15); }
+/* Earned (past tier) */
+.perk-cell.pc-earned { background: rgba(78,162,253,0.07); }
+.perk-cell.pc-earned .perk-cell-val { color: rgba(0,49,65,0.25); }
+.perk-cell.pc-earned .perk-cell-label { color: rgba(0,49,65,0.1); }
+.perk-cell.pc-earned::after { background: rgba(78,162,253,0.2); }
+/* Active (current tier) — sky blue from demo, keep our flex zoom */
+.perk-cell.pc-current {
+  background: #4EA2FD;
+  box-shadow: 0 3px 14px rgba(78,162,253,0.3);
+  flex: 1.4; z-index: 2;
+}
+.perk-cell.pc-current .perk-cell-val { color: #fff; font-size: 18px; }
+.perk-cell.pc-current .perk-cell-label { color: rgba(255,255,255,0.55); font-size: 8px; }
+.perk-cell.pc-current::after { background: rgba(0,49,65,0.2); }
+
+/* Nudge line above perk strip (cards mode) */
+.cards-nudge-line {
+  font-family: 'Sofia Pro', sans-serif;
+  font-size: 13px; font-weight: 600;
+  color: rgba(0,49,65,0.6);
+  padding: 12px 16px 0; line-height: 1.35;
+}
+.cards-nudge-line strong { color: #003141; font-weight: 800; }
+.cards-nudge-line em.del-em { color: #167421; font-style: normal; font-weight: 800; }
+
+/* Bottom row: save info (fixed left) + delivery (fixed 122px right) */
+.cards-bottom-row {
+  display: grid; grid-template-columns: 1fr 122px;
+  gap: 10px; margin-top: 14px; padding: 0 14px;
+}
+
+/* Save block */
+.cards-save-block {
+  display: flex; flex-direction: column; justify-content: center; gap: 4px;
+}
+.cards-save-block .checkout-save-badge {
+  padding: 3px 9px; font-size: 12px;
+  align-self: flex-start; /* shrink to text width */
+}
+.cards-save-block .checkout-main-price { font-size: 26px; line-height: 1; }
+.cards-save-block .checkout-vs-price { font-size: 13px; }
+
+/* Delivery box — fixed size so layout never jumps between tiers */
+.cards-del-box {
+  border-radius: 10px; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+  width: 122px; height: 60px;
+  transition: background 0.35s, box-shadow 0.35s;
+  position: relative; overflow: hidden;
+}
+.cdel-inner-row { display: flex; align-items: center; gap: 7px; }
+.cdel-van-big { font-size: 24px; line-height: 1; flex-shrink: 0; }
+.cdel-stacked { display: flex; flex-direction: column; gap: 0px; }
+.cdel-line1, .cdel-line2, .cdel-line3 {
+  font-family: 'Sofia Pro', sans-serif;
+  font-size: 10.5px; font-weight: 900;
+  letter-spacing: .05em; line-height: 1.1;
+  text-transform: uppercase;
+}
+.cdel-line3 { opacity: 0.75; letter-spacing: .03em; }
+/* Locked */
+.cards-del-box.cdel-locked {
+  background: rgba(0,49,65,0.03);
+  border: 1.5px dashed rgba(0,49,65,0.14);
+}
+.cdel-locked .cdel-van-big { opacity: 0.32; filter: grayscale(1); }
+.cdel-lock-nudge {
+  font-family: 'Sofia Pro', sans-serif;
+  font-size: 10.5px; font-weight: 600;
+  color: rgba(0,49,65,0.55); line-height: 1.25;
+  letter-spacing: 0; text-transform: none;
+}
+.cdel-lock-sub {
+  font-family: 'Sofia Pro', sans-serif;
+  font-size: 10px; font-weight: 400;
+  color: rgba(0,49,65,0.42); line-height: 1.25;
+  letter-spacing: 0; text-transform: none;
+}
+/* Unlocked — sky→green gradient (matches track bar) */
+.cards-del-box.cdel-unlocked {
+  background: linear-gradient(135deg, #4EA2FD 0%, #6BBD52 100%);
+  border: none;
+  box-shadow: 0 3px 14px rgba(78,162,253,0.22);
+}
+.cdel-unlocked .cdel-van-big { opacity: 1; filter: none; }
+.cdel-unlocked .cdel-line1, .cdel-unlocked .cdel-line2, .cdel-unlocked .cdel-line3 { color: #fff; }
+</style>
+</head>
+<body>
+
+<!-- PAGE WRAPPER -->
+<div class="page-wrapper">
+
+<!-- NAV BAR — matches homepage -->
+<nav class="top-bar">
+  <a href="diet-selector.html" class="nav-logo">BetterDay</a>
+  <ul class="nav-links">
+    <li><a href="#">How It Works</a></li>
+    <li><a href="#">This Week's Menu</a></li>
+    <li><a href="#">Pricing</a></li>
+    <li><a href="#">Our Store</a></li>
+  </ul>
+  <div class="nav-right">
+    <button class="nav-btn-outline">How it works</button>
+    <button class="done-btn" onclick="handleDone()">Order Now</button>
+    <div class="nav-icons">
+      <div class="nav-cart-icon">
+        <svg width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path d="M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4zM3 6h18"/><path d="M16 10a4 4 0 01-8 0"/></svg>
+        <span class="nav-cart-count" id="navCartCount">8</span>
+      </div>
+      <svg width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+    </div>
+  </div>
+</nav>
+
+<!-- BODY: left content + right cart -->
+<div class="page-body">
+
+<!-- LEFT SIDE: tabs + grid -->
+<div class="page-left">
+
+<!-- CATEGORY TABS -->
+<div class="tabs-bar">
+  <button class="sort-filter-btn" id="sortFilterBtn" onclick="toggleFilterDropdown()"><svg width="16" height="14" viewBox="0 0 16 14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="1" y1="2" x2="15" y2="2"/><line x1="3" y1="7" x2="13" y2="7"/><line x1="5.5" y1="12" x2="10.5" y2="12"/></svg> Sort &amp; Filter</button>
+  <div style="width:1px;height:24px;background:#e0dcd6;flex-shrink:0"></div>
+  <button class="tab-pill active" data-cat="All" onclick="setCategory('All', this)">All</button>
+  <button class="tab-pill" data-cat="Entrees" onclick="setCategory('Entrees', this)">Entrees</button>
+  <button class="tab-pill" data-cat="Sandwich & Wraps" onclick="setCategory('Sandwich & Wraps', this)">Sandwich &amp; Wraps</button>
+  <button class="tab-pill" data-cat="Breakfasts" onclick="setCategory('Breakfasts', this)">Breakfasts</button>
+  <button class="tab-pill" data-cat="Snacks & Other" onclick="setCategory('Snacks & Other', this)">Snacks &amp; Other</button>
+</div>
+<!-- FILTER DROPDOWN (outside tabs-bar to avoid overflow clipping) -->
+<div style="position:relative;z-index:150">
+  <div class="filter-dropdown" id="filterDropdown">
+    <div class="filter-header">
+      <h3>Sort & Filter</h3>
+      <button class="filter-clear" onclick="clearAllFilters()">Clear all</button>
+    </div>
+    <div class="filter-body">
+      <div class="filter-group">
+        <div class="filter-group-label">Sort by</div>
+        <div class="filter-chips">
+          <button class="filter-chip active" data-sort="popular" onclick="setSortFilter(this,'sort')">Popular</button>
+          <button class="filter-chip" data-sort="price-low" onclick="setSortFilter(this,'sort')">Price: Low</button>
+          <button class="filter-chip" data-sort="price-high" onclick="setSortFilter(this,'sort')">Price: High</button>
+          <button class="filter-chip" data-sort="cal-low" onclick="setSortFilter(this,'sort')">Calories: Low</button>
+          <button class="filter-chip" data-sort="protein" onclick="setSortFilter(this,'sort')">Protein: High</button>
+        </div>
+      </div>
+      <div class="filter-group">
+        <div class="filter-group-label">Dietary</div>
+        <div class="filter-chips">
+          <button class="filter-chip" data-type="vegan" data-filter="Vegan" onclick="toggleFilter(this)">Vegan</button>
+          <button class="filter-chip" data-filter="Vegetarian" onclick="toggleFilter(this)">Vegetarian</button>
+          <button class="filter-chip" data-type="protein" data-filter="High Protein" onclick="toggleFilter(this)">High Protein</button>
+        </div>
+      </div>
+      <div class="filter-group">
+        <div class="filter-group-label">Features</div>
+        <div class="filter-chips">
+          <button class="filter-chip" data-type="freezer" data-filter="Freezer Friendly" onclick="toggleFilter(this)">Freezer Friendly</button>
+          <button class="filter-chip" data-type="spicy" data-filter="Spicy" onclick="toggleFilter(this)">Spicy</button>
+        </div>
+      </div>
+      <div class="filter-group">
+        <div class="filter-group-label">Allergen-free</div>
+        <div class="filter-chips">
+          <button class="filter-chip" data-allergen="Dairy" onclick="toggleFilter(this)">Dairy-free</button>
+          <button class="filter-chip" data-allergen="Shellfish" onclick="toggleFilter(this)">Shellfish-free</button>
+          <button class="filter-chip" data-allergen="Gluten" onclick="toggleFilter(this)">Gluten-free</button>
+          <button class="filter-chip" data-allergen="Nuts" onclick="toggleFilter(this)">Nut-free</button>
+        </div>
+      </div>
+    </div>
+    <div class="filter-footer">
+      <button class="filter-apply" onclick="applyFilters()">Apply Filters</button>
+    </div>
+  </div>
+</div><!-- end filter wrapper -->
+
+<!-- MOBILE SEARCH -->
+<div class="mobile-search">
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+  <input type="text" id="searchMobile" placeholder="Search meals..." oninput="handleSearch(this.value)">
+</div>
+
+<!-- MAIN CONTENT (scrollable grid) -->
+<div class="main-layout">
+  <div class="grid-area" id="gridArea"></div>
+</div>
+
+</div><!-- end .page-left -->
+
+<!-- CART SIDEBAR -->
+<div class="cart-sidebar" id="cartSidebar">
+  <div class="cart-panel">
+    <div class="cart-header-top">
+      <h2 id="cartTitle">Your Cart · 8 meals</h2>
+      <button class="clear-cart" onclick="clearCart()">Clear cart</button>
+    </div>
+    <div class="cart-items-area" id="cartItems"></div>
+<div class="rewards-module" id="rewardsModule"></div>
+    <div class="cart-footer" id="cartFooter"></div>
+  </div>
+</div>
+
+</div><!-- end .page-body -->
+</div><!-- end .page-wrapper -->
+
+<!-- DETAIL MODAL -->
+<div class="modal-overlay" id="modalOverlay" onclick="closeModalIfBg(event)">
+  <div class="modal" id="modal">
+    <button class="modal-close" onclick="closeModal()">&#10005;</button>
+    <div class="modal-img-side" id="modalImgSide"></div>
+    <div class="modal-detail-side">
+      <div class="modal-cat" id="modalCat"></div>
+      <div class="modal-name" id="modalName"></div>
+      <div class="modal-tags" id="modalTags"></div>
+      <div class="modal-allergens" id="modalAllergens"></div>
+      <div class="modal-desc" id="modalDesc"></div>
+      <div class="modal-macros" id="modalMacros"></div>
+      <div class="modal-ingredients-label" id="modalIngrLabel"></div>
+      <div class="modal-ingredients" id="modalIngredients"></div>
+      <div class="modal-instructions" id="modalInstructions"></div>
+      <div class="modal-btn-area" id="modalBtnArea"></div>
+    </div>
+  </div>
+</div>
+
+<!-- MOBILE BOTTOM BAR -->
+<div class="mobile-bottom-bar" id="mobileBar">
+  <div class="mobile-cart-info" onclick="openSheet()">
+    <span id="mobileCartText">Items: 0</span>
+    <small id="mobileCartPrice">$0.00</small>
+  </div>
+  <div class="mobile-sub-toggle subscribe-active" id="mobileSubToggle">
+    <button class="mobile-sub-opt active-sub" data-mode="subscribe" onclick="setSubscribeMode('subscribe')">Weekly Order</button>
+    <button class="mobile-sub-opt" data-mode="onetime" onclick="setSubscribeMode('onetime')">One-Time</button>
+  </div>
+  <button class="mobile-checkout-btn">CHECKOUT &rsaquo;</button>
+</div>
+
+<!-- MOBILE BOTTOM SHEET -->
+<div class="sheet-overlay" id="sheetOverlay" onclick="closeSheet()"></div>
+<div class="bottom-sheet" id="bottomSheet">
+  <div class="sheet-handle"><span></span></div>
+  <div class="sheet-header">
+    <h3 id="sheetTitle">Your Cart</h3>
+    <button class="sheet-close" onclick="closeSheet()">&#10005;</button>
+  </div>
+  <div class="sheet-body" id="sheetBody"></div>
+  <div class="sheet-footer" id="sheetFooter"></div>
+</div>
+
+<script>
+// ── DATA ──
+const allMeals = [
+  // ENTREES - Meat (blue bg photos) - some in cart
+  {id:1,  name:'Thai Basil Beef',         price:16.99, cal:590, protein:38, carbs:55, fat:18, cat:'Entrees',          qty:2, img:'photos/Thai Basil Beef.jpg',              allergens:[], tags:['High Protein','Spicy'],               desc:'Aromatic Thai basil stir-fry with ground beef, green beans, and jasmine rice.',        instructions:'Microwave 4-5 min. Stir halfway.', ingredients:'Ground beef, jasmine rice, Thai basil, green beans, garlic, soy sauce, oyster sauce, fish sauce, chili flakes, sesame oil'},
+  {id:2,  name:'Green Thai Meatballs',     price:15.99, cal:540, protein:36, carbs:48, fat:16, cat:'Entrees',          qty:1, img:'photos/Green Thai Meatballs.jpg',          allergens:[], tags:['High Protein'],                        desc:'Juicy meatballs in green Thai curry sauce with noodles and fresh vegetables.',          instructions:'Microwave 4-5 min. Let stand 1 min.', ingredients:'Turkey meatballs, rice noodles, green curry paste, coconut milk, zucchini, bell pepper, Thai basil, lime, cilantro'},
+  {id:3,  name:'Prawn Khao Soi',           price:17.99, cal:620, protein:32, carbs:62, fat:20, cat:'Entrees',          qty:1, img:'photos/Prawn Khao Soi.jpg',                allergens:['Shellfish'], tags:['Spicy','Freezer Friendly'], desc:'Coconut curry soup with prawns, egg noodles, and crispy shallots.',                    instructions:'Microwave 5-6 min. Stir halfway.', ingredients:'Prawns, egg noodles, coconut milk, khao soi curry paste, shallots, lime, cilantro, chili oil, bean sprouts, turmeric'},
+  {id:4,  name:'Salmon Soba',              price:18.99, cal:510, protein:42, carbs:38, fat:14, cat:'Entrees',          qty:0, img:'photos/Salmon Soba.jpg',                   allergens:[], tags:['High Protein','Freezer Friendly'],    desc:'Teriyaki salmon with soba noodles, edamame, and sesame dressing.',                    instructions:'Microwave 4-5 min.', ingredients:'Atlantic salmon, soba noodles, edamame, teriyaki sauce, sesame seeds, green onion, pickled ginger, nori, sesame oil'},
+  {id:5,  name:'Shrimp Stir Fry',          price:16.99, cal:480, protein:34, carbs:44, fat:12, cat:'Entrees',          qty:1, img:'photos/Shrimp Stir Fry.jpg',               allergens:['Shellfish'], tags:['High Protein'],            desc:'Sesame shrimp with bok choy, peppers, and steamed rice.',                             instructions:'Microwave 4-5 min. Stir halfway.', ingredients:'Shrimp, jasmine rice, bok choy, bell pepper, sesame sauce, garlic, ginger, soy sauce, sesame seeds, green onion'},
+  // ENTREES - Plant-based (green bg photos)
+  {id:6,  name:'Buffalo Cauliflower',      price:14.99, cal:420, protein:18, carbs:50, fat:14, cat:'Entrees',          qty:1, img:'photos/Buffalo Cauliflower.jpg',            allergens:[], tags:['Vegan','Spicy'],                      desc:'Crispy buffalo cauliflower with ranch, roasted potatoes, and slaw.',                  instructions:'Microwave 4-5 min.', ingredients:'Cauliflower, buffalo sauce, vegan ranch, roasted potatoes, cabbage slaw, carrots, celery, green onion'},
+  {id:7,  name:'Shawarma Chickpea',        price:13.99, cal:460, protein:22, carbs:58, fat:10, cat:'Entrees',          qty:1, img:'photos/Shawarma Chickpea.jpg',              allergens:[], tags:['Vegan','High Protein','Freezer Friendly'], desc:'Spiced chickpeas with tahini, pickled onions, and fluffy couscous.',              instructions:'Microwave 3-4 min.', ingredients:'Chickpeas, couscous, tahini, pickled red onion, cucumber, tomato, shawarma spice blend, parsley, lemon'},
+  {id:8,  name:'Under the Tuscan Sun',     price:14.99, cal:440, protein:20, carbs:56, fat:10, cat:'Entrees',          qty:0, img:'photos/Under the Tuscan Sun.jpg',          allergens:[], tags:['Vegan','Freezer Friendly'],           desc:'Tuscan white bean stew with sun-dried tomatoes, kale, and crusty bread.',             instructions:'Microwave 4-5 min. Stir halfway.', ingredients:'White beans, kale, sun-dried tomatoes, crusty bread, garlic, vegetable broth, rosemary, olive oil, red pepper flakes'},
+  {id:9,  name:"Wok n Roll Ginger Bee'f", price:15.49, cal:490, protein:28, carbs:52, fat:14, cat:'Entrees',          qty:0, img:"photos/Wok n Roll Ginger Bee'f.jpg",      allergens:[], tags:['Vegan','High Protein'],               desc:'Plant-based ginger beef stir-fry with rainbow slaw and rice.',                        instructions:'Microwave 4-5 min.', ingredients:'Plant-based beef strips, jasmine rice, ginger, cabbage slaw, carrots, bell pepper, soy sauce, sesame oil, green onion'},
+  {id:10, name:'Flex Mex',                 price:14.49, cal:470, protein:24, carbs:56, fat:12, cat:'Entrees',          qty:0, img:'photos/Flex Mex.jpg',                      allergens:[], tags:['Vegan'],                              desc:'Mexican-inspired bowl with black beans, corn salsa, guacamole, and rice.',            instructions:'Microwave 3-4 min.', ingredients:'Black beans, cilantro lime rice, corn salsa, guacamole, pico de gallo, romaine, tortilla strips, lime crema'},
+  // SANDWICH & WRAPS
+  {id:11, name:'Shawarma Salad Wrap',      price:13.99, cal:380, protein:16, carbs:48, fat:10, cat:'Sandwich & Wraps', qty:0, img:'photos/shawarma salad.jpg',                allergens:[], tags:['Vegan'],                              desc:'Shawarma-spiced chickpeas with greens, tahini, and pickled veg in a wrap.',           instructions:'Serve cold or warm 2 min.', ingredients:'Flour tortilla, chickpeas, mixed greens, tahini, pickled turnip, cucumber, tomato, shawarma spice, parsley'},
+  {id:12, name:'Veggie Caesar Wrap',       price:12.99, cal:410, protein:18, carbs:46, fat:14, cat:'Sandwich & Wraps', qty:0, img:'photos/Veggie Caesar.jpg',                 allergens:['Dairy'], tags:['Vegetarian'],                  desc:'Crisp romaine, parmesan, croutons, and creamy Caesar in a flour tortilla.',           instructions:'Serve cold.', ingredients:'Flour tortilla, romaine lettuce, parmesan, croutons, Caesar dressing, cherry tomatoes, black pepper'},
+  {id:13, name:"Santa Fe Chick'n Wrap",   price:14.49, cal:450, protein:26, carbs:50, fat:10, cat:'Sandwich & Wraps', qty:0, img:'photos/Santa Fe Sunset Chick\'n Salad.jpg', allergens:[], tags:['Vegan','Spicy'],                     desc:'Plant-based chicken with southwest spices, corn, black beans, and chipotle aioli.',   instructions:'Warm 2-3 min or serve cold.', ingredients:'Flour tortilla, plant-based chicken, black beans, corn, chipotle aioli, romaine, pico de gallo, avocado, southwest spices'},
+  // BREAKFASTS
+  {id:14, name:'Asian Chopped Bowl',       price:11.99, cal:320, protein:14, carbs:42, fat:8,  cat:'Breakfasts',       qty:1, img:'photos/Asian Chopped Salad.jpg',            allergens:[], tags:['Vegan','High Protein'],               desc:'Crunchy Asian chopped vegetables with sesame dressing and crispy noodles.',           instructions:'Serve cold. Toss before eating.', ingredients:'Cabbage, carrots, edamame, cucumber, crispy wonton noodles, sesame dressing, green onion, cilantro, sesame seeds'},
+  {id:15, name:'Flex Mex Breakfast',       price:12.99, cal:390, protein:22, carbs:48, fat:10, cat:'Breakfasts',       qty:1, img:'photos/Flex Mex (2).jpg',                  allergens:[], tags:['Vegan'],                              desc:'Southwest breakfast bowl with scrambled tofu, black beans, and salsa.',               instructions:'Microwave 3-4 min.', ingredients:'Scrambled tofu, black beans, salsa roja, sweet potato hash, avocado, corn, cilantro, lime, chipotle seasoning'},
+  {id:16, name:'Thai Basil Scramble',      price:12.49, cal:440, protein:30, carbs:38, fat:14, cat:'Breakfasts',       qty:0, img:'photos/Thai Basil Beef (2).jpg',           allergens:[], tags:['High Protein','Spicy'],               desc:'Thai basil scrambled eggs with vegetables and chili sauce over rice.',                instructions:'Microwave 3-4 min.', ingredients:'Eggs, jasmine rice, Thai basil, bell pepper, zucchini, garlic, chili sauce, soy sauce, sesame oil, green onion'},
+  // SNACKS
+  {id:17, name:'Flex Mex Snack Bowl',      price:8.99,  cal:280, protein:12, carbs:36, fat:8,  cat:'Snacks & Other',   qty:0, img:'photos/Flex Mex (3).jpg',                  allergens:[], tags:['Vegan'],                              desc:'Mini Mexican bowl — perfect afternoon pick-me-up.',                                  instructions:'Microwave 2-3 min or serve cold.', ingredients:'Black beans, cilantro lime rice, corn salsa, guacamole, pico de gallo, tortilla strips'},
+];
+
+// Fix missing allergens & add popularity/new flags
+allMeals.forEach(m => { if (!m.allergens) m.allergens = []; if (!m.tags) m.tags = []; });
+// Mark some as new/popular
+[4, 7, 13].forEach(id => { const m = allMeals.find(x=>x.id===id); if(m) m.isNew = true; });
+[1, 5, 6, 14].forEach(id => { const m = allMeals.find(x=>x.id===id); if(m) m.isPopular = true; });
+
+const CATEGORY_ORDER = ['Entrees', 'Sandwich & Wraps', 'Breakfasts', 'Snacks & Other'];
+let currentCat = 'All';
+let searchQuery = '';
+let subscribeMode = 'subscribe'; // 'subscribe' or 'onetime'
+let openModalMealId = null;
+
+// ── PRICING ──
+function getPrice(meal) {
+  return meal.price;
+}
+
+function fmtPrice(n) { return '$' + n.toFixed(2); }
+
+// ── CART CALCULATIONS ──
+function getCartMeals() { return allMeals.filter(m => m.qty > 0); }
+function getTotalItems() { return allMeals.reduce((s, m) => s + m.qty, 0); }
+
+function getSubtotal(mode) {
+  let prev = subscribeMode;
+  subscribeMode = mode;
+  let t = allMeals.reduce((s, m) => s + getPrice(m) * m.qty, 0);
+  subscribeMode = prev;
+  return t;
+}
+
+function getSavingsPercent() {
+  if (subscribeMode !== 'subscribe') return 0;
+  const n = getTotalItems();
+  for (let i = PERK_TIERS.length - 1; i >= 0; i--) {
+    if (n >= PERK_TIERS[i].meals) return PERK_TIERS[i].pct;
+  }
+  return 0;
+}
+
+const FREE_DELIVERY_MEALS = 8;   // weekly order: meal count
+const CHECKOUT_MIN        = 4;   // minimum meals required to proceed to checkout
+const DELIVERY_FEE        = 7.99; // standard delivery fee
+const PERK_TIERS = [
+  {meals:4,pct:5},{meals:5,pct:8},{meals:7,pct:11},
+  {meals:9,pct:14},{meals:11,pct:17},{meals:13,pct:20},
+];
+const MILESTONES = [
+  [4,'5% off',false],[5,'8% off',false],[7,'11% off',false],
+  [8,'Free Delivery',true],[9,'14% off',false],[11,'17% off',false],[13,'20% off',false],
+];
+function getDeliveryFee() {
+  if (subscribeMode === 'subscribe') {
+    return getTotalItems() >= FREE_DELIVERY_MEALS ? 0 : DELIVERY_FEE;
+  }
+  return DELIVERY_FEE; // one-time orders always pay delivery
+}
+
+// ── TAG HELPERS ──
+function getTagClass(tag) {
+  const t = tag.toLowerCase();
+  if (t === 'vegan') return 'vegan';
+  if (t === 'vegetarian') return 'vegetarian';
+  if (t === 'high protein') return 'high-protein';
+  if (t === 'spicy') return 'spicy';
+  if (t === 'freezer friendly') return 'freezer-friendly';
+  return '';
+}
+
+// ── RENDER GRID ──
+function renderGrid() {
+  const area = document.getElementById('gridArea');
+  let base = (activeFilters.length > 0 || activeAllergens.length > 0 || activeSort !== 'popular') ? getFilteredMeals() : allMeals;
+  let filtered = base.filter(m => {
+    if (currentCat !== 'All' && m.cat !== currentCat) return false;
+    if (searchQuery) {
+      const q = searchQuery.toLowerCase();
+      return m.name.toLowerCase().includes(q);
+    }
+    return true;
+  });
+
+  let html = '';
+  if (currentCat === 'All' && !searchQuery) {
+    CATEGORY_ORDER.forEach(cat => {
+      const catMeals = filtered.filter(m => m.cat === cat);
+      if (catMeals.length === 0) return;
+      const inCart = catMeals.reduce((s, m) => s + m.qty, 0);
+      // Sort: keep original order (don't regroup in-cart to top)
+      if (activeSort === 'popular') {
+        // Keep original data order — no sorting
+      }
+      html += `<div class="section-header"><h3>${cat}</h3>${inCart > 0 ? `<span class="cart-count">${inCart} in cart</span>` : ''}</div>`;
+      html += '<div class="meal-grid">';
+      catMeals.forEach(m => { html += renderCard(m); });
+      html += '</div>';
+    });
+  } else {
+    // Keep original data order — don't regroup in-cart items
+    html += '<div class="meal-grid">';
+    filtered.forEach(m => { html += renderCard(m); });
+    html += '</div>';
+  }
+  area.innerHTML = html;
+}
+
+function renderCard(m) {
+  const price = getPrice(m);
+  let badges = '';
+  if (m.tags) {
+    if (m.tags.includes('Vegan')) badges += '<span class="card-badge vegan">Vegan</span>';
+    if (m.tags.includes('High Protein')) badges += '<span class="card-badge protein">High Protein</span>';
+    if (m.tags.includes('Spicy')) badges += '<span class="card-badge spicy">Spicy</span>';
+    if (m.isNew) badges += '<span class="card-badge new">New</span>';
+    if (m.isPopular) badges += '<span class="card-badge popular">Popular</span>';
+  }
+  return `
+    <div class="meal-card${m.qty > 0 ? ' in-cart' : ''}" data-id="${m.id}" onclick="openModal(${m.id})">
+      <div class="card-img-wrap">
+        <img class="card-img" src="${m.img}" alt="${m.name}" loading="lazy">
+        ${badges ? `<div class="card-badges">${badges}</div>` : ''}
+      </div>
+      <div class="card-macros">
+        <div class="macro-cell"><span class="macro-val">${m.cal||'—'}</span><span class="macro-label">Cal</span></div>
+        <div class="macro-cell"><span class="macro-val">${m.protein||'—'}g</span><span class="macro-label">Pro</span></div>
+        <div class="macro-cell"><span class="macro-val">${m.carbs||'—'}g</span><span class="macro-label">Car</span></div>
+        <div class="macro-cell"><span class="macro-val">${m.fat||'—'}g</span><span class="macro-label">Fat</span></div>
+      </div>
+      <div class="card-body">
+        <div class="card-name-wrap"><div class="card-name">${m.name}</div></div>
+        <div class="card-btn-area" onclick="event.stopPropagation()">
+          ${m.qty > 0 ? renderQtyCtrl(m.id, m.qty) : renderAddBtn(m.id, price)}
+        </div>
+      </div>
+    </div>`;
+}
+
+function renderAddBtn(id, price) {
+  return `<button class="add-btn" onclick="addToCart(${id})"><span>ADD</span><span class="add-btn-divider"></span><span class="add-btn-price">${fmtPrice(price)}</span></button>`;
+}
+
+function renderQtyCtrl(id, qty) {
+  return `<div class="qty-ctrl">
+    <button class="qty-minus" onclick="changeQty(${id}, -1)">&minus;</button>
+    <div class="qty-num">${qty}</div>
+    <button class="qty-plus" onclick="changeQty(${id}, 1)">+</button>
+  </div>`;
+}
+
+// ── CART ACTIONS ──
+function addToCart(id) {
+  const m = allMeals.find(x => x.id === id);
+  if (!m) return;
+  m.qty = 1;
+  renderAll();
+}
+
+function changeQty(id, delta) {
+  const m = allMeals.find(x => x.id === id);
+  if (!m) return;
+  m.qty = Math.max(0, m.qty + delta);
+  renderAll();
+}
+
+function clearCart() {
+  allMeals.forEach(m => m.qty = 0);
+  renderAll();
+}
+
+// ── RENDER CART SIDEBAR ──
+function renderCart() {
+  const cartMeals = getCartMeals();
+  const totalItems = getTotalItems();
+
+  // Title
+  // Update cart title
+  document.getElementById('cartTitle').textContent = `Your Cart · ${totalItems} meal${totalItems !== 1 ? 's' : ''}`;
+
+  // Mobile subscribe toggle styling
+  const mobileSubToggle = document.getElementById('mobileSubToggle');
+  mobileSubToggle.className = 'mobile-sub-toggle' + (subscribeMode === 'subscribe' ? ' subscribe-active' : '');
+  mobileSubToggle.querySelectorAll('.mobile-sub-opt').forEach(btn => {
+    btn.className = 'mobile-sub-opt' + (btn.dataset.mode === subscribeMode ? (subscribeMode === 'subscribe' ? ' active-sub' : ' active-onetime') : '');
+  });
+
+  // Cart items grouped by category
+  let itemsHtml = '';
+  CATEGORY_ORDER.forEach(cat => {
+    const catItems = cartMeals.filter(m => m.cat === cat);
+    if (catItems.length === 0) return;
+    const catQty = catItems.reduce((s, m) => s + m.qty, 0);
+    itemsHtml += `<div class="cart-cat-header">${cat} <span class="cat-total">| ${catQty} Total</span></div>`;
+    catItems.forEach(m => {
+      const price = getPrice(m);
+      const trashSvg = '<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 011-1h4a1 1 0 011 1v2"/></svg>';
+      const minusBtn = m.qty === 1
+        ? `<button class="cart-qty-btn remove" onclick="changeQty(${m.id}, -1)" title="Remove">${trashSvg}</button>`
+        : `<button class="cart-qty-btn" onclick="changeQty(${m.id}, -1)" title="Decrease">&minus;</button>`;
+      const priceDisplay = m.qty > 1
+        ? `<span class="cart-item-unit">${fmtPrice(price)} &times; ${m.qty}</span> <span class="cart-item-total">${fmtPrice(price * m.qty)}</span>`
+        : fmtPrice(price);
+      itemsHtml += `
+        <div class="cart-item">
+          <div class="cart-thumb-wrap" onclick="scrollToMeal(${m.id})">
+            <img class="cart-item-thumb" src="${m.img}" alt="${m.name}">
+            <span class="cart-info-pill">+ info</span>
+          </div>
+          <div class="cart-item-info" onclick="scrollToMeal(${m.id})" style="cursor:pointer">
+            <div class="cart-item-name">${m.name}</div>
+            <div class="cart-item-price">${priceDisplay}</div>
+          </div>
+          <div class="cart-item-actions">
+            <div class="cart-qty-ctrl">
+              ${minusBtn}
+              <div class="cart-qty-num">${m.qty}</div>
+              <button class="cart-qty-btn" onclick="changeQty(${m.id}, 1)" title="Increase">+</button>
+            </div>
+          </div>
+        </div>`;
+    });
+  });
+  const cartItemsEl = document.getElementById('cartItems');
+  cartItemsEl.innerHTML = itemsHtml;
+
+  // After render, check if scrollable and show hint
+  requestAnimationFrame(() => {
+    const isScrollable = cartItemsEl.scrollHeight > cartItemsEl.clientHeight;
+    const atBottom = cartItemsEl.scrollTop + cartItemsEl.clientHeight >= cartItemsEl.scrollHeight - 10;
+    const existing = cartItemsEl.parentElement.querySelector('.cart-scroll-hint');
+    if (existing) existing.remove();
+    if (isScrollable && !atBottom) {
+      const hint = document.createElement('div');
+      hint.className = 'cart-scroll-hint';
+      hint.innerHTML = '<span></span><span></span><span></span>';
+      cartItemsEl.after(hint);
+    }
+  });
+
+  // Unified rewards module
+  renderRewards('rewardsModule');
+
+  // Footer
+  const subtotal = getSubtotal(subscribeMode);
+  const savingsPct = getSavingsPercent();
+  const savingsAmt = subtotal * (savingsPct / 100);
+  const delivery = getDeliveryFee();
+  const total = subtotal - savingsAmt + delivery;
+
+  const displayTotal = subtotal - savingsAmt;
+  // cartFooter emptied — checkout button lives inside the rewards box now
+  document.getElementById('cartFooter').innerHTML = '';
+
+  // Mobile bar
+  document.getElementById('mobileCartText').textContent = `Items: ${totalItems}`;
+  document.getElementById('mobileCartPrice').textContent = fmtPrice(displayTotal);
+
+  // Bottom sheet
+  document.getElementById('sheetTitle').textContent = `Your Cart \u00B7 ${totalItems} meals`;
+  document.getElementById('sheetBody').innerHTML = itemsHtml;
+  document.getElementById('sheetFooter').innerHTML = `<div id="sheetSavingsPlaceholder"></div>`;
+  renderSavingsBar('sheetSavingsPlaceholder');
+}
+
+// ── UNIFIED REWARDS MODULE ──
+const vanSvg = `<svg width="34" height="20" viewBox="0 0 40 22" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect x="0" y="2" width="24" height="14" rx="2.5" fill="#FFC600"/>
+  <path d="M24 8h7l5 7v5H24V8z" fill="#FFC600"/>
+  <rect x="2" y="5" width="9" height="6" rx="1.5" fill="#003141" opacity="0.45"/>
+  <circle cx="8" cy="19" r="3" fill="#003141" stroke="#FFC600" stroke-width="1.5"/>
+  <circle cx="30" cy="19" r="3" fill="#003141" stroke="#FFC600" stroke-width="1.5"/>
+  <circle cx="8" cy="19" r="1.2" fill="#FFC600"/>
+  <circle cx="30" cy="19" r="1.2" fill="#FFC600"/>
+</svg>`;
+
+function renderRewards(containerId, skipIfMissing) {
+  const el = document.getElementById(containerId);
+  if (!el) return;
+  const n = getTotalItems();
+  const isSub = subscribeMode === 'subscribe';
+
+if (n === 0) { el.innerHTML = ''; return; }
+
+  // ── Shared prices ──
+  const subRaw     = getSubtotal('subscribe');
+  const savingsPct = getSavingsPercent();
+  const subSavings = subRaw * (savingsPct / 100);
+  const weeklyAmt  = subRaw - subSavings;
+  const oneAmt     = getSubtotal('onetime');
+  const subPrice   = fmtPrice(weeklyAmt);
+  const onePrice   = fmtPrice(oneAmt);
+
+  // ── Toggle ──
+  const toggleHtml = `
+    <div class="sub-toggle ${isSub ? 'subscribe-active' : ''}" id="subToggle">
+      <button class="sub-toggle-opt${isSub ? ' active-sub' : ''}" data-mode="subscribe" onclick="setSubscribeMode('subscribe')">
+        Weekly Order<small>${subPrice}</small>
+      </button>
+      <button class="sub-toggle-opt${!isSub ? ' active-onetime' : ''}" data-mode="onetime" onclick="setSubscribeMode('onetime')">
+        One-Time Order<small>${onePrice}</small>
+      </button>
+    </div>`;
+
+  // ── Shared weekly card computation (used by both tabs) ──
+  const deliveryEarned = n >= FREE_DELIVERY_MEALS;
+  const maxReached     = n >= PERK_TIERS[PERK_TIERS.length - 1].meals;
+  const dollarSaved    = oneAmt - weeklyAmt;
+
+  const perkCells = PERK_TIERS.map((t, i) => {
+    const unlocked = n >= t.meals;
+    const nextT = PERK_TIERS[i + 1];
+    const isCurrent = unlocked && (!nextT || n < nextT.meals);
+    let cls = isCurrent ? 'pc-current' : unlocked ? 'pc-earned' : 'pc-locked';
+    return `<div class="perk-cell ${cls}">
+      <div class="perk-cell-label">saving</div>
+      <div class="perk-cell-val">${t.pct}%</div>
+    </div>`;
+  }).join('');
+
+  const nextMs = MILESTONES.find(([t]) => n < t);
+  let cardsNudgeLine = '';
+  if (!nextMs) {
+    cardsNudgeLine = `<div class="cards-nudge-line">🏁 <strong>Max savings</strong> — 20% off + free delivery</div>`;
+  } else {
+    const [msThresh, msLabel, msIsDel] = nextMs;
+    const msNeed = msThresh - n;
+    cardsNudgeLine = msIsDel
+      ? `<div class="cards-nudge-line">Add <strong>${msNeed} more meal${msNeed===1?'':'s'}</strong> for <em class="del-em">Free Delivery</em></div>`
+      : `<div class="cards-nudge-line">Add <strong>${msNeed} more meal${msNeed===1?'':'s'}</strong> for <strong>${msLabel}</strong></div>`;
+  }
+
+  const cardsDeliveryBox = deliveryEarned
+    ? `<div class="cards-del-box cdel-unlocked"><div class="cdel-inner-row">
+        <span class="cdel-van-big">🚚</span>
+        <div class="cdel-stacked">
+          <div class="cdel-line1">FREE</div><div class="cdel-line2">DELIVERY</div><div class="cdel-line3">UNLOCKED!</div>
+        </div></div></div>`
+    : `<div class="cards-del-box cdel-locked"><div class="cdel-inner-row">
+        <span class="cdel-van-big">🚚</span>
+        <div class="cdel-stacked">
+          <div class="cdel-lock-nudge">Free delivery</div>
+          <div class="cdel-lock-sub">at ${FREE_DELIVERY_MEALS} meals</div>
+        </div></div></div>`;
+
+  const totalSaved = dollarSaved + (deliveryEarned ? DELIVERY_FEE : 0);
+  const cardsLeftBlock = savingsPct > 0
+    ? `<div class="cards-save-block">
+        <span class="checkout-save-badge">Save ${fmtPrice(totalSaved)}</span>
+        <div class="checkout-main-price">${subPrice}</div>
+        <div class="checkout-vs-price">vs ${fmtPrice(oneAmt)} one-time</div>
+       </div>`
+    : `<div class="cards-save-block" style="justify-content:center;gap:3px;">
+        <div style="font-family:'Sofia Pro',sans-serif;font-size:15px;font-weight:900;color:#003141;letter-spacing:-.01em;">Add ${CHECKOUT_MIN-n} meal${(CHECKOUT_MIN-n)>1?'s':''}</div>
+        <div style="font-size:12px;font-weight:700;color:rgba(0,49,65,0.45);">to unlock savings</div>
+       </div>`;
+
+  // The weekly card HTML — shared between both tabs
+  const weeklyCardHtml = `
+    ${cardsNudgeLine}
+    <div class="perk-strip-row">${perkCells}</div>
+    <div class="cards-bottom-row">
+      ${cardsLeftBlock}
+      ${cardsDeliveryBox}
+    </div>`;
+
+  let contentHtml = '';
+
+  if (!isSub) {
+    // ── ONE-TIME MODE — clean pitch section ──
+    const otSaved = oneAmt - weeklyAmt;
+    const wouldGetFreeDelivery = n >= FREE_DELIVERY_MEALS;
+    const otTotalSaved = otSaved + (wouldGetFreeDelivery ? DELIVERY_FEE : 0);
+    const hasSavings = otTotalSaved > 0.5;
+
+    const saveAmt = hasSavings ? fmtPrice(otTotalSaved) : 'up to 20%';
+    const fdText = wouldGetFreeDelivery
+      ? `, earn <strong>free delivery</strong>`
+      : '';
+
+    const savingsBlock = `
+      <div class="ot-savings-wrap">
+        <span class="ot-savings-pill">Potential Savings</span>
+        <div class="ot-savings-block">
+          <div class="ot-switch-line">Switch to <strong>Weekly Order and save ${saveAmt}</strong>${fdText} + unlock other great perks!</div>
+          <button class="ot-learn-btn" onclick="openWeekliesPanel()">Learn more about Weekly Orders →</button>
+        </div>
+      </div>`;
+
+    contentHtml = `
+      <div class="ot-clean">
+        <div class="ot-clean-headline">Try our Weekly Orders for true flexibility & huge savings</div>
+        <div class="ot-clean-body">Swap dishes, change quantities, mix categories week to week. Skip, pause, or cancel with one tap.</div>
+        ${savingsBlock}
+        <div class="ot-checkout-wrap">
+          <button class="ot-checkout-btn" onclick="handleCheckout()">
+            <span class="ot-checkout-main">Place One-Time Order</span>
+            <span class="checkout-btn-div"></span>
+            <span class="ot-checkout-price">${onePrice}</span>
+          </button>
+          <div class="ot-checkout-vs">vs ${fmtPrice(weeklyAmt)} weekly</div>
+          <div class="ot-checkout-sub-note">Skip or cancel anytime · No contracts</div>
+        </div>
+      </div>`;
+
+  } else {
+    // ── SUBSCRIBE MODE ──
+    const checkoutNeed = CHECKOUT_MIN - n;
+    const checkoutHtml = n >= CHECKOUT_MIN
+      ? `<div class="checkout-btn-area">
+          <button class="checkout-btn checkout-btn-solo" onclick="handleCheckout()"><span class="checkout-btn-label">Place Weekly Order</span><span class="checkout-btn-div"></span><span class="checkout-btn-price">${fmtPrice(weeklyAmt)}</span></button>
+          <div class="checkout-sub-note">Skip or cancel anytime · No contracts</div>
+        </div>`
+      : `<div class="checkout-btn-area">
+          <button class="checkout-btn checkout-btn-locked" disabled>ADD ${checkoutNeed} MORE MEAL${checkoutNeed===1?'':'S'} TO CHECKOUT</button>
+          <div class="checkout-sub-note">Skip or cancel anytime · No contracts</div>
+        </div>`;
+
+    contentHtml = `${weeklyCardHtml}${checkoutHtml}`;
+  }
+
+  el.innerHTML = `
+    <div class="rewards-box">
+      ${toggleHtml}
+      ${contentHtml}
+    </div>`;
+}
+
+// Keep backward compat for bottom sheet
+function renderSavingsBar(containerId) { renderRewards(containerId); }
+
+// ── MODAL ──
+function openModal(id) {
+  openModalMealId = id;
+  const m = allMeals.find(x => x.id === id);
+  if (!m) return;
+  const price = getPrice(m);
+
+  document.getElementById('modalImgSide').innerHTML = `<img src="${m.img}" alt="${m.name}">`;
+  document.getElementById('modalCat').textContent = m.cat;
+  document.getElementById('modalName').textContent = m.name;
+  // Tags
+  let tagsHtml = '';
+  if (m.tags && m.tags.length > 0) {
+    tagsHtml = m.tags.map(t => `<span class="tag-pill ${getTagClass(t)}">${t}</span>`).join('');
+  }
+  document.getElementById('modalTags').innerHTML = tagsHtml;
+
+  // Allergens
+  let allergensHtml = '';
+  if (m.allergens && m.allergens.length > 0) {
+    allergensHtml = m.allergens.map(a => `<span class="allergen-pill">${a}</span>`).join('');
+  }
+  document.getElementById('modalAllergens').innerHTML = allergensHtml;
+
+  document.getElementById('modalDesc').textContent = m.desc;
+
+  // Macros
+  document.getElementById('modalMacros').innerHTML = `
+    <div class="modal-macro-cell"><span class="modal-macro-val">${m.cal||'—'}</span><span class="modal-macro-label">Cal</span></div>
+    <div class="modal-macro-cell"><span class="modal-macro-val">${m.protein||'—'}g</span><span class="modal-macro-label">Protein</span></div>
+    <div class="modal-macro-cell"><span class="modal-macro-val">${m.carbs||'—'}g</span><span class="modal-macro-label">Carbs</span></div>
+    <div class="modal-macro-cell"><span class="modal-macro-val">${m.fat||'—'}g</span><span class="modal-macro-label">Fat</span></div>`;
+
+  // Ingredients
+  if (m.ingredients) {
+    document.getElementById('modalIngrLabel').textContent = 'Ingredients';
+    document.getElementById('modalIngredients').textContent = m.ingredients;
+  } else {
+    document.getElementById('modalIngrLabel').textContent = '';
+    document.getElementById('modalIngredients').textContent = '';
+  }
+
+  // Instructions
+  let instrHtml = '';
+  if (m.instructions) {
+    instrHtml = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="2" y="6" width="20" height="12" rx="2"/><path d="M12 12h.01"/></svg> ${m.instructions}`;
+  }
+  document.getElementById('modalInstructions').innerHTML = instrHtml;
+
+  const btnArea = document.getElementById('modalBtnArea');
+  if (m.qty > 0) {
+    btnArea.innerHTML = `<div class="qty-ctrl">
+      <button class="qty-minus" onclick="changeQty(${m.id}, -1); updateModalBtn(${m.id})">&minus;</button>
+      <div class="qty-num">${m.qty}</div>
+      <button class="qty-plus" onclick="changeQty(${m.id}, 1); updateModalBtn(${m.id})">+</button>
+    </div>`;
+  } else {
+    btnArea.innerHTML = `<button class="add-btn" onclick="addToCart(${m.id}); updateModalBtn(${m.id})"><span>ADD</span><span class="add-btn-divider"></span><span class="add-btn-price">${fmtPrice(price)}</span></button>`;
+  }
+
+  document.getElementById('modalOverlay').classList.add('open');
+  document.body.style.overflow = 'hidden';
+}
+
+function updateModalBtn(id) {
+  const m = allMeals.find(x => x.id === id);
+  if (!m) return;
+  const price = getPrice(m);
+  const btnArea = document.getElementById('modalBtnArea');
+  if (m.qty > 0) {
+    btnArea.innerHTML = `<div class="qty-ctrl">
+      <button class="qty-minus" onclick="changeQty(${m.id}, -1); updateModalBtn(${m.id})">&minus;</button>
+      <div class="qty-num">${m.qty}</div>
+      <button class="qty-plus" onclick="changeQty(${m.id}, 1); updateModalBtn(${m.id})">+</button>
+    </div>`;
+  } else {
+    btnArea.innerHTML = `<button class="add-btn" onclick="addToCart(${m.id}); updateModalBtn(${m.id})"><span>ADD</span><span class="add-btn-divider"></span><span class="add-btn-price">${fmtPrice(price)}</span></button>`;
+  }
+}
+
+function closeModal() {
+  document.getElementById('modalOverlay').classList.remove('open');
+  openModalMealId = null;
+  document.body.style.overflow = '';
+}
+
+function closeModalIfBg(e) {
+  if (e.target === document.getElementById('modalOverlay')) closeModal();
+}
+
+// ── CATEGORY / SEARCH ──
+function setCategory(cat, btn) {
+  currentCat = cat;
+  document.querySelectorAll('.tab-pill').forEach(p => p.classList.remove('active'));
+  if (btn) btn.classList.add('active');
+  renderGrid();
+}
+
+function handleSearch(val) {
+  searchQuery = val.trim();
+  const desk = document.getElementById('searchDesktop');
+  const mob = document.getElementById('searchMobile');
+  if (desk) desk.value = val;
+  if (mob) mob.value = val;
+  renderGrid();
+}
+
+// ── SUBSCRIBE TOGGLE ──
+function setSubscribeMode(mode) {
+  subscribeMode = mode;
+  renderAll();
+  if (openModalMealId) {
+    updateModalBtn(openModalMealId);
+  }
+}
+
+// ── MOBILE SHEET ──
+function openSheet() {
+  document.getElementById('sheetOverlay').classList.add('open');
+  document.getElementById('bottomSheet').classList.add('open');
+  document.body.classList.add('sheet-open');
+}
+function closeSheet() {
+  document.getElementById('sheetOverlay').classList.remove('open');
+  document.getElementById('bottomSheet').classList.remove('open');
+  document.body.classList.remove('sheet-open');
+}
+
+// ── SCROLL TO MEAL ──
+function scrollToMeal(id) {
+  const card = document.querySelector(`.meal-card[data-id="${id}"]`);
+  if (card) {
+    card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    card.style.boxShadow = '0 0 0 2px #4ea2fd';
+    setTimeout(() => { card.style.boxShadow = ''; }, 1200);
+  }
+}
+
+// ── UTILITY ──
+function handleDone() { /* Close overlay in real app */ }
+function handleCheckout() { /* Navigate to checkout in real app */ }
+
+// ── RENDER ALL ──
+function renderAll() {
+  renderGrid();
+  renderCart();
+}
+
+// ── FILTER LOGIC ──
+let activeFilters = [];
+let activeAllergens = [];
+let activeSort = 'popular';
+
+function toggleFilterDropdown() {
+  const dd = document.getElementById('filterDropdown');
+  const btn = document.getElementById('sortFilterBtn');
+  dd.classList.toggle('open');
+  btn.classList.toggle('open');
+}
+
+function setSortFilter(el, type) {
+  el.parentElement.querySelectorAll('.filter-chip').forEach(c => c.classList.remove('active'));
+  el.classList.add('active');
+  activeSort = el.dataset.sort;
+}
+
+function toggleFilter(el) {
+  el.classList.toggle('active');
+}
+
+function clearAllFilters() {
+  document.querySelectorAll('.filter-chip').forEach(c => c.classList.remove('active'));
+  document.querySelector('[data-sort="popular"]').classList.add('active');
+  activeFilters = [];
+  activeAllergens = [];
+  activeSort = 'popular';
+  renderAll();
+  updateFilterBadge();
+}
+
+function applyFilters() {
+  activeFilters = [];
+  activeAllergens = [];
+  document.querySelectorAll('.filter-chip.active[data-filter]').forEach(c => activeFilters.push(c.dataset.filter));
+  document.querySelectorAll('.filter-chip.active[data-allergen]').forEach(c => activeAllergens.push(c.dataset.allergen));
+  const sortChip = document.querySelector('.filter-chip.active[data-sort]');
+  if (sortChip) activeSort = sortChip.dataset.sort;
+  renderAll();
+  toggleFilterDropdown();
+  updateFilterBadge();
+}
+
+function updateFilterBadge() {
+  const count = activeFilters.length + activeAllergens.length + (activeSort !== 'popular' ? 1 : 0);
+  const btn = document.getElementById('sortFilterBtn');
+  const existing = btn.querySelector('.filter-count-badge');
+  if (existing) existing.remove();
+  if (count > 0) {
+    btn.insertAdjacentHTML('beforeend', `<span class="filter-count-badge">${count}</span>`);
+  }
+}
+
+function getFilteredMeals() {
+  let meals = [...allMeals];
+  if (activeFilters.length > 0) {
+    meals = meals.filter(m => activeFilters.every(f => m.tags && m.tags.includes(f)));
+  }
+  if (activeAllergens.length > 0) {
+    meals = meals.filter(m => !activeAllergens.some(a => m.allergens && m.allergens.includes(a)));
+  }
+  // Sort
+  if (activeSort === 'price-low') meals.sort((a,b) => a.price - b.price);
+  else if (activeSort === 'price-high') meals.sort((a,b) => b.price - a.price);
+  else if (activeSort === 'cal-low') meals.sort((a,b) => (a.cal||0) - (b.cal||0));
+  else if (activeSort === 'protein') meals.sort((a,b) => (b.protein||0) - (a.protein||0));
+  // Default: keep original order
+  return meals;
+}
+
+// Close filter dropdown when clicking outside
+document.addEventListener('click', function(e) {
+  const dd = document.getElementById('filterDropdown');
+  const btn = document.getElementById('sortFilterBtn');
+  if (dd.classList.contains('open') && !dd.contains(e.target) && !btn.contains(e.target)) {
+    dd.classList.remove('open');
+    btn.classList.remove('open');
+  }
+});
+
+// ── INIT ──
+// Hide scroll hint when user scrolls cart to bottom
+document.getElementById('cartItems').addEventListener('scroll', function() {
+  const hint = this.parentElement.querySelector('.cart-scroll-hint');
+  if (!hint) return;
+  const atBottom = this.scrollTop + this.clientHeight >= this.scrollHeight - 10;
+  hint.style.opacity = atBottom ? '0' : '';
+  hint.style.transition = 'opacity .2s';
+});
+renderAll();
+
+// ── MEMBER POPUP ──
+function openMemberPopup() {
+  const subTotal = getSubtotal('subscribe');
+  const oneTotal = getSubtotal('onetime');
+  const savingsPct = getSavingsPercent();
+  const savings = subTotal * (savingsPct / 100);
+  const memberPrice = subTotal - savings;
+  const savedAmt = oneTotal - memberPrice;
+
+  const overlay = document.getElementById('memberPopupOverlay');
+  overlay.querySelector('.popup-your-price').textContent = fmtPrice(memberPrice);
+  overlay.querySelector('.popup-vs-price').innerHTML = `vs ${fmtPrice(oneTotal)} one-time`;
+  overlay.querySelector('.popup-save-amount').textContent = fmtPrice(savedAmt);
+  overlay.classList.add('active');
+}
+function closeMemberPopup() {
+  document.getElementById('memberPopupOverlay').classList.remove('active');
+}
+function convertToWeekly() {
+  closeMemberPopup();
+  setSubscribeMode('subscribe');
+}
+function openWeekliesPanel() {
+  const n          = getTotalItems();
+  const subRaw     = getSubtotal('subscribe');
+  const savingsPct = getSavingsPercent();
+  const weeklyAmt  = subRaw - subRaw * (savingsPct / 100);
+  const oneAmt     = getSubtotal('onetime');
+  const discountSaved = oneAmt - weeklyAmt;
+  const deliveryEarned = n >= FREE_DELIVERY_MEALS;
+  const totalSaved = discountSaved + (deliveryEarned ? DELIVERY_FEE : 0);
+
+  const panel = document.getElementById('weekliesPanel');
+  if (!panel) return;
+
+  // Update savings row — clone the weekly card layout
+  const footerSavings = panel.querySelector('.wp-footer-savings');
+  if (footerSavings) {
+    const delBox = deliveryEarned
+      ? `<div class="cards-del-box cdel-unlocked" style="width:100px;height:50px;"><div class="cdel-inner-row">
+          <span class="cdel-van-big">🚚</span>
+          <div class="cdel-stacked"><div class="cdel-line1">FREE</div><div class="cdel-line2">DELIVERY</div><div class="cdel-line3">UNLOCKED!</div></div></div></div>`
+      : `<div class="cards-del-box cdel-locked" style="width:100px;height:50px;"><div class="cdel-inner-row">
+          <span class="cdel-van-big">🚚</span>
+          <div class="cdel-stacked"><div class="cdel-lock-main">Free delivery</div><div class="cdel-lock-sub">at ${FREE_DELIVERY_MEALS} meals</div></div></div></div>`;
+
+    const saveBlock = totalSaved > 0.5
+      ? `<div class="cards-save-block">
+          <span class="checkout-save-badge">Save ${fmtPrice(totalSaved)}</span>
+          <div class="checkout-main-price">${fmtPrice(weeklyAmt)}</div>
+          <div class="checkout-vs-price">vs ${fmtPrice(oneAmt)} one-time</div>
+         </div>`
+      : `<div class="cards-save-block" style="justify-content:center;gap:3px;">
+          <div style="font-family:'Sofia Pro',sans-serif;font-size:13px;font-weight:700;color:#003141;">Save up to 20%</div></div>`;
+
+    footerSavings.innerHTML = `<div class="cards-bottom-row" style="margin-top:0;padding:0;">${saveBlock}${delBox}</div>`;
+  }
+
+  panel.classList.add('wp-active');
+}
+function closeWeekliesPanel() {
+  document.getElementById('weekliesPanel')?.classList.remove('wp-active');
+}
+function startWeeklyFromPanel() {
+  closeWeekliesPanel();
+  setSubscribeMode('subscribe');
+}
+</script>
+
+<!-- WEEKLIES SLIDE-UP PANEL (in-sidebar, no page overlay) -->
+<div class="weeklies-panel" id="weekliesPanel">
+  <div class="wp-header">
+    <button class="wp-close" onclick="closeWeekliesPanel()">✕</button>
+    <div class="wp-title">Your perfect cart.<em>Week after week.</em></div>
+  </div>
+  <div class="wp-body">
+    <div class="wp-section-label">What TOTAL flexibility looks like:</div>
+    <ul class="wp-steps">
+      <li>🛒 <span><strong>Build it your way</strong> — any meals, any mix, any size. No preset plans.</span></li>
+      <li>✏️ <span><strong>Edit anything, anytime</strong> — swap dishes, change quantities, mix categories week to week</span></li>
+      <li>👋 <span><strong>Skip, pause, or cancel</strong> — one tap. No hoops. No guilt trip.</span></li>
+    </ul>
+    <div class="wp-section-label">Extra perks for Weekly members:</div>
+    <ul class="wp-perks">
+      <li>💰 <span><strong>Up to 20% off</strong> — savings grow automatically as you add more meals</span></li>
+      <li>🚚 <span><strong>Free delivery</strong> — unlocks at 8 meals, yours every week</span></li>
+      <li>🏷️ <span><strong>Member-only deals</strong> — exclusive discounts dropped into your account weekly</span></li>
+      <li>🔁 <span><strong>Your cart carries forward</strong> — selections auto-save so you never start from scratch</span></li>
+    </ul>
+  </div>
+  <div class="wp-footer">
+    <div class="wp-footer-savings"></div>
+    <button class="wp-btn-primary" onclick="startWeeklyFromPanel()" style="margin-top:14px;">Start My Weekly Order →</button>
+    <button class="wp-btn-secondary" onclick="closeWeekliesPanel()">Continue with One-Time Order</button>
+  </div>
+</div>
+
+<!-- Legacy popup overlay (kept for backward compat) -->
+<div class="member-popup-overlay" id="memberPopupOverlay" style="display:none"></div>
+</body>
+</html>

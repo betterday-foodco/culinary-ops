@@ -1,0 +1,465 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>BetterDay — What are you in the mood for?</title>
+<style>
+@font-face {
+  font-family: 'BDSupper';
+  src: url('fonts/BDSupperBold.otf') format('opentype');
+  font-weight: 700; font-style: normal; font-display: swap;
+}
+@font-face {
+  font-family: 'Gaya';
+  src: url('fonts/Gaya.otf') format('opentype');
+  font-weight: 400; font-style: normal; font-display: swap;
+}
+@font-face {
+  font-family: 'Sofia Pro';
+  src: url('fonts/SofiaProSoftRegular.otf') format('opentype');
+  font-weight: 400; font-style: normal; font-display: swap;
+}
+@font-face {
+  font-family: 'Sofia Pro';
+  src: url('fonts/SofiaProSoftBold.otf') format('opentype');
+  font-weight: 700; font-style: normal; font-display: swap;
+}
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+html, body {
+  height: 100%; width: 100%;
+  font-family: 'Sofia Pro', -apple-system, BlinkMacSystemFont, sans-serif;
+  color: #003141;
+  background: #faebda;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ── NAV BAR ── */
+.nav-bar {
+  position: fixed; top: 0; left: 0; right: 0;
+  display: flex; align-items: center; justify-content: space-between;
+  height: 64px; padding: 0 48px;
+  background: #4EA2FD;
+  z-index: 100;
+}
+.nav-logo {
+  font-family: 'Gaya', serif;
+  font-size: 22px; font-weight: 400;
+  color: #faebda; text-decoration: none;
+  letter-spacing: -0.01em;
+}
+.nav-links {
+  display: flex; align-items: center; gap: 32px;
+  list-style: none;
+}
+.nav-links a {
+  font-family: 'Sofia Pro', sans-serif;
+  font-size: 14px; font-weight: 400;
+  color: rgba(250,235,218,0.85);
+  text-decoration: none;
+  transition: color 0.2s;
+}
+.nav-links a:hover { color: #faebda; }
+.nav-cta {
+  display: flex; align-items: center; gap: 12px;
+}
+.nav-btn-outline {
+  padding: 8px 20px; border-radius: 100px;
+  border: 1.5px solid rgba(250,235,218,0.5);
+  background: transparent;
+  color: #faebda; font-family: 'Sofia Pro', sans-serif;
+  font-size: 13px; font-weight: 700;
+  cursor: pointer; transition: all 0.2s;
+}
+.nav-btn-outline:hover { border-color: #faebda; }
+.nav-btn-primary {
+  padding: 8px 20px; border-radius: 100px;
+  border: none; background: #ffc600;
+  color: #003141; font-family: 'Sofia Pro', sans-serif;
+  font-size: 13px; font-weight: 700;
+  cursor: pointer; transition: all 0.15s;
+}
+.nav-btn-primary:hover { transform: translateY(-1px); box-shadow: 0 4px 12px rgba(255,198,0,0.4); }
+.nav-icons {
+  display: flex; align-items: center; gap: 16px;
+  color: #faebda; font-size: 18px;
+}
+.nav-cart {
+  position: relative; cursor: pointer;
+}
+.nav-cart-badge {
+  position: absolute; top: -6px; right: -8px;
+  background: #ff4444; color: #fff;
+  font-size: 10px; font-weight: 700;
+  width: 16px; height: 16px;
+  border-radius: 50%; display: flex;
+  align-items: center; justify-content: center;
+}
+
+/* ── MAIN CONTENT ── */
+.page-content {
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  min-height: 100vh; padding: 84px 32px 32px;
+}
+
+/* ── HEADLINE ── */
+.headline-area {
+  text-align: center; margin-bottom: 28px;
+  animation: fadeUp 0.6s ease-out;
+}
+.headline {
+  font-family: 'Gaya', serif;
+  font-size: clamp(32px, 4vw, 52px);
+  font-weight: 400; line-height: 1.15;
+  color: #003141; letter-spacing: -0.01em;
+  margin-bottom: 12px;
+}
+.headline em {
+  font-style: italic; color: #4EA2FD;
+}
+.subline {
+  font-family: 'Sofia Pro', sans-serif;
+  font-size: 16px; line-height: 1.5;
+  color: rgba(0,49,65,0.6);
+}
+
+/* ── CARDS ── */
+.cards-row {
+  display: flex; gap: 32px;
+  justify-content: center;
+  animation: fadeUp 0.6s ease-out 0.15s both;
+}
+
+.diet-card {
+  position: relative;
+  width: 420px;
+  border-radius: 24px;
+  overflow: hidden;
+  cursor: pointer;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  background: #fff;
+  box-shadow: none;
+}
+.diet-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 10px 12px 0px #003141;
+}
+.diet-card:active {
+  transform: translateY(-1px);
+  box-shadow: 6px 7px 0px #003141;
+}
+
+/* ── Card Image ── */
+.card-image {
+  position: relative;
+  height: 240px;
+  overflow: hidden;
+}
+.card-image img {
+  width: 100%; height: 100%;
+  object-fit: cover;
+  transition: transform 0.4s ease;
+}
+.diet-card:hover .card-image img {
+  transform: scale(1.03);
+}
+
+/* No gradient overlay — clean edge */
+
+/* ── Card Body ── */
+.card-body {
+  padding: 20px 24px 28px;
+  text-align: center;
+}
+.card-title {
+  font-family: 'BDSupper', sans-serif;
+  font-size: 22px; font-weight: 700;
+  color: #003141;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  margin-bottom: 8px;
+}
+.card-desc {
+  font-family: 'Sofia Pro', sans-serif;
+  font-size: 14px; line-height: 1.35;
+  color: rgba(0,49,65,0.6);
+  margin-bottom: 20px;
+}
+.card-cta {
+  display: inline-flex; align-items: center; gap: 8px;
+  padding: 14px 36px;
+  border-radius: 100px; border: none;
+  background: #ffc600;
+  color: #003141;
+  font-family: 'Sofia Pro', sans-serif;
+  font-size: 15px; font-weight: 700;
+  cursor: pointer;
+  transition: all 0.15s;
+  width: 100%;
+  justify-content: center;
+}
+.card-cta:hover {
+  background: #e6b300;
+  transform: translateY(-1px);
+}
+.card-cta:active {
+  transform: translateY(0);
+}
+.card-cta svg {
+  width: 16px; height: 16px;
+  transition: transform 0.2s;
+}
+.diet-card:hover .card-cta svg {
+  transform: translateX(3px);
+}
+
+/* Plant card accent */
+.card-safety {
+  display: flex; align-items: center; gap: 6px;
+  justify-content: center;
+  margin-top: 12px;
+  font-family: 'Sofia Pro', sans-serif;
+  font-size: 12px; color: #167421;
+  font-weight: 600;
+}
+.card-safety svg {
+  width: 14px; height: 14px;
+  color: #167421;
+}
+
+/* ── Bottom note ── */
+.bottom-note {
+  margin-top: 40px;
+  text-align: center;
+  animation: fadeUp 0.6s ease-out 0.3s both;
+}
+.bottom-note p {
+  font-family: 'Sofia Pro', sans-serif;
+  font-size: 13px;
+  color: rgba(0,49,65,0.45);
+  line-height: 1.5;
+}
+.bottom-note a {
+  color: #4EA2FD;
+  text-decoration: none;
+  font-weight: 600;
+}
+.bottom-note a:hover {
+  text-decoration: underline;
+}
+
+/* ── Animations ── */
+@keyframes fadeUp {
+  from { opacity: 0; transform: translateY(20px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* ── Page transition ── */
+.page-transition {
+  position: fixed; inset: 0;
+  background: #faebda;
+  z-index: 1000;
+  display: flex; align-items: center; justify-content: center;
+  opacity: 0; pointer-events: none;
+  transition: opacity 0.3s ease;
+}
+.page-transition.active {
+  opacity: 1; pointer-events: all;
+}
+.page-transition .loading-text {
+  font-family: 'Gaya', serif;
+  font-size: 24px; color: #003141;
+  display: flex; align-items: center; gap: 12px;
+}
+.page-transition .spinner {
+  width: 24px; height: 24px;
+  border: 3px solid rgba(0,49,65,0.15);
+  border-top-color: #4EA2FD;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+/* ── Responsive ── */
+@media (max-width: 840px) {
+  .nav-links { display: none; }
+  .nav-bar { padding: 0 16px; height: 56px; }
+  .nav-btn-outline { display: none; }
+  .page-content {
+    padding: 56px 0 0;
+    justify-content: flex-start;
+  }
+  .headline-area {
+    margin-bottom: 16px;
+    padding: 20px 20px 0;
+  }
+  .headline { font-size: 28px; }
+  .subline { font-size: 14px; }
+  .cards-row {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0;
+    width: 100%;
+    flex: 1;
+  }
+  .diet-card {
+    width: 100%;
+    border-radius: 0;
+    box-shadow: none;
+    flex: 1;
+    display: flex;
+    flex-direction: row;
+    border-bottom: 2px solid rgba(0,49,65,0.08);
+  }
+  .diet-card:last-child { border-bottom: none; }
+  .diet-card:hover {
+    transform: none;
+    box-shadow: none;
+  }
+  .diet-card:active {
+    background: rgba(78,162,253,0.06);
+    transform: none;
+    box-shadow: none;
+  }
+  .card-image {
+    width: 40%;
+    height: auto;
+    min-height: 180px;
+    flex-shrink: 0;
+  }
+  .card-image::after { display: none; }
+  .card-body {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    padding: 16px 20px;
+    text-align: left;
+  }
+  .card-title { font-size: 18px; margin-bottom: 6px; }
+  .card-desc { font-size: 13px; margin-bottom: 14px; }
+  .card-cta {
+    padding: 12px 24px;
+    font-size: 14px;
+    width: auto;
+    align-self: flex-start;
+  }
+  .card-safety {
+    justify-content: flex-start;
+    margin-top: 8px;
+  }
+  .bottom-note { display: none; }
+}
+</style>
+</head>
+<body>
+
+<!-- NAV BAR (matches homepage) -->
+<nav class="nav-bar">
+  <a href="#" class="nav-logo">BetterDay</a>
+  <ul class="nav-links">
+    <li><a href="#">How It Works</a></li>
+    <li><a href="#">This Week's Menu</a></li>
+    <li><a href="#">Pricing</a></li>
+    <li><a href="#">Our Store</a></li>
+  </ul>
+  <div class="nav-cta">
+    <button class="nav-btn-outline">How it works</button>
+    <button class="nav-btn-primary">Order Now</button>
+    <div class="nav-icons">
+      <div class="nav-cart">
+        <svg width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path d="M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4zM3 6h18"/><path d="M16 10a4 4 0 01-8 0"/></svg>
+      </div>
+      <svg width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+    </div>
+  </div>
+</nav>
+
+<!-- PAGE CONTENT -->
+<main class="page-content">
+
+  <div class="headline-area">
+    <h1 class="headline">Choose your <em>diet preference</em></h1>
+    <p class="subline">New menu every week · Chef-crafted · Ready in 2 minutes</p>
+  </div>
+
+  <div class="cards-row">
+
+    <!-- MEAT & PLANTS CARD -->
+    <div class="diet-card meat" onclick="selectDiet('meat')">
+      <div class="card-image">
+        <img src="img/Meat Image.jpeg" alt="Meat & Plants meals">
+      </div>
+      <div class="card-body">
+        <h2 class="card-title">Meat & Plants</h2>
+        <p class="card-desc">Mixed protein options. Choose between meat and plant-based meals in whatever ratio fits your vibe. Perfect for mixed diet households or flexitarians.</p>
+        <button class="card-cta">
+          Select Your Meals
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+        </button>
+      </div>
+    </div>
+
+    <!-- PLANTS ONLY CARD -->
+    <div class="diet-card plants" onclick="selectDiet('plants')">
+      <div class="card-image">
+        <img src="img/Vegan Image.jpeg" alt="Plants Only meals">
+      </div>
+      <div class="card-body">
+        <h2 class="card-title">Plants Only</h2>
+        <p class="card-desc">100% Plant-Based. Wholesome, meat & dairy-free meals powered by grains, legumes, veggies, and good vibes. Loaded with protein, big on flavour, 100% delicious.</p>
+        <button class="card-cta">
+          Select Your Meals
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+        </button>
+        <div class="card-safety">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+          100% plant-based menu, always
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <div class="bottom-note">
+    <p>You can switch between menus anytime · Both menus change weekly</p>
+  </div>
+
+</main>
+
+<!-- TRANSITION OVERLAY -->
+<div class="page-transition" id="pageTransition">
+  <div class="loading-text">
+    <div class="spinner"></div>
+    <span id="transitionText">Loading your menu...</span>
+  </div>
+</div>
+
+<script>
+function selectDiet(type) {
+  const transition = document.getElementById('pageTransition');
+  const text = document.getElementById('transitionText');
+
+  if (type === 'plants') {
+    text.textContent = 'Loading plant-based menu...';
+  } else {
+    text.textContent = 'Loading your menu...';
+  }
+
+  transition.classList.add('active');
+
+  // Simulate redirect to Sprwt menu
+  setTimeout(() => {
+    // In production: window.location.href = 'https://eatbetter.yourmealprep.com/order?mpid=XXXXX'
+    window.location.href = 'menu-overlay.html?diet=' + type;
+  }, 800);
+}
+</script>
+
+</body>
+</html>
