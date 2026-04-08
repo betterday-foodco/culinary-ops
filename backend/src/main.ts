@@ -32,9 +32,20 @@ async function bootstrap() {
 
   app.enableCors({
     origin: (origin, callback) => {
-      // Allow any localhost port in development, or match FRONTEND_URL in production
-      const allowed = process.env.FRONTEND_URL;
-      if (!origin || (allowed ? origin === allowed : /^http:\/\/localhost:\d+$/.test(origin))) {
+      // Allow any localhost port in development; in production, accept any
+      // origin listed in FRONTEND_URLS (comma-separated) or the legacy
+      // FRONTEND_URL env var. Multi-origin support is needed because the
+      // marketing site, admin dashboard, and customer webapp may run on
+      // different hostnames but all talk to the same API.
+      const allowList = (process.env.FRONTEND_URLS || process.env.FRONTEND_URL || '')
+        .split(',')
+        .map((s) => s.trim())
+        .filter(Boolean);
+
+      const isLocalhost = origin && /^http:\/\/localhost:\d+$/.test(origin);
+      const isAllowed = !origin || isLocalhost || allowList.includes(origin);
+
+      if (isAllowed) {
         callback(null, true);
       } else {
         callback(new Error('Not allowed by CORS'));
