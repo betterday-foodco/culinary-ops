@@ -22,7 +22,7 @@ The 9 core brand colors. Everything else derives from these.
 | `brand.yellow` | `#FFC600` | CTA buttons (Checkout, Subscribe, Done), NEW badge, savings badges |
 | `brand.yellow-dark` | `#E6B300` | CTA button hover states |
 | `brand.purple` | `#C8A4F5` | In-cart card body background, savings progress bar fill |
-| `brand.purple-dark` | `#7C3AED` | Savings tier text, savings percentage labels |
+| `brand.purple-dark` | `#7453A2` | Savings tier text, savings percentage labels |
 | `brand.green` | `#6BBD52` | Positive states, Vegan badge, success messages |
 | `brand.green-dark` | `#167421` | Success deep accents |
 | `brand.red` | `#D93025` | Destructive actions (Edit Cart on subscriber hub), Spicy badge, error states |
