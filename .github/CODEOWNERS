@@ -1,0 +1,18 @@
+# CODEOWNERS — controls who must approve PRs touching each area
+# Docs: https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners
+
+# Default: Gurleen approves everything
+* @GurleenKaur
+
+# Frontend — Gurleen only (Conner must not modify without approval)
+/frontend/                @GurleenKaur
+/frontend/**              @GurleenKaur
+
+# Backend API modules — either can approve
+/backend/src/modules/     @GurleenKaur @conner-kadz
+
+# Prisma schema & migrations — both must be aware of DB changes
+/backend/prisma/          @GurleenKaur @conner-kadz
+
+# Conner's workspace — Conner owns, Gurleen reviews
+/conner/                  @conner-kadz
