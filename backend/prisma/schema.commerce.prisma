@@ -1,0 +1,406 @@
+// ─────────────────────────────────────────────────────────────────────────────
+// BetterDay Commerce Schema
+// ─────────────────────────────────────────────────────────────────────────────
+// Lives in a SEPARATE Neon project (betterday-commerce / spring-fire-44871408)
+// from the culinary ops schema. This file defines every table for customer-
+// facing data: accounts, subscriptions, orders, payments, delivery.
+//
+// Source of truth for field shapes: conner/data-model/entities.md
+// Non-secret Neon project metadata: conner/data-model/commerce-neon-setup.md
+//
+// DO NOT REFERENCE CULINARY MODELS FROM HERE. These two schemas generate
+// separate Prisma clients that connect to separate databases. Commerce code
+// reads culinary data through service imports (CulinaryPrismaService), not
+// through cross-schema relations.
+//
+// NAMING CONVENTIONS (matching Gurleen's schema.prisma where possible):
+// - Models: PascalCase (Customer, CustomerOrder)
+// - Fields: snake_case (first_name, created_at)
+// - IDs: String @id @default(uuid())
+// - Timestamps: created_at + updated_at on everything
+// - Soft deletes: is_active Boolean (not deletedAt) — matches culinary
+// - Money: Decimal @db.Decimal(10, 2) — NOT Float. Entities.md specifies
+//   decimal, and payment processing needs exact arithmetic. This is the
+//   ONE place we deliberately diverge from culinary's Float convention.
+// ─────────────────────────────────────────────────────────────────────────────
+
+generator commerce_client {
+  provider = "prisma-client-js"
+  output   = "../node_modules/@prisma/commerce-client"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("COMMERCE_DATABASE_URL")
+  directUrl = env("COMMERCE_DIRECT_URL")
+}
+
+// ─── Enums ───────────────────────────────────────────────────────────────────
+
+enum CustomerStatus {
+  active
+  paused_indefinite
+  cancelled
+  unclaimed // Auto-created via Apple/Google Pay express checkout, no password yet
+}
+
+enum CustomerSource {
+  signup
+  apple_pay_express
+  google_pay_express
+  gift_redeem
+  admin
+}
+
+enum AddressType {
+  delivery
+  pickup
+}
+
+enum PaymentProcessor {
+  helcim      // Primary processor (Canadian)
+  apple_pay   // Token from Apple Pay wallet
+  google_pay  // Token from Google Pay wallet
+}
+
+enum CardBrand {
+  visa
+  mc
+  amex
+  disc
+  other
+}
+
+enum SubscriptionCadence {
+  weekly
+  biweekly
+  monthly
+}
+
+enum SubscriptionStatus {
+  active
+  paused              // Finite pause, resumes automatically
+  paused_indefinite   // Indefinite pause, requires manual resume
+  cancelled
+}
+
+enum DeliveryStatus {
+  scheduled  // Default delivering state
+  confirmed  // Past cutoff, locked, will deliver
+  skipped    // Customer opted out of this week
+  paused     // Auto-set when account is paused_indefinite
+  cancelled  // Auto-set when account is cancelled
+}
+
+enum OrderType {
+  one_time
+  subscription_first
+  subscription_renewal
+  add_on
+}
+
+enum FulfillmentMethod {
+  delivery
+  pickup
+}
+
+enum OrderStatus {
+  pending
+  confirmed
+  in_kitchen
+  out_for_delivery
+  delivered
+  cancelled
+  refunded
+}
+
+// ─── Customer ────────────────────────────────────────────────────────────────
+
+model Customer {
+  id                  String         @id @default(uuid())
+  display_id          String         @unique // Human-readable: "BD-C-00012"
+  email               String         @unique
+  phone               String?
+  first_name          String?
+  last_name           String?
+  birthday            DateTime?      @db.Date
+  member_since        DateTime       @default(now()) @db.Date
+
+  // Lifecycle
+  status              CustomerStatus @default(active)
+  source              CustomerSource @default(signup)
+
+  // Auth — supports email+password, OAuth (Apple/Google), and unclaimed
+  password_hash       String? // Null for unclaimed / OAuth-only accounts
+  apple_id_sub        String? // Sign in with Apple subject identifier
+  google_id_sub       String? // Google OAuth subject identifier
+
+  // Payments — Helcim customer object reference
+  helcim_customer_id  String?
+
+  // Notification opt-ins
+  sms_opt_in          Boolean        @default(true)
+  email_opt_in        Boolean        @default(true)
+
+  // Preferences
+  allergens           String[] // e.g. ["Shellfish", "Gluten"]
+  diet_tags           String[] // e.g. ["High Protein", "Keto"]
+  disliked_meals      String[] // manual "never swap TO this" list
+  favorite_meals      String[] // manual preferred list
+
+  // Admin-only
+  internal_notes      String? // CS notes, hidden from customer UI
+  tags                String[] // Admin segmentation e.g. ["VIP", "frequent-edits"]
+  last_contacted_at   DateTime?
+  flagged             Boolean        @default(false)
+  flagged_reason      String?
+
+  // Timestamps
+  created_at          DateTime       @default(now())
+  updated_at          DateTime       @updatedAt
+  last_login_at       DateTime?
+
+  // Relations
+  addresses           CustomerAddress[]
+  payment_methods     PaymentMethod[]
+  subscription        Subscription?
+  orders              CustomerOrder[]
+  weekly_cart_records WeeklyCartRecord[]
+
+  @@index([phone])
+  @@index([apple_id_sub])
+  @@index([google_id_sub])
+  @@index([status])
+  @@index([flagged])
+}
+
+// ─── CustomerAddress ─────────────────────────────────────────────────────────
+// Delivery or pickup address. A customer can have many.
+// recipient_name is distinct from the customer's name — supports gift
+// addresses where Jose stores Mom's address with recipient "Sarah Ramirez".
+
+model CustomerAddress {
+  id                    String      @id @default(uuid())
+  customer_id           String
+  label                 String // "Home", "Office", "Mom"
+  type                  AddressType @default(delivery)
+  recipient_name        String
+  recipient_phone       String?
+  company               String?
+  street                String
+  street2               String? // apartment / unit
+  city                  String
+  state                 String
+  zip                   String
+  delivery_instructions String? // "leave at side door"
+  is_default            Boolean     @default(false)
+  created_at            DateTime    @default(now())
+  updated_at            DateTime    @updatedAt
+
+  customer              Customer    @relation(fields: [customer_id], references: [id], onDelete: Cascade)
+  orders                CustomerOrder[]      @relation("OrderShippingAddress")
+  subscriptions         Subscription[]       @relation("SubscriptionDefaultAddress")
+
+  @@index([customer_id])
+  @@index([customer_id, type, is_default])
+}
+
+// ─── PaymentMethod ───────────────────────────────────────────────────────────
+// Tokenized reference to a payment card. Real card numbers NEVER stored.
+// Helcim holds the PCI data; we only store the token and metadata.
+
+model PaymentMethod {
+  id               String           @id @default(uuid())
+  customer_id      String
+  processor        PaymentProcessor @default(helcim)
+  processor_token  String // The tokenized reference (no real PAN)
+  brand            CardBrand        @default(other)
+  last4            String // e.g. "4242"
+  exp_month        Int
+  exp_year         Int
+  cardholder_name  String?
+  is_default       Boolean          @default(false)
+  created_at       DateTime         @default(now())
+
+  customer         Customer         @relation(fields: [customer_id], references: [id], onDelete: Cascade)
+  orders           CustomerOrder[]  @relation("OrderPaymentMethod")
+  subscriptions    Subscription[]   @relation("SubscriptionDefaultPayment")
+
+  @@index([customer_id])
+}
+
+// ─── Subscription ────────────────────────────────────────────────────────────
+// A recurring delivery commitment. One active per customer.
+// Cancelled subs are soft-deleted (status change), not hard-deleted, for
+// win-back campaigns.
+
+model Subscription {
+  id                  String              @id @default(uuid())
+  customer_id         String              @unique // One active sub per customer
+  cadence             SubscriptionCadence @default(weekly)
+  status              SubscriptionStatus  @default(active)
+  next_renewal_at     DateTime
+
+  // Defaults for auto-generated weekly cart records
+  default_payment_id  String?
+  default_address_id  String?
+  default_meal_count  Int                 @default(9)
+  savings_tier        Int                 @default(0) // 5 | 8 | 11 | 14 | 17 | 20 (percent)
+
+  started_at          DateTime            @default(now())
+  paused_at           DateTime?
+  cancelled_at        DateTime?
+  cancel_reason       String?
+
+  // Denormalized counters
+  lifetime_orders     Int                 @default(0)
+  lifetime_spend      Decimal             @default(0) @db.Decimal(10, 2)
+
+  created_at          DateTime            @default(now())
+  updated_at          DateTime            @updatedAt
+
+  customer            Customer            @relation(fields: [customer_id], references: [id], onDelete: Cascade)
+  default_payment     PaymentMethod?      @relation("SubscriptionDefaultPayment", fields: [default_payment_id], references: [id], onDelete: SetNull)
+  default_address     CustomerAddress?    @relation("SubscriptionDefaultAddress", fields: [default_address_id], references: [id], onDelete: SetNull)
+  weekly_cart_records WeeklyCartRecord[]
+  orders              CustomerOrder[]
+
+  @@index([status])
+  @@index([next_renewal_at])
+}
+
+// ─── PickupLocation ──────────────────────────────────────────────────────────
+// BetterDay pickup depots. Small list, updated manually.
+
+model PickupLocation {
+  id             String          @id @default(uuid())
+  name           String // "BetterDay HQ"
+  address        String
+  city           String
+  pickup_days    String[] // ["Wed", "Thu"]
+  pickup_hours   String // "5 PM – 8 PM"
+  is_active      Boolean         @default(true)
+  created_at     DateTime        @default(now())
+  updated_at     DateTime        @updatedAt
+
+  orders         CustomerOrder[] @relation("OrderPickupLocation")
+
+  @@index([is_active])
+}
+
+// ─── CustomerOrder ───────────────────────────────────────────────────────────
+// A single delivery. One order = one delivery. Named CustomerOrder (not Order)
+// to avoid collision with the existing Shopify production-needs Order model
+// in the culinary schema.
+//
+// Critical design rule: line_items and billing_contact are JSONB SNAPSHOTS
+// taken at order time. They never mutate after the order is placed. If a
+// meal gets renamed or repriced, historical orders still show the original.
+// Edits before cutoff mutate the snapshot AND append to edit_history.
+
+model CustomerOrder {
+  id                      String             @id @default(uuid())
+  display_id              String             @unique // "BD-2026-04-0012345"
+  customer_id             String
+  subscription_id         String? // Null for one-time orders
+  order_type              OrderType          @default(one_time)
+
+  // Contact snapshots (never mutate after placement)
+  billing_contact         Json // { name, email, phone }
+  payment_method_id       String?
+  processor_charge_id     String? // Helcim charge/invoice reference
+
+  // Fulfillment
+  fulfillment_method      FulfillmentMethod  @default(delivery)
+  shipping_address_id     String?
+  pickup_location_id      String?
+  pickup_date             DateTime?          @db.Date
+  estimated_delivery_date DateTime?          @db.Date
+
+  // Gift fields
+  is_gift                 Boolean            @default(false)
+  gift_recipient          Json? // { first_name, last_name, phone, message }
+  gift_sms_sent_at        DateTime?
+
+  // Line items (snapshot — includes meal_id, name, qty, price, img_url)
+  line_items              Json
+  meals_count             Int                @default(0) // denormalized sum of qty
+
+  // Money — Decimal throughout. See note at top of file about Float vs Decimal.
+  subtotal                Decimal            @db.Decimal(10, 2)
+  subscriber_discount     Decimal            @default(0) @db.Decimal(10, 2)
+  savings_pct             Int                @default(0)
+  code_discount           Decimal            @default(0) @db.Decimal(10, 2)
+  gift_card_amount        Decimal            @default(0) @db.Decimal(10, 2)
+  points_redeemed         Decimal            @default(0) @db.Decimal(10, 2)
+  tax                     Decimal            @default(0) @db.Decimal(10, 2)
+  delivery_fee            Decimal            @default(0) @db.Decimal(10, 2)
+  total                   Decimal            @db.Decimal(10, 2)
+  points_earned           Int                @default(0)
+
+  // Status + lifecycle
+  status                  OrderStatus        @default(pending)
+  placed_at               DateTime           @default(now())
+  confirmed_at            DateTime?
+  delivered_at            DateTime?
+
+  // Audit / CS
+  admin_notes             String?
+  edit_history            Json // Append-only array — see entities.md
+  is_locked               Boolean            @default(false)
+  locked_at               DateTime?
+  locked_by               String? // "cutoff_job" | "admin:conner"
+
+  created_at              DateTime           @default(now())
+  updated_at              DateTime           @updatedAt
+
+  // Relations
+  customer                Customer           @relation(fields: [customer_id], references: [id])
+  subscription            Subscription?      @relation(fields: [subscription_id], references: [id], onDelete: SetNull)
+  payment_method          PaymentMethod?     @relation("OrderPaymentMethod", fields: [payment_method_id], references: [id], onDelete: SetNull)
+  shipping_address        CustomerAddress?   @relation("OrderShippingAddress", fields: [shipping_address_id], references: [id], onDelete: SetNull)
+  pickup_location         PickupLocation?    @relation("OrderPickupLocation", fields: [pickup_location_id], references: [id], onDelete: SetNull)
+  weekly_cart_record      WeeklyCartRecord?
+
+  @@index([customer_id])
+  @@index([subscription_id])
+  @@index([status])
+  @@index([placed_at])
+  @@index([fulfillment_method])
+}
+
+// ─── WeeklyCartRecord ────────────────────────────────────────────────────────
+// Per-customer, per-week cart state. Generated every Friday morning for ALL
+// active subscribers — no exceptions for skip/pause. delivery_status drives
+// the production cart report. See conner/data-model/decisions/ for the full
+// skip/pause/cancel model.
+
+model WeeklyCartRecord {
+  id               String         @id @default(uuid())
+  subscription_id  String
+  customer_id      String
+  delivery_week    DateTime       @db.Date // The Sunday of the delivery week
+  delivery_status  DeliveryStatus @default(scheduled)
+
+  // Cart contents as JSONB snapshot — [{meal_id, qty, price_snapshot}]
+  cart_items       Json
+
+  // Order linkage (set when cutoff fires and order is created)
+  order_id         String?        @unique
+  processed_at     DateTime?
+
+  // Engagement tracking
+  last_reviewed_at DateTime?
+
+  created_at       DateTime       @default(now())
+  updated_at       DateTime       @updatedAt
+
+  // Relations
+  subscription     Subscription   @relation(fields: [subscription_id], references: [id], onDelete: Cascade)
+  customer         Customer       @relation(fields: [customer_id], references: [id], onDelete: Cascade)
+  order            CustomerOrder? @relation(fields: [order_id], references: [id], onDelete: SetNull)
+
+  @@unique([subscription_id, delivery_week])
+  @@index([delivery_week, delivery_status]) // Composite for cart report queries
+  @@index([customer_id])
+}
