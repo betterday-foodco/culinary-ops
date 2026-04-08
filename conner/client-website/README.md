@@ -87,7 +87,7 @@ takes us from "mocked" to "wired."
 
 | Page | File | Status |
 |---|---|---|
-| Homepage | `index.html` | 🚧 to build (first target) |
+| Homepage | `index.html` | ✅ built (2026-04-08) |
 | Login | `login.html` | 💭 planned |
 | Menu browse | `menu/index.html` | 💭 planned |
 | Meal detail | `menu/[meal-code].html` | 💭 planned |
@@ -120,16 +120,32 @@ import from `brand/` or fetch from `/api/system-config/public` instead.
 
 ## Local development
 
-Because the HTML files use `fetch()` to pull in shared headers/footers, you
+Because the HTML files use `fetch()` to pull in shared headers/footers AND
+reference `/brand/tokens.css` (a sibling folder above this one), you
 **cannot** just double-click a page from Finder — `file://` URLs block
-fetches. Start a local HTTP server from this folder:
+fetches. You also can't run the server from inside `client-website/` alone,
+because `/brand/` lives outside it and wouldn't be reachable.
+
+**Run the server from the repo root**, so both `/brand/` and
+`/conner/client-website/` resolve under the same HTTP origin:
 
 ```
-cd conner/client-website
+cd ~/Downloads/culinary-ops   # or wherever your clone lives
 python3 -m http.server 8000
 ```
 
-Then open http://localhost:8000/ in your browser.
+Then open:
+
+    http://localhost:8000/conner/client-website/
 
 Any changes you save in files are picked up on the next browser refresh.
 No build step, no dev server to fight, no `npm install`.
+
+**Alternatives** (all work the same — just serve the repo root over HTTP):
+- **VS Code Live Server** — right-click any file in `culinary-ops/` and
+  "Open with Live Server"
+- **`npx serve .`** from the repo root (needs Node)
+- **`php -S localhost:8000`** from the repo root (needs PHP)
+
+In production, deploy the same file tree; every page loads `/brand/tokens.css`
+and `shared/*.html` over HTTPS and the fetches work automatically.
