@@ -20,7 +20,8 @@ export class TagsService {
   }
 
   create(data: { name: string; type: string; subtype?: string; source?: string; visible?: boolean; label_bold?: boolean; rule?: string; emoji?: string }) {
-    return this.prisma.systemTag.create({ data });
+    const slug = data.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'tag';
+    return this.prisma.systemTag.create({ data: { ...data, slug } });
   }
 
   update(id: string, data: Partial<{ name: string; visible: boolean; label_bold: boolean; rule: string; subtype: string; source: string }>) {
@@ -117,7 +118,8 @@ export class TagsService {
       { name: 'Prep Station', type: 'storage', subtype: 'Location', source: 'ingredient', visible: false },
     ];
 
-    await this.prisma.systemTag.createMany({ data: tags });
+    const withSlugs = tags.map(t => ({ ...t, slug: t.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'tag' }));
+    await this.prisma.systemTag.createMany({ data: withSlugs });
     return { message: 'Seeded', count: tags.length };
   }
 }

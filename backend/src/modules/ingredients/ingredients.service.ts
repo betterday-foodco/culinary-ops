@@ -48,7 +48,8 @@ export class IngredientsService {
     });
     if (existing) throw new ConflictException('SKU already exists');
 
-    return this.prisma.ingredient.create({ data: dto });
+    const slug = (dto.display_name || dto.internal_name).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'ingredient';
+    return this.prisma.ingredient.create({ data: { ...dto, slug } });
   }
 
   async update(id: string, dto: UpdateIngredientDto) {

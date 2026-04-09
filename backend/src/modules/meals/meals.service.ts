@@ -89,7 +89,8 @@ export class MealsService {
       try {
         meal = await this.prisma.$transaction(async (tx) => {
           const meal_code = await this.generateMealCode(tx);
-          const created = await tx.mealRecipe.create({ data: { ...mealData, meal_code } });
+          const slug = (mealData.display_name || mealData.name).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'meal';
+          const created = await tx.mealRecipe.create({ data: { ...mealData, meal_code, slug } });
 
           if (components?.length) {
             await tx.mealComponent.createMany({

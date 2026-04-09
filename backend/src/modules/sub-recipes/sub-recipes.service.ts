@@ -68,7 +68,8 @@ export class SubRecipesService {
     const { components, ...subRecipeData } = dto;
 
     const subRecipe = await this.prisma.$transaction(async (tx) => {
-      const created = await tx.subRecipe.create({ data: subRecipeData });
+      const slug = (subRecipeData.name).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'sub-recipe';
+      const created = await tx.subRecipe.create({ data: { ...subRecipeData, slug } });
 
       if (components?.length) {
         await tx.subRecipeComponent.createMany({
