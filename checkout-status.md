@@ -3,7 +3,7 @@
 > **Scope of this file:** a single-source status snapshot for the customer-facing checkout page at `conner/client-website/checkout.html`. Anyone picking up work on the checkout should read this first. If the checkout state changes significantly, update this file in the same commit.
 >
 > **Last updated:** 2026-04-09 (checkout port + subscriber discount calculator fix session)
-> **Current branch baseline:** `conner/universal-brand-folder` at commit `3393e2d`
+> **File location:** repo root (`/checkout-status.md`) — sibling of `CLAUDE.md` and `PROJECT_SCOPE.md`. This file tracks the checkout module specifically; cross-cutting project state lives in `PROJECT_SCOPE.md`.
 > **Shipping status:** ✅ Built, 🎭 payment mocked, 🚧 not yet smoke-tested in a browser, 🚢 not yet pushed to origin
 
 ---
