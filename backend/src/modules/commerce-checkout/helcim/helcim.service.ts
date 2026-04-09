@@ -375,19 +375,120 @@ export class HelcimService {
 
   /**
    * Refund a prior charge, full or partial. Called by the admin refund
-   * endpoint and by the reconciliation cron (for dispute-driven refunds).
+   * endpoint and (in a future phase) by the reconciliation cron for
+   * dispute-driven auto-refunds.
    *
-   * 🚧 Phase 4.1 — body to be filled in alongside the admin refund endpoint.
+   * Helcim's Refund API mirrors Purchase — same response shape,
+   * same error format, same idempotency-key requirement, same
+   * inconsistent errors-field behavior.
+   *
+   * Three outcomes:
+   *   1. HTTP 200 + status="APPROVED" → `kind: 'approved'`
+   *   2. HTTP 200 + status="DECLINED" → `kind: 'rejected'` (processor refused)
+   *   3. HelcimApiError caught → `kind: 'rejected'` or `'system_error'`
+   *
+   * The `originalTransactionId` is numeric (Helcim's transactionId field).
+   * The caller stringifies it into `CustomerOrder.processor_charge_id`,
+   * so the admin controller parses it back with Number() before calling
+   * this method.
+   *
+   * Research: conner/data-model/helcim-integration.md §8
    */
-  async refundCharge(_args: {
+  async refundCharge(args: {
     originalTransactionId: number;
     amount: number;
     adminIpAddress: string;
     idempotencyKey: string;
   }): Promise<RefundResult> {
-    throw new Error(
-      'HelcimService.refundCharge is not yet implemented. Scheduled for Phase 4.1 of helcim-integration-plan.md.',
+    this.logger.log(
+      `refundCharge: originalTxn=${args.originalTransactionId} amount=${args.amount} ` +
+        `key=${args.idempotencyKey}`,
     );
+
+    try {
+      const response = await this.apiClient.postRefund(
+        {
+          originalTransactionId: args.originalTransactionId,
+          amount: args.amount,
+          ipAddress: args.adminIpAddress,
+          ecommerce: true,
+        },
+        args.idempotencyKey,
+      );
+
+      if (response.status === 'APPROVED') {
+        this.logger.log(
+          `refundCharge APPROVED: originalTxn=${args.originalTransactionId} ` +
+            `refundTxn=${response.transactionId} approval=${response.approvalCode}`,
+        );
+        return {
+          kind: 'approved',
+          processorRefundId: String(response.transactionId),
+          idempotencyKey: args.idempotencyKey,
+        };
+      }
+
+      // HTTP 200 + DECLINED — the processor refused the refund. This is
+      // unusual but can happen when the original transaction is already
+      // fully refunded or isn't refundable (e.g. in-person debit).
+      const reason = response.warning ?? 'Refund declined by processor';
+      this.logger.warn(
+        `refundCharge REJECTED: originalTxn=${args.originalTransactionId} ` +
+          `reason="${reason}"`,
+      );
+      return {
+        kind: 'rejected',
+        rawError: reason,
+        idempotencyKey: args.idempotencyKey,
+      };
+    } catch (err) {
+      if (err instanceof HelcimApiError) {
+        this.logger.warn(
+          `refundCharge API error: originalTxn=${args.originalTransactionId} ` +
+            `status=${err.status} error="${err.toErrorString().slice(0, 200)}"`,
+        );
+        if (err.isIdempotencyConflict()) {
+          return {
+            kind: 'system_error',
+            rawError: err.toErrorString(),
+            idempotencyKey: args.idempotencyKey,
+            reason: 'idempotency_conflict',
+          };
+        }
+        if (err.isAuthError()) {
+          return {
+            kind: 'system_error',
+            rawError: err.toErrorString(),
+            idempotencyKey: args.idempotencyKey,
+            reason: 'auth_error',
+          };
+        }
+        if (err.isRateLimit()) {
+          return {
+            kind: 'system_error',
+            rawError: err.toErrorString(),
+            idempotencyKey: args.idempotencyKey,
+            reason: 'rate_limited',
+          };
+        }
+        // 4xx validation errors → rejection (not system error)
+        return {
+          kind: 'rejected',
+          rawError: err.toErrorString(),
+          idempotencyKey: args.idempotencyKey,
+        };
+      }
+      this.logger.error(
+        `refundCharge unknown error: originalTxn=${args.originalTransactionId} ` +
+          `err=${err instanceof Error ? err.message : String(err)}`,
+      );
+      return {
+        kind: 'system_error',
+        rawError: err instanceof Error ? err.message : String(err),
+        idempotencyKey: args.idempotencyKey,
+        reason: 'unexpected',
+      };
+    }
   }
 
   // ─── Helpers exposed for cron + controllers ──────────────────────────────

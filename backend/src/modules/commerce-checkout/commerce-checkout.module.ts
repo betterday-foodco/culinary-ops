@@ -10,6 +10,7 @@ import { HelcimService } from './helcim/helcim.service';
 import { HelcimCheckoutSessionRepository } from './helcim/helcim-checkout-session.repository';
 import { DeclineClassifier } from './helcim/decline-classifier';
 import { HmacVerifier } from './helcim/hmac-verifier';
+import { OrderRefundRepository } from './helcim/order-refund.repository';
 
 
 /**
@@ -48,6 +49,7 @@ import { HmacVerifier } from './helcim/hmac-verifier';
     HelcimApiClient,
     HelcimService,
     HelcimCheckoutSessionRepository,
+    OrderRefundRepository,
     DeclineClassifier,
     HmacVerifier,
     WeeklyChargeCron,
