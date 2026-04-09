@@ -34,23 +34,8 @@ button{font-family:inherit;cursor:pointer;border:none;background:none}
 img{display:block;max-width:100%}
 a{color:inherit;text-decoration:none}
 
-/* ======= ECC TOP NAV BAR ======= */
-.ecc-top-bar{background:#4EA2FD;padding:0 32px;display:flex;align-items:center;height:52px;gap:24px;position:sticky;top:0;z-index:100}
-.ecc-logo{display:flex;align-items:center;gap:0}
-.ecc-logo-text{font-size:20px;font-weight:900;color:#fff;letter-spacing:2px;border:2px solid rgba(250,235,218,0.5);padding:2px 8px;line-height:1.1}
-.ecc-logo-text .red{color:#ffc600}
-.ecc-logo-sub{font-size:9px;font-weight:700;color:#ffc600;letter-spacing:4px;text-transform:uppercase;display:block;text-align:center;margin-top:1px}
-.ecc-nav-links{display:flex;gap:24px;margin-left:auto}
-.ecc-nav-link{color:#fff;font-size:13px;font-weight:600;letter-spacing:.5px;text-transform:uppercase;transition:color .2s}
-.ecc-nav-link:hover{color:#ffc600}
-.ecc-order-btn{background:#ffc600;color:#003141;font-size:12px;font-weight:800;padding:10px 22px;border-radius:4px;letter-spacing:.5px;text-transform:uppercase;transition:all .2s}
-.ecc-order-btn:hover{background:#e6b300}
-.ecc-nav-icons{display:flex;align-items:center;gap:14px;margin-left:8px}
-.ecc-nav-icon{color:#fff;width:22px;height:22px;position:relative}
-.ecc-cart-count{position:absolute;top:-6px;right:-8px;background:#ff4444;color:#fff;font-size:9px;font-weight:800;width:16px;height:16px;border-radius:50%;display:flex;align-items:center;justify-content:center}
-
 /* ======= ACCOUNT TABS BAR ======= */
-.account-tabs-bar{background:#faebda;border-bottom:1px solid #e0d0bc;padding:0 32px;display:flex;align-items:stretch;gap:0;position:sticky;top:52px;z-index:99}
+.account-tabs-bar{background:#faebda;border-bottom:1px solid #e0d0bc;padding:0 32px;display:flex;align-items:stretch;gap:0;position:sticky;top:0;z-index:99}
 .account-tab{padding:16px 24px;font-size:14px;font-weight:500;color:#8a7a6a;border-bottom:3px solid transparent;transition:all .2s;white-space:nowrap;background:none;border-left:none;border-right:none;border-top:none;cursor:pointer;font-family:inherit}
 .account-tab:hover{color:#003141}
 .account-tab.active{color:#003141;font-weight:700;border-bottom-color:#00465e}
@@ -59,9 +44,6 @@ a{color:inherit;text-decoration:none}
 .account-tab-logout:hover{background:rgba(220,38,38,.08);border-color:rgba(220,38,38,.55);color:#b91c1c}
 @media(max-width:640px){.account-tab-logout span{display:none}.account-tab-logout{padding:9px 12px}}
 
-/* ======= NAV EXTRAS (points badge, avatar — now in top bar icons area) ======= */
-.points-badge{background:linear-gradient(135deg,#ffc600,#e6b300);color:#003141;font-size:11px;font-weight:700;padding:4px 10px;border-radius:12px;display:flex;align-items:center;gap:4px}
-.points-badge svg{width:14px;height:14px}
 .avatar{width:30px;height:30px;border-radius:50%;background:linear-gradient(135deg,#4EA2FD,#00465e);color:#fff;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700}
 
 /* ======= MAIN LAYOUT ======= */
@@ -1352,9 +1334,6 @@ a{color:inherit;text-decoration:none}
 
 /* (old edit cart mobile handle removed — now handled by .eo- overlay classes) */
 
-/* Mobile hamburger (hidden on desktop) */
-.mobile-hamburger{display:none;background:none;border:none;padding:4px;cursor:pointer}
-.mobile-hamburger svg{width:22px;height:22px;color:#fff}
 
 /* ======= TABLET (< 1080px) ======= */
 @media(max-width:1080px){
@@ -1370,16 +1349,8 @@ a{color:inherit;text-decoration:none}
 
 /* ======= MOBILE (< 768px) ======= */
 @media(max-width:768px){
-  /* --- Nav: hamburger style --- */
-  .ecc-nav-links{display:none}
-  .ecc-order-btn{display:none}
-  .mobile-hamburger{display:block}
-  .ecc-top-bar{padding:0 16px;height:48px}
-  .ecc-logo-text{font-size:16px;padding:1px 6px}
-  .ecc-logo-sub{font-size:8px;letter-spacing:3px}
-
   /* --- Account tabs: horizontal scroll --- */
-  .account-tabs-bar{padding:0 0 0 12px;overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none;top:48px}
+  .account-tabs-bar{padding:0 0 0 12px;overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none;top:0}
   .account-tabs-bar::-webkit-scrollbar{display:none}
   .account-tab{padding:12px 16px;font-size:13px;flex-shrink:0}
 
@@ -1790,39 +1761,6 @@ select.acct-form-input{appearance:none;background-image:url("data:image/svg+xml,
 </style>
 </head>
 <body>
-
-<!-- ============================================================
-     PORT NOTE — temporary top bar (legacy ECC branding).
-     Replace this whole <nav> block with conner/client-website/shared/marketing-header.html
-     when porting this file into client-website/account/. Same goes for the
-     .ecc-* CSS rules in the <style> block above (search for ECC TOP NAV BAR).
-     ============================================================ -->
-<nav class="ecc-top-bar">
-  <div class="ecc-logo">
-    <div>
-      <div class="ecc-logo-text">EAT <span class="red">CLEAN</span></div>
-      <div class="ecc-logo-sub">Chicago</div>
-    </div>
-  </div>
-  <div class="ecc-nav-links">
-    <a class="ecc-nav-link" href="#">Home</a>
-    <a class="ecc-nav-link" href="#">About Us</a>
-    <a class="ecc-nav-link" href="#">Contact</a>
-    <a class="ecc-nav-link" href="#">FAQ</a>
-  </div>
-  <button class="ecc-order-btn">Order Now</button>
-  <div class="ecc-nav-icons">
-    <div class="ecc-nav-icon" style="cursor:pointer">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 01-3.46 0"/></svg>
-      <div class="ecc-cart-count">5</div>
-    </div>
-    <div class="avatar">JR</div>
-    <button class="mobile-hamburger" onclick="this.classList.toggle('open')">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
-    </button>
-  </div>
-</nav>
-<!-- END PORT NOTE — legacy top bar -->
 
 <!-- ACCOUNT TABS -->
 <div class="account-tabs-bar">
