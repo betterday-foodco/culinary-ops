@@ -36,6 +36,12 @@ A running list of things that came up in chats but were consciously deferred —
 
 ## 🛠️ Implementation TODOs
 
+- [2026-04-09] **Subscriber Hub port: tokenize inline hex codes**
+  `conner/client-website/account/index.html` was ported from the v2 prototype with the conservative approach: link `/brand/tokens.css`, add the data-shell placeholders + `site-shell.js`, but leave the existing ~1,750 lines of inline CSS hex codes alone for now. The page works and looks identical to the prototype, but it doesn't yet honor brand-token rebranding. Follow-up: walk the inline `<style>` block and replace literal hex codes with `var(--brand-*)` from tokens.css. Hottest targets: `#00465e` → `var(--brand-navy)`, `#003141` → `var(--brand-navy-dark)`, `#4EA2FD` → `var(--brand-primary)`, `#FAEBDA` → `var(--brand-cream)`, `#ffc600` → `var(--brand-yellow)`, `#6bbd52` → `var(--brand-green)`, `#dc2626` → `var(--brand-red)`. Long-tail rgba()s and one-off shades can stay literal until they actually need to change.
+
+- [2026-04-09] **conner/client-website/login.html does not exist yet**
+  The ported account hub's auth gate redirects to `../login.html` when there is no active session. That file is planned (see `client-website/README.md` status table) but not built. Until then, append `?preview=1` to the URL to bypass the gate (the prototype's existing dev escape hatch). Build login.html as a separate task — its prototype lives at `conner/app/login.html`.
+
 - [2026-04-09] **Subscriber Hub "Deal of the Week" Add-to-Delivery button is a stub**
   In `conner/app/subscriber-hub-2.0.html`, the Subscriber Perks card has a static "Deal of the Week" sub-card (currently hardcoded to "Protein Energy Bites"). The "Add to Delivery" button just toasts a success message — it doesn't actually add anything to the cart. Wire this for real once the DOTW data model + customer-side coupon resolver is wired up (see DOTW scheduler entry below). The whole `#perksDealSlot` is meant to be JS-rendered from real DOTW data; the static HTML is just a visual placeholder.
 
