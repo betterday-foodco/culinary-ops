@@ -130,8 +130,16 @@ model Customer {
   status              CustomerStatus @default(active)
   source              CustomerSource @default(signup)
 
-  // Auth — supports email+password, OAuth (Apple/Google), and unclaimed
-  password_hash       String? // Null for unclaimed / OAuth-only accounts
+  // Auth — 100% passwordless. Login happens via one of:
+  //   1. Magic link (email → click link → signed in)
+  //   2. Phone OTP (SMS 6-digit code)
+  //   3. Sign in with Apple (OAuth — apple_id_sub set on link)
+  //   4. Sign in with Google (OAuth — google_id_sub set on link)
+  //   5. Apple Pay / Google Pay Express (auto-creates unclaimed account;
+  //      customer later claims via magic link)
+  //
+  // There is NO password field by design. See
+  // memory: project_betterday_passwordless_auth.md
   apple_id_sub        String? // Sign in with Apple subject identifier
   google_id_sub       String? // Google OAuth subject identifier
 
@@ -606,12 +614,14 @@ model CustomerSession {
 
 // ─── Auth: CustomerAuthToken ─────────────────────────────────────────────────
 // Short-lived one-time tokens for auth flows that aren't sessions:
-//   - Password reset links (1 hour TTL)
-//   - Email verification links (24 hour TTL)
-//   - Phone OTP codes (10 minute TTL)
-//   - Magic link login (15 minute TTL)
+//   - Magic link login (15 minute TTL) — PRIMARY login method
+//   - Phone OTP codes (10 minute TTL) — secondary login method
+//   - Email verification (24 hour TTL) — claims an unclaimed account
 //   - Email change confirmation (1 hour TTL, sent to NEW email)
 //   - Phone change confirmation (10 minute TTL, sent as SMS to NEW phone)
+//
+// There is NO password_reset token type because there are no passwords.
+// See memory: project_betterday_passwordless_auth.md
 //
 // Each token is single-use: once consumed_at is set, it's invalid. Rate
 // limiting happens at the API layer (N tokens per customer per hour max).
@@ -624,12 +634,11 @@ model CustomerSession {
 // the token row itself.
 
 enum AuthTokenType {
-  password_reset
-  email_verification
-  phone_otp
-  magic_link
-  email_change
-  phone_change
+  magic_link          // Email-based passwordless login (15 min TTL)
+  phone_otp           // SMS 6-digit code (10 min TTL)
+  email_verification  // Confirm email ownership, typically on claim (24 hr TTL)
+  email_change        // Confirm a new email before switching (1 hr TTL)
+  phone_change        // Confirm a new phone before switching (10 min TTL)
 }
 
 model CustomerAuthToken {
