@@ -3012,6 +3012,137 @@ function logoutAndRedirect(){
   setTimeout(() => window.location.replace(AUTH_LOGIN_URL + '?logout=1'), 450);
 }
 
+// ============================================================
+// COMMERCE API WIRING (commit 1 of 8: read profile)
+// ============================================================
+// This section bridges the ported subscriber-hub-2.0 prototype to the
+// real commerce-customers backend endpoints at /api/commerce/customers/me.
+//
+// Commit 1 (this one): loadProfile() populates Personal Information +
+// Contact Details cards from GET /me. No save wiring yet — the existing
+// saveProfile() / saveContact() / savePreferences() / saveAddress()
+// stubs are unchanged and still toast-and-forget. Subsequent commits
+// wire them one at a time.
+//
+// Auth: sends x-dev-customer-id header with a hardcoded dev UUID that
+// matches backend's @CurrentCustomer() decorator dev stub. Replaced by
+// real passwordless auth when that lands — see deferred-decisions.
+//
+// API base: window.BETTERDAY_API_BASE if set, else http://localhost:3001/api
+// for local dev. Set the window var in a <script> tag before this one
+// to point at staging/production.
+const API_BASE = window.BETTERDAY_API_BASE || 'http://localhost:3001/api';
+const DEV_CUSTOMER_ID = window.BETTERDAY_DEV_CUSTOMER_ID
+  || '00000000-0000-4000-a000-000000000001'; // Jose Ramirez seed row
+
+async function api(path, opts = {}) {
+  const res = await fetch(API_BASE + path, {
+    ...opts,
+    headers: {
+      'Content-Type': 'application/json',
+      'x-dev-customer-id': DEV_CUSTOMER_ID,
+      ...(opts.headers || {}),
+    },
+  });
+  if (!res.ok) {
+    let msg = res.status + ' ' + res.statusText;
+    try {
+      const body = await res.json();
+      if (body && body.message) {
+        msg += ' — ' + (Array.isArray(body.message) ? body.message.join(', ') : body.message);
+      }
+    } catch (_) { /* ignore parse errors */ }
+    throw new Error(msg);
+  }
+  if (res.status === 204) return null;
+  return res.json();
+}
+
+// Populate the Customer Info tab (Personal Information + Contact Details
+// cards) with real data from GET /api/commerce/customers/me. Called from
+// DOMContentLoaded — the hardcoded "Jose Ramirez" values in the HTML act
+// as a silent fallback if the fetch fails, so the page is still usable
+// offline during dev. Errors log to console but do NOT toast (it would
+// be noisy on every page load when the dev backend is down).
+//
+// Fields updated:
+//   • Personal card: firstName, lastName, birthday, profileFullName, avatar
+//   • Contact card:  email, phone, SMS opt-in toggle state
+//   • userData:      all of the above (keeps the existing edit/cancel
+//                    flow functional — saveProfile reverts from userData
+//                    when the user clicks Cancel during edit)
+//
+// Birthday handling: /me returns birthday as an ISO datetime string like
+// "1989-03-15T00:00:00.000Z". The .field-edit input is type="date" which
+// wants "YYYY-MM-DD". The .field-display shows "March 15, 1989". Both are
+// derived from the same ISO string via setField().
+async function loadProfile() {
+  try {
+    const me = await api('/commerce/customers/me');
+    if (!me) return;
+
+    // Update the in-memory userData so edit/cancel flow reads fresh values.
+    // The existing cancelEditProfile() function reverts from userData, so
+    // syncing it here keeps the cancel behavior honest.
+    userData.firstName = me.first_name || '';
+    userData.lastName  = me.last_name  || '';
+    userData.email     = me.email      || '';
+    userData.phone     = me.phone      || '';
+    userData.smsOptIn  = Boolean(me.sms_opt_in);
+    if (me.birthday) {
+      userData.birthday = String(me.birthday).slice(0, 10); // YYYY-MM-DD
+    }
+
+    // Personal Information header (full name + avatar initials)
+    const fullName = (userData.firstName + ' ' + userData.lastName).trim();
+    document.getElementById('profileFullName').textContent = fullName || 'Your account';
+    const initials = ((userData.firstName[0] || '') + (userData.lastName[0] || '')).toUpperCase() || '??';
+    document.getElementById('profileAvatar').textContent = initials;
+
+    // Field display + edit value pairs. The prototype stores both a text
+    // display element and a hidden input for each field, keyed by
+    // data-field. Update both so Edit mode and Display mode both show
+    // the real values.
+    setField('firstName', userData.firstName);
+    setField('lastName',  userData.lastName);
+    setField('email',     userData.email);
+    setField('phone',     userData.phone);
+
+    // Birthday needs a formatted display ("March 15, 1989") separate from
+    // the raw YYYY-MM-DD value used by the date input.
+    if (userData.birthday) {
+      const d = new Date(userData.birthday + 'T12:00:00');
+      const display = d.toLocaleDateString('en', { month: 'long', day: 'numeric', year: 'numeric' });
+      setField('birthday', userData.birthday, display);
+    } else {
+      setField('birthday', '', '—');
+    }
+
+    // SMS toggle — the prototype uses a classList-based toggle switch
+    // (not a native checkbox). Set .active based on userData.smsOptIn.
+    // The toggle is identified by its onclick handler calling toggleSms.
+    const smsToggle = document.querySelector('.acct-toggle-switch[onclick*="toggleSms"]');
+    if (smsToggle) {
+      smsToggle.classList.toggle('active', userData.smsOptIn);
+    }
+  } catch (err) {
+    console.warn('[account] loadProfile failed; keeping hardcoded fallback values.', err);
+    // Intentionally silent in the UI — the hardcoded DOM values remain
+    // visible so the page stays functional during dev when the backend
+    // is down. A toast on every page load would be noisy.
+  }
+}
+
+// Helper: update both the display text and the edit input value for a
+// named field. `displayValue` overrides the text content if provided
+// (used by birthday which has a different display format than input format).
+function setField(name, inputValue, displayValue) {
+  const disp = document.querySelector('.field-display[data-field="' + name + '"]');
+  const edit = document.querySelector('.field-edit[data-field="' + name + '"]');
+  if (disp) disp.textContent = displayValue !== undefined ? displayValue : (inputValue || '—');
+  if (edit) edit.value = inputValue || '';
+}
+
 // ======= DATA =======
 const allMeals = [
   // In cart
@@ -3196,6 +3327,10 @@ function initAllPhoneInputs(){
 
 // ======= INIT =======
 document.addEventListener('DOMContentLoaded',()=>{
+  // Fire the /me fetch immediately — it's async and doesn't block the
+  // rest of init. The hardcoded DOM values stay visible while the fetch
+  // is in flight; loadProfile() swaps them out when the response lands.
+  loadProfile();
   renderCompactCart();
   renderSuggestions();
   renderTimeline();
