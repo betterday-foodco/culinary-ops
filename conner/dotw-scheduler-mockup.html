@@ -1,0 +1,996 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Deal of the Week Scheduler — Mockup</title>
+  <link rel="stylesheet" href="../brand/tokens.css">
+  <style>
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      padding: 40px 24px 120px;
+      background: var(--bg-page);
+      color: var(--text-primary);
+    }
+
+    .wrap { max-width: 960px; margin: 0 auto; }
+
+    header.page-header {
+      text-align: center;
+      margin-bottom: 32px;
+    }
+    header.page-header h1 {
+      font-family: var(--font-display);
+      font-size: var(--fs-display);
+      margin: 0 0 8px;
+      color: var(--brand-navy-dark);
+    }
+    header.page-header p {
+      margin: 0;
+      color: var(--text-secondary);
+      font-size: var(--fs-body-lg);
+    }
+
+    /* ─── Presets panel ─── */
+    .presets {
+      background: var(--brand-navy);
+      color: var(--text-on-dark);
+      border-radius: var(--radius-card);
+      padding: 20px 24px;
+      margin-bottom: 20px;
+      box-shadow: var(--shadow-card);
+    }
+    .presets h3 {
+      font-family: var(--font-heading);
+      font-size: var(--fs-heading-sm);
+      margin: 0 0 4px;
+      color: var(--brand-yellow);
+    }
+    .presets .subtitle {
+      font-size: var(--fs-body-sm);
+      opacity: 0.8;
+      margin-bottom: 14px;
+    }
+    .presets-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 12px;
+    }
+    .preset-field {
+      background: rgba(255, 255, 255, 0.08);
+      border-radius: 10px;
+      padding: 10px 12px;
+    }
+    .preset-field .label {
+      font-size: var(--fs-caption);
+      opacity: 0.7;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 2px;
+    }
+    .preset-field .value {
+      font-family: ui-monospace, 'SF Mono', monospace;
+      font-size: var(--fs-body-sm);
+      color: var(--brand-yellow);
+    }
+    .preset-field input, .preset-field select {
+      background: transparent;
+      border: none;
+      color: var(--brand-yellow);
+      font-family: ui-monospace, 'SF Mono', monospace;
+      font-size: var(--fs-body-sm);
+      width: 100%;
+      padding: 0;
+    }
+    .preset-field input:focus, .preset-field select:focus {
+      outline: 1px dashed var(--brand-yellow);
+      outline-offset: 2px;
+    }
+
+    /* ─── Week list ─── */
+    .weeks {
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    .week {
+      background: var(--bg-card);
+      border-radius: var(--radius-card);
+      box-shadow: var(--shadow-card);
+      overflow: hidden;
+      transition: box-shadow 0.15s;
+    }
+    .week:hover {
+      box-shadow: var(--shadow-card-hover);
+    }
+
+    .week-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 18px 24px;
+      gap: 16px;
+      flex-wrap: wrap;
+    }
+    .week-header .dates {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+    .week-header .range {
+      font-family: var(--font-heading);
+      font-size: var(--fs-heading);
+      color: var(--text-primary);
+    }
+    .week-header .delivery {
+      font-size: var(--fs-body-sm);
+      color: var(--text-muted);
+    }
+    .week-header .delivery strong {
+      color: var(--text-secondary);
+    }
+
+    .status-badge {
+      font-family: var(--font-body);
+      font-size: var(--fs-caption);
+      font-weight: var(--fw-bold);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      padding: 4px 12px;
+      border-radius: var(--radius-badge);
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+    }
+    .status-badge::before {
+      content: '';
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: currentColor;
+    }
+    .status-live      { background: rgba(107, 189, 82, 0.15); color: var(--brand-green-dark); }
+    .status-scheduled { background: rgba(255, 198, 0, 0.2); color: #8a6d00; }
+    .status-empty     { background: rgba(0, 49, 65, 0.08); color: var(--text-muted); }
+    .status-expired   { background: rgba(0, 49, 65, 0.05); color: var(--text-muted); opacity: 0.6; }
+
+    .week-body {
+      padding: 0 24px 18px;
+    }
+
+    .dotw-list {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      margin-bottom: 12px;
+    }
+    .dotw-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 10px 14px;
+      background: var(--bg-page);
+      border-radius: 12px;
+      gap: 12px;
+    }
+    .dotw-item .meal {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-weight: var(--fw-bold);
+      font-size: var(--fs-body-lg);
+    }
+    .dotw-item .meal .emoji {
+      font-size: 20px;
+    }
+    .dotw-item .discount {
+      font-family: var(--font-body);
+      font-weight: var(--fw-bold);
+      color: var(--brand-red);
+      font-size: var(--fs-body-lg);
+    }
+    .dotw-item .meta {
+      font-size: var(--fs-body-sm);
+      color: var(--text-muted);
+    }
+    .dotw-item .actions {
+      display: flex;
+      gap: 6px;
+    }
+    .dotw-item button {
+      background: transparent;
+      border: 1px solid var(--border-tab);
+      padding: 4px 10px;
+      border-radius: var(--radius-button);
+      font-size: var(--fs-caption);
+      font-weight: var(--fw-bold);
+      color: var(--text-secondary);
+      cursor: pointer;
+    }
+    .dotw-item button:hover {
+      background: var(--brand-navy);
+      color: var(--text-on-dark);
+      border-color: var(--brand-navy);
+    }
+
+    .add-deal-btn {
+      display: block;
+      width: 100%;
+      padding: 14px;
+      background: transparent;
+      border: 2px dashed var(--border-section);
+      border-radius: 12px;
+      color: var(--text-secondary);
+      font-family: var(--font-body);
+      font-weight: var(--fw-bold);
+      font-size: var(--fs-body);
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+    .add-deal-btn:hover {
+      border-color: var(--brand-navy);
+      background: rgba(0, 49, 65, 0.04);
+      color: var(--text-primary);
+    }
+    .week.status-past .add-deal-btn { display: none; }
+
+    /* ─── Modal ─── */
+    .modal-backdrop {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 49, 65, 0.7);
+      z-index: 100;
+      align-items: flex-start;
+      justify-content: center;
+      padding: 40px 20px;
+      overflow-y: auto;
+    }
+    .modal-backdrop.visible { display: flex; }
+
+    .modal {
+      background: var(--bg-card);
+      border-radius: var(--radius-card);
+      max-width: 720px;
+      width: 100%;
+      box-shadow: 0 20px 60px rgba(0, 49, 65, 0.4);
+      overflow: hidden;
+    }
+    .modal-header {
+      padding: 20px 28px;
+      background: var(--brand-navy);
+      color: var(--text-on-dark);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .modal-header h2 {
+      font-family: var(--font-heading);
+      font-size: var(--fs-heading-lg);
+      margin: 0;
+      color: var(--text-on-dark);
+    }
+    .modal-header .close {
+      background: transparent;
+      border: none;
+      color: var(--text-on-dark);
+      font-size: 28px;
+      cursor: pointer;
+      padding: 0;
+      width: 32px;
+      height: 32px;
+      line-height: 1;
+    }
+    .modal-body {
+      padding: 24px 28px;
+    }
+    .modal-footer {
+      padding: 16px 28px;
+      background: var(--bg-page);
+      display: flex;
+      justify-content: flex-end;
+      gap: 10px;
+    }
+    .modal-footer button {
+      padding: 10px 22px;
+      border-radius: var(--radius-button);
+      font-family: var(--font-body);
+      font-weight: var(--fw-bold);
+      font-size: var(--fs-button);
+      cursor: pointer;
+      border: 2px solid transparent;
+    }
+    .modal-footer .btn-cancel {
+      background: transparent;
+      color: var(--text-secondary);
+      border-color: var(--border-tab);
+    }
+    .modal-footer .btn-primary {
+      background: var(--brand-yellow);
+      color: var(--brand-navy-dark);
+      border-color: var(--brand-yellow);
+    }
+    .modal-footer .btn-primary:hover {
+      background: var(--brand-yellow-dark);
+      border-color: var(--brand-yellow-dark);
+    }
+    .modal-footer .btn-primary:disabled {
+      opacity: 0.4;
+      cursor: not-allowed;
+    }
+
+    .step {
+      margin-bottom: 24px;
+    }
+    .step-label {
+      font-family: var(--font-heading);
+      font-size: var(--fs-heading-sm);
+      color: var(--brand-navy-dark);
+      margin-bottom: 8px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .step-label .num {
+      width: 24px;
+      height: 24px;
+      border-radius: 50%;
+      background: var(--brand-yellow);
+      color: var(--brand-navy-dark);
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      font-size: var(--fs-body-sm);
+      font-weight: var(--fw-bold);
+    }
+
+    .meal-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+      gap: 10px;
+    }
+    .meal-card {
+      border: 2px solid var(--border-section);
+      border-radius: 12px;
+      padding: 12px;
+      cursor: pointer;
+      text-align: center;
+      transition: all 0.15s;
+      background: var(--bg-card);
+      user-select: none;
+    }
+    .meal-card:hover {
+      border-color: var(--brand-primary);
+    }
+    .meal-card.selected {
+      border-color: var(--brand-green);
+      background: rgba(107, 189, 82, 0.08);
+    }
+    .meal-card .emoji {
+      font-size: 28px;
+      display: block;
+      margin-bottom: 4px;
+    }
+    .meal-card .name {
+      font-weight: var(--fw-bold);
+      font-size: var(--fs-body-sm);
+      color: var(--text-primary);
+      line-height: 1.2;
+    }
+    .meal-card .price {
+      font-size: var(--fs-caption);
+      color: var(--text-muted);
+      margin-top: 4px;
+    }
+    .meal-card .code {
+      font-family: ui-monospace, monospace;
+      font-size: 10px;
+      color: var(--text-muted);
+      margin-top: 2px;
+    }
+    .meal-card.selected::after {
+      content: '✓';
+      display: block;
+      color: var(--brand-green-dark);
+      font-weight: var(--fw-bold);
+      margin-top: 4px;
+    }
+
+    .discount-row {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+    }
+    .type-toggle {
+      display: flex;
+      border: 1px solid var(--border-section);
+      border-radius: var(--radius-button);
+      overflow: hidden;
+    }
+    .type-toggle button {
+      padding: 8px 16px;
+      background: transparent;
+      border: none;
+      font-family: var(--font-body);
+      font-weight: var(--fw-bold);
+      cursor: pointer;
+      color: var(--text-secondary);
+    }
+    .type-toggle button.active {
+      background: var(--brand-navy);
+      color: var(--text-on-dark);
+    }
+    .amount-input {
+      flex: 1;
+      padding: 10px 14px;
+      border: 1px solid var(--border-section);
+      border-radius: var(--radius-button);
+      font-family: var(--font-body);
+      font-size: var(--fs-body-lg);
+      font-weight: var(--fw-bold);
+      background: var(--bg-card);
+    }
+    .amount-input:focus {
+      outline: 2px solid var(--brand-primary);
+      outline-offset: 0;
+      border-color: transparent;
+    }
+
+    .text-input {
+      width: 100%;
+      padding: 10px 14px;
+      border: 1px solid var(--border-section);
+      border-radius: 10px;
+      font-family: var(--font-body);
+      font-size: var(--fs-body);
+      background: var(--bg-card);
+    }
+    .text-input:focus {
+      outline: 2px solid var(--brand-primary);
+      outline-offset: 0;
+      border-color: transparent;
+    }
+
+    .presets-preview {
+      background: var(--bg-page);
+      border-radius: 12px;
+      padding: 14px 18px;
+      font-family: ui-monospace, monospace;
+      font-size: var(--fs-caption);
+      color: var(--text-secondary);
+      line-height: 1.6;
+    }
+    .presets-preview .key { color: var(--brand-primary); }
+    .presets-preview .val { color: var(--brand-navy-dark); font-weight: var(--fw-bold); }
+
+    /* ─── Export modal ─── */
+    .export-box textarea {
+      width: 100%;
+      height: 360px;
+      font-family: ui-monospace, monospace;
+      font-size: var(--fs-body-sm);
+      padding: 12px;
+      border-radius: 10px;
+      border: 1px solid var(--border-section);
+      background: var(--bg-page);
+      color: var(--text-primary);
+      resize: vertical;
+    }
+
+    /* ─── Top action bar ─── */
+    .top-actions {
+      display: flex;
+      gap: 10px;
+      justify-content: flex-end;
+      margin-bottom: 20px;
+      flex-wrap: wrap;
+    }
+    .top-actions button {
+      padding: 10px 18px;
+      border-radius: var(--radius-button);
+      font-family: var(--font-body);
+      font-weight: var(--fw-bold);
+      font-size: var(--fs-button);
+      cursor: pointer;
+      border: 2px solid var(--brand-navy);
+      background: transparent;
+      color: var(--brand-navy);
+      transition: all 0.1s;
+    }
+    .top-actions button:hover {
+      background: var(--brand-navy);
+      color: var(--text-on-dark);
+    }
+    .top-actions button.primary {
+      background: var(--brand-yellow);
+      border-color: var(--brand-yellow);
+      color: var(--brand-navy-dark);
+    }
+    .top-actions button.primary:hover {
+      background: var(--brand-yellow-dark);
+      border-color: var(--brand-yellow-dark);
+      color: var(--brand-navy-dark);
+    }
+
+    @media (max-width: 640px) {
+      body { padding: 20px 12px 100px; }
+      .modal { border-radius: 16px; }
+      .presets-grid { grid-template-columns: 1fr 1fr; }
+    }
+  </style>
+</head>
+<body>
+
+<div class="wrap">
+
+  <header class="page-header">
+    <h1>Deal of the Week Scheduler</h1>
+    <p>Pick meals, set discounts, confirm — the coupon builder handles the rest.</p>
+  </header>
+
+  <!-- PRESETS PANEL -->
+  <div class="presets">
+    <h3>DOTW Presets</h3>
+    <p class="subtitle">These fields are auto-set on every DOTW coupon. Edit here to change the defaults for all new DOTWs you schedule.</p>
+    <div class="presets-grid">
+      <div class="preset-field">
+        <div class="label">auto_apply</div>
+        <div class="value">true (locked)</div>
+      </div>
+      <div class="preset-field">
+        <div class="label">purpose</div>
+        <div class="value">deal_of_the_week (locked)</div>
+      </div>
+      <div class="preset-field">
+        <div class="label">show_as_clippable</div>
+        <div class="value">
+          <select id="presetShowClippable">
+            <option value="true" selected>true</option>
+            <option value="false">false</option>
+          </select>
+        </div>
+      </div>
+      <div class="preset-field">
+        <div class="label">category</div>
+        <div class="value">
+          <select id="presetCategory">
+            <option value="seasonal" selected>seasonal</option>
+            <option value="loyalty">loyalty</option>
+            <option value="intro">intro</option>
+            <option value="manual">manual</option>
+            <option value="other">other</option>
+          </select>
+        </div>
+      </div>
+      <div class="preset-field">
+        <div class="label">default display message</div>
+        <div class="value">
+          <input type="text" id="presetDisplayMessage" value="Deal of the Week!">
+        </div>
+      </div>
+      <div class="preset-field">
+        <div class="label">default tag</div>
+        <div class="value">
+          <input type="text" id="presetTag" value="dotw">
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="top-actions">
+    <button id="exportBtn">Export all scheduled DOTWs</button>
+  </div>
+
+  <!-- WEEK LIST -->
+  <div class="weeks" id="weeksList"></div>
+
+</div>
+
+<!-- SCHEDULE MODAL -->
+<div class="modal-backdrop" id="scheduleModal">
+  <div class="modal">
+    <div class="modal-header">
+      <h2 id="modalTitle">Schedule Deal of the Week</h2>
+      <button class="close" id="modalClose">×</button>
+    </div>
+    <div class="modal-body">
+
+      <div class="step">
+        <div class="step-label"><span class="num">1</span>Pick dish(es) from this week's menu</div>
+        <div class="meal-grid" id="mealGrid"></div>
+      </div>
+
+      <div class="step">
+        <div class="step-label"><span class="num">2</span>Discount</div>
+        <div class="discount-row">
+          <div class="type-toggle">
+            <button type="button" class="active" data-type="percent">% off</button>
+            <button type="button" data-type="fixed">$ off</button>
+          </div>
+          <input type="number" class="amount-input" id="discountAmount" placeholder="20" min="1" step="1">
+          <span id="discountUnit" style="font-family: var(--font-body); font-weight: var(--fw-bold); color: var(--text-secondary);">%</span>
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="step-label"><span class="num">3</span>Display message</div>
+        <input type="text" class="text-input" id="modalDisplayMessage" placeholder="Deal of the Week!">
+      </div>
+
+      <div class="step">
+        <div class="step-label"><span class="num">4</span>Preset fields (auto-configured)</div>
+        <div class="presets-preview" id="presetsPreview"></div>
+      </div>
+
+    </div>
+    <div class="modal-footer">
+      <button class="btn-cancel" id="modalCancel">Cancel</button>
+      <button class="btn-primary" id="modalSchedule">Schedule Deal</button>
+    </div>
+  </div>
+</div>
+
+<!-- EXPORT MODAL -->
+<div class="modal-backdrop" id="exportModal">
+  <div class="modal">
+    <div class="modal-header">
+      <h2>Generated Coupon JSON</h2>
+      <button class="close" id="exportClose">×</button>
+    </div>
+    <div class="modal-body export-box">
+      <p style="margin: 0 0 12px; color: var(--text-secondary); font-size: var(--fs-body-sm);">
+        This is what the backend would receive for every scheduled DOTW. Paste into a schema conversation or keep as a reference.
+      </p>
+      <textarea id="exportText" readonly></textarea>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-primary" id="exportDone">Close</button>
+    </div>
+  </div>
+</div>
+
+<script>
+  // ─── Mock data ─────────────────────────────────────────────────────────
+  const TODAY = new Date('2026-04-08');  // mock "today" for demo
+
+  const MOCK_MEALS = [
+    { code: 'SALMON_BOWL',    name: 'Lemon Herb Salmon',  emoji: '🐟', price: 18.00 },
+    { code: 'CHICKEN_TIKKA',  name: 'Chicken Tikka',      emoji: '🍗', price: 16.00 },
+    { code: 'CHICKPEA_CURRY', name: 'Chickpea Curry',     emoji: '🍛', price: 15.00 },
+    { code: 'BEEF_STIRFRY',   name: 'Beef Stir Fry',      emoji: '🥩', price: 17.00 },
+    { code: 'TURKEY_CHILI',   name: 'Turkey Chili',       emoji: '🌶️', price: 15.00 },
+    { code: 'FALAFEL_WRAP',   name: 'Falafel Wrap',       emoji: '🌯', price: 14.00 },
+    { code: 'CHOC_COOKIES',   name: 'Chocolate Cookies',  emoji: '🍪', price: 6.00  },
+    { code: 'ENERGY_BALLS',   name: 'Protein Balls',      emoji: '💪', price: 8.00  },
+  ];
+
+  // Generate the rolling 8-week view (2 past, current, 5 future)
+  function generateWeeks() {
+    const weeks = [];
+    // Find the Sunday of TODAY's week
+    const thisSunday = new Date(TODAY);
+    const day = thisSunday.getDay();
+    thisSunday.setDate(thisSunday.getDate() + (day === 0 ? 0 : 7 - day));
+
+    for (let i = -2; i <= 5; i++) {
+      const sunday = new Date(thisSunday);
+      sunday.setDate(sunday.getDate() + (i * 7));
+      const monday = new Date(sunday);
+      monday.setDate(monday.getDate() - 6);
+      weeks.push({
+        deliverySunday: new Date(sunday),
+        weekStart: new Date(monday),
+        weekEnd: new Date(sunday),
+      });
+    }
+    return weeks;
+  }
+
+  // Seed some mock DOTWs for demo
+  const state = {
+    weeks: generateWeeks(),
+    dotws: {},  // keyed by ISO delivery sunday
+  };
+
+  function seedMockDOTWs() {
+    // Past week: cookies (expired)
+    const pastWeek = toISODate(state.weeks[1].deliverySunday);
+    state.dotws[pastWeek] = [{
+      meals: [MOCK_MEALS[6]],
+      discountType: 'percent',
+      discountAmount: 25,
+      displayMessage: 'Deal of the Week!',
+      redemptions: 47,
+    }];
+
+    // Current week: cookies (LIVE)
+    const currentWeek = toISODate(state.weeks[2].deliverySunday);
+    state.dotws[currentWeek] = [{
+      meals: [MOCK_MEALS[6]],
+      discountType: 'percent',
+      discountAmount: 30,
+      displayMessage: 'Deal of the Week!',
+      redemptions: 12,
+    }];
+
+    // Next week: salmon (SCHEDULED)
+    const nextWeek = toISODate(state.weeks[3].deliverySunday);
+    state.dotws[nextWeek] = [{
+      meals: [MOCK_MEALS[0]],
+      discountType: 'percent',
+      discountAmount: 25,
+      displayMessage: 'Deal of the Week!',
+      redemptions: 0,
+    }];
+  }
+
+  function toISODate(d) { return d.toISOString().slice(0, 10); }
+
+  function formatRange(start, end) {
+    const opts = { month: 'short', day: 'numeric' };
+    return `${start.toLocaleDateString('en-US', opts)} – ${end.toLocaleDateString('en-US', opts)}`;
+  }
+
+  function getWeekStatus(weekSunday) {
+    const now = TODAY.getTime();
+    const sundayTime = weekSunday.getTime();
+    const weekStart = sundayTime - (6 * 24 * 60 * 60 * 1000);
+    const hasDotws = (state.dotws[toISODate(weekSunday)] || []).length > 0;
+    if (sundayTime < now - (24 * 60 * 60 * 1000)) return hasDotws ? 'expired' : 'past';
+    if (now >= weekStart && now <= sundayTime + (24 * 60 * 60 * 1000)) return 'live';
+    return hasDotws ? 'scheduled' : 'empty';
+  }
+
+  // ─── Render weeks ──────────────────────────────────────────────────────
+  function renderWeeks() {
+    const container = document.getElementById('weeksList');
+    container.innerHTML = '';
+    state.weeks.forEach(week => {
+      const iso = toISODate(week.deliverySunday);
+      const status = getWeekStatus(week.deliverySunday);
+      const dotws = state.dotws[iso] || [];
+
+      const statusLabel = {
+        live: 'LIVE',
+        scheduled: 'SCHEDULED',
+        empty: 'EMPTY',
+        expired: 'EXPIRED',
+        past: 'PAST',
+      }[status];
+
+      const weekEl = document.createElement('div');
+      weekEl.className = `week status-${status}`;
+      weekEl.innerHTML = `
+        <div class="week-header">
+          <div class="dates">
+            <div class="range">${formatRange(week.weekStart, week.weekEnd)}</div>
+            <div class="delivery">Delivery Sunday <strong>${week.deliverySunday.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</strong></div>
+          </div>
+          <span class="status-badge status-${status}">${statusLabel}</span>
+        </div>
+        <div class="week-body">
+          <div class="dotw-list">
+            ${dotws.map((d, idx) => `
+              <div class="dotw-item">
+                <div class="meal">
+                  <span class="emoji">${d.meals[0].emoji}</span>
+                  <span>${d.meals.map(m => m.name).join(', ')}</span>
+                  <span class="discount">${d.discountType === 'percent' ? `-${d.discountAmount}%` : `-$${d.discountAmount}`}</span>
+                </div>
+                <div class="meta">
+                  ${d.redemptions > 0 ? `${d.redemptions} uses` : (status === 'scheduled' ? 'visible to pre-orderers' : '0 uses')}
+                </div>
+                <div class="actions">
+                  ${status !== 'expired' && status !== 'past' ? `<button data-remove="${iso}" data-idx="${idx}">Remove</button>` : ''}
+                </div>
+              </div>
+            `).join('')}
+          </div>
+          ${status !== 'expired' && status !== 'past' ? `
+            <button class="add-deal-btn" data-schedule="${iso}">
+              + ${dotws.length > 0 ? 'Add another deal for this week' : 'Schedule a deal for this week'}
+            </button>
+          ` : ''}
+        </div>
+      `;
+      container.appendChild(weekEl);
+    });
+
+    // Wire up buttons
+    container.querySelectorAll('[data-schedule]').forEach(btn => {
+      btn.addEventListener('click', e => openScheduleModal(e.target.dataset.schedule));
+    });
+    container.querySelectorAll('[data-remove]').forEach(btn => {
+      btn.addEventListener('click', e => {
+        const iso = e.target.dataset.remove;
+        const idx = parseInt(e.target.dataset.idx);
+        state.dotws[iso].splice(idx, 1);
+        if (state.dotws[iso].length === 0) delete state.dotws[iso];
+        renderWeeks();
+      });
+    });
+  }
+
+  // ─── Schedule modal ────────────────────────────────────────────────────
+  let modalState = {
+    weekIso: null,
+    selectedMeals: new Set(),
+    discountType: 'percent',
+  };
+
+  function openScheduleModal(weekIso) {
+    modalState = { weekIso, selectedMeals: new Set(), discountType: 'percent' };
+    const weekDate = new Date(weekIso);
+    document.getElementById('modalTitle').textContent =
+      `Schedule Deal for ${formatRange(new Date(weekDate.getTime() - 6*86400000), weekDate)}`;
+
+    // Render meal grid
+    const grid = document.getElementById('mealGrid');
+    grid.innerHTML = MOCK_MEALS.map(m => `
+      <div class="meal-card" data-code="${m.code}">
+        <span class="emoji">${m.emoji}</span>
+        <div class="name">${m.name}</div>
+        <div class="price">$${m.price.toFixed(2)}</div>
+        <div class="code">${m.code}</div>
+      </div>
+    `).join('');
+    grid.querySelectorAll('.meal-card').forEach(card => {
+      card.addEventListener('click', () => {
+        const code = card.dataset.code;
+        if (modalState.selectedMeals.has(code)) {
+          modalState.selectedMeals.delete(code);
+          card.classList.remove('selected');
+        } else {
+          modalState.selectedMeals.add(code);
+          card.classList.add('selected');
+        }
+        updatePresetsPreview();
+      });
+    });
+
+    // Reset inputs
+    document.getElementById('discountAmount').value = '';
+    document.getElementById('modalDisplayMessage').value = document.getElementById('presetDisplayMessage').value;
+    document.querySelectorAll('.type-toggle button').forEach(b => b.classList.remove('active'));
+    document.querySelector('.type-toggle button[data-type="percent"]').classList.add('active');
+    document.getElementById('discountUnit').textContent = '%';
+
+    updatePresetsPreview();
+    document.getElementById('scheduleModal').classList.add('visible');
+  }
+
+  function updatePresetsPreview() {
+    const weekDate = new Date(modalState.weekIso);
+    const weekStart = new Date(weekDate.getTime() - 6*86400000);
+    const selectedCodes = Array.from(modalState.selectedMeals);
+    const preview = document.getElementById('presetsPreview');
+    preview.innerHTML = `
+<span class="key">purpose</span>              <span class="val">"deal_of_the_week"</span>
+<span class="key">auto_apply</span>           <span class="val">true</span>
+<span class="key">show_as_clippable</span>    <span class="val">${document.getElementById('presetShowClippable').value}</span>
+<span class="key">category</span>             <span class="val">"${document.getElementById('presetCategory').value}"</span>
+<span class="key">tags</span>                 <span class="val">["${document.getElementById('presetTag').value}", "week_${modalState.weekIso}"]</span>
+<span class="key">delivery_week_sunday</span> <span class="val">"${modalState.weekIso}"</span>
+<span class="key">starts_at</span>            <span class="val">"${toISODate(weekStart)}T00:00:00Z"</span>
+<span class="key">expires_at</span>           <span class="val">"${modalState.weekIso}T23:59:59Z"</span>
+<span class="key">product_include</span>      <span class="val">[${selectedCodes.map(c => `"${c}"`).join(', ') || '← pick meals above'}]</span>`;
+  }
+
+  // Type toggle
+  document.querySelectorAll('.type-toggle button').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.type-toggle button').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      modalState.discountType = btn.dataset.type;
+      document.getElementById('discountUnit').textContent = btn.dataset.type === 'percent' ? '%' : '$';
+    });
+  });
+
+  // Close modal
+  document.getElementById('modalClose').addEventListener('click', closeModal);
+  document.getElementById('modalCancel').addEventListener('click', closeModal);
+  document.getElementById('scheduleModal').addEventListener('click', e => {
+    if (e.target.id === 'scheduleModal') closeModal();
+  });
+  function closeModal() {
+    document.getElementById('scheduleModal').classList.remove('visible');
+  }
+
+  // Schedule the deal
+  document.getElementById('modalSchedule').addEventListener('click', () => {
+    const amount = parseFloat(document.getElementById('discountAmount').value);
+    if (modalState.selectedMeals.size === 0) {
+      alert('Pick at least one meal');
+      return;
+    }
+    if (!amount || amount <= 0) {
+      alert('Enter a discount amount');
+      return;
+    }
+
+    const selectedMealObjects = MOCK_MEALS.filter(m => modalState.selectedMeals.has(m.code));
+    const displayMessage = document.getElementById('modalDisplayMessage').value ||
+                           document.getElementById('presetDisplayMessage').value;
+
+    const dotw = {
+      meals: selectedMealObjects,
+      discountType: modalState.discountType,
+      discountAmount: amount,
+      displayMessage,
+      redemptions: 0,
+    };
+
+    if (!state.dotws[modalState.weekIso]) state.dotws[modalState.weekIso] = [];
+    state.dotws[modalState.weekIso].push(dotw);
+    closeModal();
+    renderWeeks();
+  });
+
+  // Re-render presets preview on preset field change
+  document.querySelectorAll('.presets input, .presets select').forEach(el => {
+    el.addEventListener('input', () => {
+      if (document.getElementById('scheduleModal').classList.contains('visible')) {
+        updatePresetsPreview();
+      }
+    });
+  });
+
+  // ─── Export ────────────────────────────────────────────────────────────
+  document.getElementById('exportBtn').addEventListener('click', () => {
+    const coupons = [];
+    Object.entries(state.dotws).forEach(([weekIso, dotws]) => {
+      const weekDate = new Date(weekIso);
+      const weekStart = new Date(weekDate.getTime() - 6*86400000);
+      dotws.forEach((d, idx) => {
+        d.meals.forEach(meal => {
+          coupons.push({
+            // Locked presets
+            purpose: 'deal_of_the_week',
+            auto_apply: true,
+            show_as_clippable: document.getElementById('presetShowClippable').value === 'true',
+            category: document.getElementById('presetCategory').value,
+            tags: [document.getElementById('presetTag').value, `week_${weekIso}`],
+            // Week binding
+            delivery_week_sunday: weekIso,
+            starts_at: `${toISODate(weekStart)}T00:00:00Z`,
+            expires_at: `${weekIso}T23:59:59Z`,
+            // Admin-picked
+            code: `DOTW_${meal.code}_${weekIso.replace(/-/g, '')}`,
+            type: d.discountType === 'percent' ? 'percent_off' : 'fixed_off',
+            value: d.discountAmount,
+            product_include: [meal.code],
+            display_message: d.displayMessage,
+          });
+        });
+      });
+    });
+
+    const text = coupons.length > 0
+      ? `// ${coupons.length} scheduled DOTW coupon(s)\n// Generated ${new Date().toLocaleString()}\n\n${JSON.stringify(coupons, null, 2)}`
+      : '// No DOTWs scheduled yet.\n// Click "Schedule a deal" on a week above to add one.';
+    document.getElementById('exportText').value = text;
+    document.getElementById('exportModal').classList.add('visible');
+  });
+
+  document.getElementById('exportClose').addEventListener('click', () => {
+    document.getElementById('exportModal').classList.remove('visible');
+  });
+  document.getElementById('exportDone').addEventListener('click', () => {
+    document.getElementById('exportModal').classList.remove('visible');
+  });
+  document.getElementById('exportModal').addEventListener('click', e => {
+    if (e.target.id === 'exportModal') {
+      document.getElementById('exportModal').classList.remove('visible');
+    }
+  });
+
+  // ─── Boot ──────────────────────────────────────────────────────────────
+  seedMockDOTWs();
+  renderWeeks();
+</script>
+
+</body>
+</html>
