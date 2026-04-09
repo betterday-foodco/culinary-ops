@@ -58,9 +58,9 @@ enum AddressType {
 }
 
 enum PaymentProcessor {
-  helcim      // Primary processor (Canadian)
-  apple_pay   // Token from Apple Pay wallet
-  google_pay  // Token from Google Pay wallet
+  helcim // Primary processor (Canadian)
+  apple_pay // Token from Apple Pay wallet
+  google_pay // Token from Google Pay wallet
 }
 
 enum CardBrand {
@@ -79,17 +79,17 @@ enum SubscriptionCadence {
 
 enum SubscriptionStatus {
   active
-  paused              // Finite pause, resumes automatically
-  paused_indefinite   // Indefinite pause, requires manual resume
+  paused // Finite pause, resumes automatically
+  paused_indefinite // Indefinite pause, requires manual resume
   cancelled
 }
 
 enum DeliveryStatus {
-  scheduled  // Default delivering state
-  confirmed  // Past cutoff, locked, will deliver
-  skipped    // Customer opted out of this week
-  paused     // Auto-set when account is paused_indefinite
-  cancelled  // Auto-set when account is cancelled
+  scheduled // Default delivering state
+  confirmed // Past cutoff, locked, will deliver
+  skipped // Customer opted out of this week
+  paused // Auto-set when account is paused_indefinite
+  cancelled // Auto-set when account is cancelled
 }
 
 enum OrderType {
@@ -117,18 +117,18 @@ enum OrderStatus {
 // ─── Customer ────────────────────────────────────────────────────────────────
 
 model Customer {
-  id                  String         @id @default(uuid())
-  display_id          String         @unique // Human-readable: "BD-C-00012"
-  email               String         @unique
-  phone               String?
-  first_name          String?
-  last_name           String?
-  birthday            DateTime?      @db.Date
-  member_since        DateTime       @default(now()) @db.Date
+  id           String    @id @default(uuid())
+  display_id   String    @unique // Human-readable: "BD-C-00012"
+  email        String    @unique
+  phone        String?
+  first_name   String?
+  last_name    String?
+  birthday     DateTime? @db.Date
+  member_since DateTime  @default(now()) @db.Date
 
   // Lifecycle
-  status              CustomerStatus @default(active)
-  source              CustomerSource @default(signup)
+  status CustomerStatus @default(active)
+  source CustomerSource @default(signup)
 
   // Auth — 100% passwordless. Login happens via one of:
   //   1. Magic link (email → click link → signed in)
@@ -140,45 +140,45 @@ model Customer {
   //
   // There is NO password field by design. See
   // memory: project_betterday_passwordless_auth.md
-  apple_id_sub        String? // Sign in with Apple subject identifier
-  google_id_sub       String? // Google OAuth subject identifier
+  apple_id_sub  String? // Sign in with Apple subject identifier
+  google_id_sub String? // Google OAuth subject identifier
 
   // Verification state — email+phone independently verified.
   // Required before marketing emails (CASL) and SMS order updates respectively.
-  email_verified      Boolean        @default(false)
-  email_verified_at   DateTime?
-  phone_verified      Boolean        @default(false)
-  phone_verified_at   DateTime?
+  email_verified    Boolean   @default(false)
+  email_verified_at DateTime?
+  phone_verified    Boolean   @default(false)
+  phone_verified_at DateTime?
 
   // Payments — Helcim customer object reference
-  helcim_customer_id  String?
+  helcim_customer_id String?
 
   // Notification opt-ins
-  sms_opt_in          Boolean        @default(true)
-  email_opt_in        Boolean        @default(true)
+  sms_opt_in   Boolean @default(true)
+  email_opt_in Boolean @default(true)
 
   // Preferences
-  allergens           String[] // e.g. ["Shellfish", "Gluten"]
-  diet_tags           String[] // e.g. ["High Protein", "Keto"]
-  disliked_meals      String[] // manual "never swap TO this" list
-  favorite_meals      String[] // manual preferred list
+  allergens      String[] // e.g. ["Shellfish", "Gluten"]
+  diet_tags      String[] // e.g. ["High Protein", "Keto"]
+  disliked_meals String[] // manual "never swap TO this" list
+  favorite_meals String[] // manual preferred list
 
   // Rewards — denormalized running balance for fast reads. The
   // RewardPointsTransaction ledger is the source of truth; this field is
   // kept in sync via application code on every earn/spend event.
-  points_balance      Int            @default(0)
+  points_balance Int @default(0)
 
   // Admin-only
-  internal_notes      String? // CS notes, hidden from customer UI
-  tags                String[] // Admin segmentation e.g. ["VIP", "frequent-edits"]
-  last_contacted_at   DateTime?
-  flagged             Boolean        @default(false)
-  flagged_reason      String?
+  internal_notes    String? // CS notes, hidden from customer UI
+  tags              String[] // Admin segmentation e.g. ["VIP", "frequent-edits"]
+  last_contacted_at DateTime?
+  flagged           Boolean   @default(false)
+  flagged_reason    String?
 
   // Timestamps
-  created_at          DateTime       @default(now())
-  updated_at          DateTime       @updatedAt
-  last_login_at       DateTime?
+  created_at    DateTime  @default(now())
+  updated_at    DateTime  @updatedAt
+  last_login_at DateTime?
 
   // Relations
   addresses                  CustomerAddress[]
@@ -188,6 +188,7 @@ model Customer {
   weekly_cart_records        WeeklyCartRecord[]
   reward_points_transactions RewardPointsTransaction[]
   customer_coupons           CustomerCoupon[]
+  coupons_referred           Coupon[]                  @relation("CouponReferrer")
   sessions                   CustomerSession[]
   auth_tokens                CustomerAuthToken[]
 
@@ -207,16 +208,16 @@ model Customer {
 // collects first/last/email/phone per address, matching these four fields.
 
 model CustomerAddress {
-  id                    String      @id @default(uuid())
-  customer_id           String
-  label                 String // "Home", "Office", "Mom"
-  type                  AddressType @default(delivery)
+  id          String      @id @default(uuid())
+  customer_id String
+  label       String // "Home", "Office", "Mom"
+  type        AddressType @default(delivery)
 
   // Recipient contact — required by the subscriber-hub address form
-  recipient_first_name  String
-  recipient_last_name   String
-  recipient_email       String
-  recipient_phone       String
+  recipient_first_name String
+  recipient_last_name  String
+  recipient_email      String
+  recipient_phone      String
 
   company               String?
   street                String
@@ -225,13 +226,13 @@ model CustomerAddress {
   state                 String
   zip                   String
   delivery_instructions String? // "leave at side door"
-  is_default            Boolean     @default(false)
-  created_at            DateTime    @default(now())
-  updated_at            DateTime    @updatedAt
+  is_default            Boolean  @default(false)
+  created_at            DateTime @default(now())
+  updated_at            DateTime @updatedAt
 
-  customer              Customer    @relation(fields: [customer_id], references: [id], onDelete: Cascade)
-  orders                CustomerOrder[]      @relation("OrderShippingAddress")
-  subscriptions         Subscription[]       @relation("SubscriptionDefaultAddress")
+  customer      Customer        @relation(fields: [customer_id], references: [id], onDelete: Cascade)
+  orders        CustomerOrder[] @relation("OrderShippingAddress")
+  subscriptions Subscription[]  @relation("SubscriptionDefaultAddress")
 
   @@index([customer_id])
   @@index([customer_id, type, is_default])
@@ -242,21 +243,21 @@ model CustomerAddress {
 // Helcim holds the PCI data; we only store the token and metadata.
 
 model PaymentMethod {
-  id               String           @id @default(uuid())
-  customer_id      String
-  processor        PaymentProcessor @default(helcim)
-  processor_token  String // The tokenized reference (no real PAN)
-  brand            CardBrand        @default(other)
-  last4            String // e.g. "4242"
-  exp_month        Int
-  exp_year         Int
-  cardholder_name  String?
-  is_default       Boolean          @default(false)
-  created_at       DateTime         @default(now())
+  id              String           @id @default(uuid())
+  customer_id     String
+  processor       PaymentProcessor @default(helcim)
+  processor_token String // The tokenized reference (no real PAN)
+  brand           CardBrand        @default(other)
+  last4           String // e.g. "4242"
+  exp_month       Int
+  exp_year        Int
+  cardholder_name String?
+  is_default      Boolean          @default(false)
+  created_at      DateTime         @default(now())
 
-  customer         Customer         @relation(fields: [customer_id], references: [id], onDelete: Cascade)
-  orders           CustomerOrder[]  @relation("OrderPaymentMethod")
-  subscriptions    Subscription[]   @relation("SubscriptionDefaultPayment")
+  customer      Customer        @relation(fields: [customer_id], references: [id], onDelete: Cascade)
+  orders        CustomerOrder[] @relation("OrderPaymentMethod")
+  subscriptions Subscription[]  @relation("SubscriptionDefaultPayment")
 
   @@index([customer_id])
 }
@@ -267,33 +268,33 @@ model PaymentMethod {
 // win-back campaigns.
 
 model Subscription {
-  id                  String              @id @default(uuid())
-  customer_id         String              @unique // One active sub per customer
-  cadence             SubscriptionCadence @default(weekly)
-  status              SubscriptionStatus  @default(active)
-  next_renewal_at     DateTime
+  id              String              @id @default(uuid())
+  customer_id     String              @unique // One active sub per customer
+  cadence         SubscriptionCadence @default(weekly)
+  status          SubscriptionStatus  @default(active)
+  next_renewal_at DateTime
 
   // Defaults for auto-generated weekly cart records
-  default_payment_id  String?
-  default_address_id  String?
-  default_meal_count  Int                 @default(9)
-  savings_tier        Int                 @default(0) // 5 | 8 | 11 | 14 | 17 | 20 (percent)
+  default_payment_id String?
+  default_address_id String?
+  default_meal_count Int     @default(9)
+  savings_tier       Int     @default(0) // 5 | 8 | 11 | 14 | 17 | 20 (percent)
 
-  started_at          DateTime            @default(now())
-  paused_at           DateTime?
-  cancelled_at        DateTime?
-  cancel_reason       String?
+  started_at    DateTime  @default(now())
+  paused_at     DateTime?
+  cancelled_at  DateTime?
+  cancel_reason String?
 
   // Denormalized counters
-  lifetime_orders     Int                 @default(0)
-  lifetime_spend      Decimal             @default(0) @db.Decimal(10, 2)
+  lifetime_orders Int     @default(0)
+  lifetime_spend  Decimal @default(0) @db.Decimal(10, 2)
 
-  created_at          DateTime            @default(now())
-  updated_at          DateTime            @updatedAt
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
 
-  customer            Customer            @relation(fields: [customer_id], references: [id], onDelete: Cascade)
-  default_payment     PaymentMethod?      @relation("SubscriptionDefaultPayment", fields: [default_payment_id], references: [id], onDelete: SetNull)
-  default_address     CustomerAddress?    @relation("SubscriptionDefaultAddress", fields: [default_address_id], references: [id], onDelete: SetNull)
+  customer            Customer           @relation(fields: [customer_id], references: [id], onDelete: Cascade)
+  default_payment     PaymentMethod?     @relation("SubscriptionDefaultPayment", fields: [default_payment_id], references: [id], onDelete: SetNull)
+  default_address     CustomerAddress?   @relation("SubscriptionDefaultAddress", fields: [default_address_id], references: [id], onDelete: SetNull)
   weekly_cart_records WeeklyCartRecord[]
   orders              CustomerOrder[]
 
@@ -305,17 +306,17 @@ model Subscription {
 // BetterDay pickup depots. Small list, updated manually.
 
 model PickupLocation {
-  id             String          @id @default(uuid())
-  name           String // "BetterDay HQ"
-  address        String
-  city           String
-  pickup_days    String[] // ["Wed", "Thu"]
-  pickup_hours   String // "5 PM – 8 PM"
-  is_active      Boolean         @default(true)
-  created_at     DateTime        @default(now())
-  updated_at     DateTime        @updatedAt
+  id           String   @id @default(uuid())
+  name         String // "BetterDay HQ"
+  address      String
+  city         String
+  pickup_days  String[] // ["Wed", "Thu"]
+  pickup_hours String // "5 PM – 8 PM"
+  is_active    Boolean  @default(true)
+  created_at   DateTime @default(now())
+  updated_at   DateTime @updatedAt
 
-  orders         CustomerOrder[] @relation("OrderPickupLocation")
+  orders CustomerOrder[] @relation("OrderPickupLocation")
 
   @@index([is_active])
 }
@@ -331,70 +332,70 @@ model PickupLocation {
 // Edits before cutoff mutate the snapshot AND append to edit_history.
 
 model CustomerOrder {
-  id                      String             @id @default(uuid())
-  display_id              String             @unique // "BD-2026-04-0012345"
-  customer_id             String
-  subscription_id         String? // Null for one-time orders
-  order_type              OrderType          @default(one_time)
+  id              String    @id @default(uuid())
+  display_id      String    @unique // "BD-2026-04-0012345"
+  customer_id     String
+  subscription_id String? // Null for one-time orders
+  order_type      OrderType @default(one_time)
 
   // Contact snapshots (never mutate after placement)
-  billing_contact         Json // { name, email, phone }
-  payment_method_id       String?
-  processor_charge_id     String? // Helcim charge/invoice reference
+  billing_contact     Json // { name, email, phone }
+  payment_method_id   String?
+  processor_charge_id String? // Helcim charge/invoice reference
 
   // Fulfillment
-  fulfillment_method      FulfillmentMethod  @default(delivery)
+  fulfillment_method      FulfillmentMethod @default(delivery)
   shipping_address_id     String?
   pickup_location_id      String?
-  pickup_date             DateTime?          @db.Date
-  estimated_delivery_date DateTime?          @db.Date
+  pickup_date             DateTime?         @db.Date
+  estimated_delivery_date DateTime?         @db.Date
 
   // Gift fields
-  is_gift                 Boolean            @default(false)
-  gift_recipient          Json? // { first_name, last_name, phone, message }
-  gift_sms_sent_at        DateTime?
+  is_gift          Boolean   @default(false)
+  gift_recipient   Json? // { first_name, last_name, phone, message }
+  gift_sms_sent_at DateTime?
 
   // Line items (snapshot — includes meal_id, name, qty, price, img_url)
-  line_items              Json
-  meals_count             Int                @default(0) // denormalized sum of qty
+  line_items  Json
+  meals_count Int  @default(0) // denormalized sum of qty
 
   // Money — Decimal throughout. See note at top of file about Float vs Decimal.
-  subtotal                Decimal            @db.Decimal(10, 2)
-  subscriber_discount     Decimal            @default(0) @db.Decimal(10, 2)
-  savings_pct             Int                @default(0)
-  code_discount           Decimal            @default(0) @db.Decimal(10, 2)
-  gift_card_amount        Decimal            @default(0) @db.Decimal(10, 2)
-  points_redeemed         Decimal            @default(0) @db.Decimal(10, 2)
-  tax                     Decimal            @default(0) @db.Decimal(10, 2)
-  delivery_fee            Decimal            @default(0) @db.Decimal(10, 2)
-  total                   Decimal            @db.Decimal(10, 2)
-  points_earned           Int                @default(0)
+  subtotal            Decimal @db.Decimal(10, 2)
+  subscriber_discount Decimal @default(0) @db.Decimal(10, 2)
+  savings_pct         Int     @default(0)
+  code_discount       Decimal @default(0) @db.Decimal(10, 2)
+  gift_card_amount    Decimal @default(0) @db.Decimal(10, 2)
+  points_redeemed     Decimal @default(0) @db.Decimal(10, 2)
+  tax                 Decimal @default(0) @db.Decimal(10, 2)
+  delivery_fee        Decimal @default(0) @db.Decimal(10, 2)
+  total               Decimal @db.Decimal(10, 2)
+  points_earned       Int     @default(0)
 
   // Status + lifecycle
-  status                  OrderStatus        @default(pending)
-  placed_at               DateTime           @default(now())
-  confirmed_at            DateTime?
-  delivered_at            DateTime?
+  status       OrderStatus @default(pending)
+  placed_at    DateTime    @default(now())
+  confirmed_at DateTime?
+  delivered_at DateTime?
 
   // Audit / CS
-  admin_notes             String?
-  edit_history            Json // Append-only array — see entities.md
-  is_locked               Boolean            @default(false)
-  locked_at               DateTime?
-  locked_by               String? // "cutoff_job" | "admin:conner"
+  admin_notes  String?
+  edit_history Json // Append-only array — see entities.md
+  is_locked    Boolean   @default(false)
+  locked_at    DateTime?
+  locked_by    String? // "cutoff_job" | "admin:conner"
 
-  created_at              DateTime           @default(now())
-  updated_at              DateTime           @updatedAt
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
 
   // Relations
-  customer                  Customer                  @relation(fields: [customer_id], references: [id])
-  subscription              Subscription?             @relation(fields: [subscription_id], references: [id], onDelete: SetNull)
-  payment_method            PaymentMethod?            @relation("OrderPaymentMethod", fields: [payment_method_id], references: [id], onDelete: SetNull)
-  shipping_address          CustomerAddress?          @relation("OrderShippingAddress", fields: [shipping_address_id], references: [id], onDelete: SetNull)
-  pickup_location           PickupLocation?           @relation("OrderPickupLocation", fields: [pickup_location_id], references: [id], onDelete: SetNull)
-  weekly_cart_record        WeeklyCartRecord?
-  points_transactions       RewardPointsTransaction[] @relation("OrderPointsTransactions")
-  coupon_redemptions        CustomerCoupon[]          @relation("OrderCouponRedemptions")
+  customer            Customer                  @relation(fields: [customer_id], references: [id])
+  subscription        Subscription?             @relation(fields: [subscription_id], references: [id], onDelete: SetNull)
+  payment_method      PaymentMethod?            @relation("OrderPaymentMethod", fields: [payment_method_id], references: [id], onDelete: SetNull)
+  shipping_address    CustomerAddress?          @relation("OrderShippingAddress", fields: [shipping_address_id], references: [id], onDelete: SetNull)
+  pickup_location     PickupLocation?           @relation("OrderPickupLocation", fields: [pickup_location_id], references: [id], onDelete: SetNull)
+  weekly_cart_record  WeeklyCartRecord?
+  points_transactions RewardPointsTransaction[] @relation("OrderPointsTransactions")
+  coupon_redemptions  CustomerCoupon[]          @relation("OrderCouponRedemptions")
 
   @@index([customer_id])
   @@index([subscription_id])
@@ -410,29 +411,29 @@ model CustomerOrder {
 // skip/pause/cancel model.
 
 model WeeklyCartRecord {
-  id               String         @id @default(uuid())
-  subscription_id  String
-  customer_id      String
-  delivery_week    DateTime       @db.Date // The Sunday of the delivery week
-  delivery_status  DeliveryStatus @default(scheduled)
+  id              String         @id @default(uuid())
+  subscription_id String
+  customer_id     String
+  delivery_week   DateTime       @db.Date // The Sunday of the delivery week
+  delivery_status DeliveryStatus @default(scheduled)
 
   // Cart contents as JSONB snapshot — [{meal_id, qty, price_snapshot}]
-  cart_items       Json
+  cart_items Json
 
   // Order linkage (set when cutoff fires and order is created)
-  order_id         String?        @unique
-  processed_at     DateTime?
+  order_id     String?   @unique
+  processed_at DateTime?
 
   // Engagement tracking
   last_reviewed_at DateTime?
 
-  created_at       DateTime       @default(now())
-  updated_at       DateTime       @updatedAt
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
 
   // Relations
-  subscription     Subscription   @relation(fields: [subscription_id], references: [id], onDelete: Cascade)
-  customer         Customer       @relation(fields: [customer_id], references: [id], onDelete: Cascade)
-  order            CustomerOrder? @relation(fields: [order_id], references: [id], onDelete: SetNull)
+  subscription Subscription   @relation(fields: [subscription_id], references: [id], onDelete: Cascade)
+  customer     Customer       @relation(fields: [customer_id], references: [id], onDelete: Cascade)
+  order        CustomerOrder? @relation(fields: [order_id], references: [id], onDelete: SetNull)
 
   @@unique([subscription_id, delivery_week])
   @@index([delivery_week, delivery_status]) // Composite for cart report queries
@@ -450,24 +451,24 @@ model WeeklyCartRecord {
 // shape. Prototype reference: pointsHistory[] in subscriber-hub-2.0.html.
 
 enum PointsTxnType {
-  earned        // Points awarded from an order
-  spent         // Points redeemed at checkout
-  expired       // Points aged out (if we ever add expiry)
-  admin_adjust  // Manual CS adjustment (bonus, correction, goodwill)
+  earned // Points awarded from an order
+  spent // Points redeemed at checkout
+  expired // Points aged out (if we ever add expiry)
+  admin_adjust // Manual CS adjustment (bonus, correction, goodwill)
 }
 
 model RewardPointsTransaction {
-  id           String         @id @default(uuid())
+  id           String        @id @default(uuid())
   customer_id  String
   type         PointsTxnType
-  points       Int            // Signed: positive for earned, negative for spent/expired
-  dollar_value Decimal        @db.Decimal(10, 2) // Cash equivalent at time of txn
-  order_id     String?        // Optional link to the order that triggered this
-  reason       String?        // Human-readable, shown in the UI
-  created_at   DateTime       @default(now())
+  points       Int // Signed: positive for earned, negative for spent/expired
+  dollar_value Decimal       @db.Decimal(10, 2) // Cash equivalent at time of txn
+  order_id     String? // Optional link to the order that triggered this
+  reason       String? // Human-readable, shown in the UI
+  created_at   DateTime      @default(now())
 
-  customer     Customer       @relation(fields: [customer_id], references: [id], onDelete: Cascade)
-  order        CustomerOrder? @relation("OrderPointsTransactions", fields: [order_id], references: [id], onDelete: SetNull)
+  customer Customer       @relation(fields: [customer_id], references: [id], onDelete: Cascade)
+  order    CustomerOrder? @relation("OrderPointsTransactions", fields: [order_id], references: [id], onDelete: SetNull)
 
   @@index([customer_id, created_at])
   @@index([order_id])
@@ -484,43 +485,174 @@ model RewardPointsTransaction {
 // exact "applied" vs "available" states the prototype shows.
 
 enum CouponType {
-  percentage      // e.g. 10% off
-  dollar_amount   // e.g. $5 off
-  free_item       // e.g. free protein balls
-  free_delivery   // waives delivery fee
+  percentage // e.g. 10% off
+  dollar_amount // e.g. $5 off
+  free_item // e.g. free protein balls
+  free_delivery // waives delivery fee
 }
 
-enum CouponAppliesTo {
-  order           // Applies to the whole order
-  category        // Applies to a meal category
-  specific_meal   // Applies to a specific meal
+// Behavioral bucket — governs how a coupon acts at checkout time. Distinct
+// from CouponCategory (marketing bucket). A "welcome" purpose coupon might
+// be distributed via email_flow category, for example.
+enum CouponPurpose {
+  manual // Customer enters a code (default)
+  auto_applied // Generic auto-apply, no code entry required
+  deal_of_the_week // DOTW — bound to delivery_week_sunday
+  welcome // New customer welcome
+  winback // Lapsed customer recovery
+  birthday // Birthday reward
+  abandoned_cart // Cart recovery
+  referral // Dual-sided referral
+}
+
+// Marketing bucket — governs how a coupon is grouped for reporting. Distinct
+// from CouponPurpose (behavioral bucket). Used by the performance dashboard
+// to slice redemptions + LTV by acquisition channel.
+enum CouponCategory {
+  intro
+  email_flow
+  influencer
+  partnership
+  flyer
+  seasonal
+  loyalty
+  referral
+  manual
+  other
+}
+
+// Subscription gate — restricts a coupon to a specific subscription status.
+enum SubscriptionRestriction {
+  none
+  active_subscribers_only
+  new_subscribers_only // First-time subscribers only
+  non_subscribers_only // Excludes active subscribers
+}
+
+// Attribution channel — populated on CustomerCoupon at redemption time.
+// Mirrors utm_source semantics. Set automatically from deep-link URL params
+// when the customer arrives via a tracked link, or manually by admin.
+enum CouponSourceChannel {
+  unknown
+  email
+  sms
+  landing_page
+  in_app
+  in_cart
+  direct
+  referral
+  partner
+  flyer
+  influencer
 }
 
 model Coupon {
-  id                    String            @id @default(uuid())
-  code                  String            @unique // "WELCOME10", "SEAFOOD2026"
-  name                  String            // "10% Off Seafood"
-  description           String?           // "Get 10% off any seafood entree this week."
-  type                  CouponType
-  value                 Decimal           @db.Decimal(10, 2) // Meaning depends on type
-  applies_to            CouponAppliesTo   @default(order)
-  target_category       String?           // When applies_to = category
-  target_meal_code      String?           // When applies_to = specific_meal
-  min_order_value       Decimal?          @db.Decimal(10, 2)
-  max_uses              Int?              // Global cap (null = unlimited)
-  max_uses_per_customer Int?              // Per-customer cap (null = unlimited)
-  uses_count            Int               @default(0) // Denormalized global counter
-  expires_at            DateTime?
-  is_active             Boolean           @default(true)
-  is_personal           Boolean           @default(false) // True = admin must grant via CustomerCoupon
-  created_at            DateTime          @default(now())
-  updated_at            DateTime          @updatedAt
+  // ─── Identity ────────────────────────────────────────────────────────────
+  id              String  @id @default(uuid())
+  code            String  @unique // "WELCOME10", "SEAFOOD2026"
+  name            String // "10% Off Seafood" (admin label)
+  description     String? // Internal admin description
+  display_message String? // Customer-facing ("20% off your order!")
 
-  customer_coupons      CustomerCoupon[]
+  // ─── Behavior + categorization ───────────────────────────────────────────
+  purpose  CouponPurpose  @default(manual)
+  category CouponCategory @default(manual)
+  tags     String[] // Free-form campaign labels
+
+  // ─── Discount engine ─────────────────────────────────────────────────────
+  type                   CouponType
+  value                  Decimal    @db.Decimal(10, 2) // Meaning depends on type
+  max_discount_amount    Decimal?   @db.Decimal(10, 2) // Cap for % coupons
+  includes_free_delivery Boolean    @default(false) // Combo with any discount
+
+  // ─── Order value thresholds ──────────────────────────────────────────────
+  min_order_value Decimal? @db.Decimal(10, 2)
+  max_order_value Decimal? @db.Decimal(10, 2)
+
+  // ─── Validity ────────────────────────────────────────────────────────────
+  starts_at           DateTime? // Effective start date
+  expires_at          DateTime?
+  rolling_expiry_days Int? // Expires N days after issuance (for auto-issued coupons)
+
+  // ─── Usage limits ────────────────────────────────────────────────────────
+  max_uses               Int? // Global cap
+  max_uses_per_customer  Int?
+  max_uses_per_household Int? // Per normalized delivery address
+  uses_count             Int  @default(0) // Denormalized global counter (pre-existing)
+
+  // ─── Restriction flags ───────────────────────────────────────────────────
+  is_active                  Boolean @default(true)
+  is_personal                Boolean @default(false) // Grant-based distribution
+  new_customers_only         Boolean @default(false)
+  exclude_sale_items         Boolean @default(false)
+  auto_apply                 Boolean @default(false)
+  stackable                  Boolean @default(true) // Default TRUE per stacking policy
+  show_as_clippable          Boolean @default(false)
+  show_in_order_confirmation Boolean @default(false)
+  require_verified_email     Boolean @default(false)
+
+  // ─── Subscription + order history restrictions ───────────────────────────
+  subscription_restriction SubscriptionRestriction @default(none)
+  min_order_count          Int? // "Valid after Nth order"
+  max_order_count          Int? // "Valid only for first N orders"
+
+  // ─── Email targeting (validation-time, distinct from is_personal) ────────
+  allowed_emails  String[]
+  excluded_emails String[]
+
+  // ─── Product + category targeting (multi) ────────────────────────────────
+  product_include  String[] // Replaces legacy target_meal_code
+  product_exclude  String[]
+  category_include String[] // Replaces legacy target_category
+  category_exclude String[]
+
+  // ─── Customer segment targeting (beyond HMP) ─────────────────────────────
+  target_customer_tags     String[] // Uses Customer.tags (pre-existing)
+  exclude_customer_tags    String[]
+  min_lifetime_spend       Decimal?         @db.Decimal(10, 2) // Uses Subscription.lifetime_spend
+  max_lifetime_spend       Decimal?         @db.Decimal(10, 2)
+  min_member_since_days    Int? // Uses Customer.member_since
+  max_member_since_days    Int?
+  target_customer_statuses CustomerStatus[]
+
+  // ─── BOGO logic ──────────────────────────────────────────────────────────
+  buy_qty          Int? // "Buy N..."
+  get_qty          Int? // "...get M"
+  get_discount_pct Int? // 100 = free, 50 = half off
+
+  // ─── DOTW binding ────────────────────────────────────────────────────────
+  // When non-null, this coupon only applies to orders whose delivery week
+  // matches this Sunday. See project_dotw_preorder_rules memory for the full
+  // validation rule.
+  delivery_week_sunday DateTime? @db.Date
+
+  // ─── Referral (dual-sided) ───────────────────────────────────────────────
+  referrer_customer_id String?
+  referrer_credit      Decimal?    @db.Decimal(10, 2)
+  referrer_credit_type CouponType?
+
+  // ─── Reporting + admin ───────────────────────────────────────────────────
+  cost_per_redemption            Decimal? @db.Decimal(10, 2) // For true ROI
+  customer_facing_error_override String? // Admin override for validation error messages
+
+  // ─── Timestamps ──────────────────────────────────────────────────────────
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  // ─── Relations ───────────────────────────────────────────────────────────
+  customer_coupons  CustomerCoupon[]
+  tiers             CouponTier[]
+  attached_products CouponAttachedProduct[]
+  referrer          Customer?               @relation("CouponReferrer", fields: [referrer_customer_id], references: [id], onDelete: SetNull)
 
   @@index([code])
   @@index([is_active, expires_at])
   @@index([is_personal])
+  @@index([purpose])
+  @@index([category])
+  @@index([delivery_week_sunday])
+  @@index([auto_apply, is_active])
+  @@index([referrer_customer_id])
 }
 
 // ─── CustomerCoupon — per-customer coupon state ──────────────────────────────
@@ -532,33 +664,87 @@ model Coupon {
 // created by the admin when granting the coupon.
 
 enum CouponStatus {
-  available   // Customer has the coupon but hasn't applied it to a cart yet
-  applied     // Attached to the customer's next cart, will consume at checkout
-  redeemed    // Used on an order — dollar amount captured
-  expired     // Passed its expiry date without being used
-  revoked     // Admin manually removed
+  available // Customer has the coupon but hasn't applied it to a cart yet
+  applied // Attached to the customer's next cart, will consume at checkout
+  redeemed // Used on an order — dollar amount captured
+  expired // Passed its expiry date without being used
+  revoked // Admin manually removed
 }
 
 model CustomerCoupon {
-  id                 String         @id @default(uuid())
-  customer_id        String
-  coupon_id          String
-  status             CouponStatus   @default(available)
-  applied_at         DateTime?      // When customer toggled "apply to next order"
-  redeemed_at        DateTime?      // When the order actually consumed it
-  redeemed_order_id  String?        // FK to CustomerOrder
-  amount_discounted  Decimal?       @db.Decimal(10, 2) // What it actually saved at redemption
-  created_at         DateTime       @default(now())
-  updated_at         DateTime       @updatedAt
+  id                String       @id @default(uuid())
+  customer_id       String
+  coupon_id         String
+  status            CouponStatus @default(available)
+  applied_at        DateTime? // When customer toggled "apply to next order"
+  redeemed_at       DateTime? // When the order actually consumed it
+  redeemed_order_id String? // FK to CustomerOrder
+  amount_discounted Decimal?     @db.Decimal(10, 2) // What it actually saved at redemption
 
-  customer           Customer       @relation(fields: [customer_id], references: [id], onDelete: Cascade)
-  coupon             Coupon         @relation(fields: [coupon_id], references: [id], onDelete: Cascade)
-  redeemed_order     CustomerOrder? @relation("OrderCouponRedemptions", fields: [redeemed_order_id], references: [id], onDelete: SetNull)
+  // Attribution — mirrors UTM parameter semantics. Populated at redemption
+  // time either from deep-link URL params or admin-manual entry. Enables
+  // cohort reporting by channel + campaign across the Coupon → CustomerCoupon
+  // → CustomerOrder join path.
+  source_channel  CouponSourceChannel?
+  source_campaign String? // e.g. "spring_launch_2026"
+  source_content  String? // utm_content — which email variant / influencer
+  referrer_url    String? // HTTP referrer at redemption time (web only)
+
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  customer       Customer       @relation(fields: [customer_id], references: [id], onDelete: Cascade)
+  coupon         Coupon         @relation(fields: [coupon_id], references: [id], onDelete: Cascade)
+  redeemed_order CustomerOrder? @relation("OrderCouponRedemptions", fields: [redeemed_order_id], references: [id], onDelete: SetNull)
 
   @@unique([customer_id, coupon_id])
   @@index([customer_id])
   @@index([coupon_id])
   @@index([status])
+  @@index([source_channel])
+  @@index([source_campaign])
+}
+
+// ─── CouponTier — tiered discounts ───────────────────────────────────────────
+// For "spend $50 → 10% off, spend $100 → 20% off, spend $150 → 25% off + free
+// delivery" style coupons. One Coupon can have multiple tiers. At checkout,
+// the highest-matching tier is applied. sort_order lets the admin control
+// evaluation priority (typically: highest min_spend first).
+
+model CouponTier {
+  id                     String     @id @default(uuid())
+  coupon_id              String
+  min_spend              Decimal    @db.Decimal(10, 2)
+  discount_type          CouponType
+  discount_value         Decimal    @db.Decimal(10, 2)
+  includes_free_delivery Boolean    @default(false)
+  sort_order             Int        @default(0)
+  created_at             DateTime   @default(now())
+
+  coupon Coupon @relation(fields: [coupon_id], references: [id], onDelete: Cascade)
+
+  @@index([coupon_id, sort_order])
+}
+
+// ─── CouponAttachedProduct — BOGO / free-gift-with-purchase ──────────────────
+// When a coupon is applied, these products are automatically added to the
+// customer's cart at the specified discount. Used for "apply this code to get
+// free protein balls" style promotions. Distinct from the BOGO fields on
+// Coupon (which express "buy N meals get M free from the cart") — this is
+// for explicitly-named bonus items the admin pre-configures.
+
+model CouponAttachedProduct {
+  id             String     @id @default(uuid())
+  coupon_id      String
+  meal_code      String
+  quantity       Int        @default(1)
+  discount_type  CouponType @default(percentage)
+  discount_value Decimal    @db.Decimal(10, 2) // 100 = free, 50 = half off
+  created_at     DateTime   @default(now())
+
+  coupon Coupon @relation(fields: [coupon_id], references: [id], onDelete: Cascade)
+
+  @@index([coupon_id])
 }
 
 // ─── Auth: CustomerSession ───────────────────────────────────────────────────
@@ -575,41 +761,41 @@ model CustomerCoupon {
 // random strings (256 bits) so plain SHA-256 is sufficient — no bcrypt needed.
 
 enum SessionRevokeReason {
-  user_logout        // Customer clicked "log out"
-  user_logout_all    // Customer clicked "log out all devices"
-  password_change    // Password was changed, invalidate all sessions
-  email_change       // Email was changed, invalidate all sessions
-  admin_force        // Admin manually revoked (CS or security action)
-  expired            // Reached expires_at
-  security_anomaly   // Fraud/abuse detection revoked it
+  user_logout // Customer clicked "log out"
+  user_logout_all // Customer clicked "log out all devices"
+  password_change // Password was changed, invalidate all sessions
+  email_change // Email was changed, invalidate all sessions
+  admin_force // Admin manually revoked (CS or security action)
+  expired // Reached expires_at
+  security_anomaly // Fraud/abuse detection revoked it
 }
 
 model CustomerSession {
-  id               String               @id @default(uuid())
-  customer_id      String
+  id          String @id @default(uuid())
+  customer_id String
 
   // The refresh token's SHA-256 hash. Raw token is returned to client once
   // at creation and never stored server-side.
-  refresh_token_hash String             @unique
+  refresh_token_hash String @unique
 
   // Device metadata — shown in "Your Devices" UI
-  user_agent       String?              // Full User-Agent header
-  device_name      String?              // Friendly label ("Jose's iPhone")
-  ip_address       String?              // IP at login time (for audit)
-  ip_country       String?              // ISO country code (from geoip)
+  user_agent  String? // Full User-Agent header
+  device_name String? // Friendly label ("Jose's iPhone")
+  ip_address  String? // IP at login time (for audit)
+  ip_country  String? // ISO country code (from geoip)
 
   // Lifecycle
-  created_at       DateTime             @default(now())
-  last_active_at   DateTime             @default(now()) // Updated on each refresh
-  expires_at       DateTime             // Absolute timeout (~30 days from creation)
-  revoked_at       DateTime?            // Null = still active
-  revoked_reason   SessionRevokeReason?
+  created_at     DateTime             @default(now())
+  last_active_at DateTime             @default(now()) // Updated on each refresh
+  expires_at     DateTime // Absolute timeout (~30 days from creation)
+  revoked_at     DateTime? // Null = still active
+  revoked_reason SessionRevokeReason?
 
-  customer         Customer             @relation(fields: [customer_id], references: [id], onDelete: Cascade)
+  customer Customer @relation(fields: [customer_id], references: [id], onDelete: Cascade)
 
   @@index([customer_id])
   @@index([customer_id, revoked_at]) // Fast "active sessions for this customer"
-  @@index([expires_at])              // Cleanup job for expired sessions
+  @@index([expires_at]) // Cleanup job for expired sessions
 }
 
 // ─── Auth: CustomerAuthToken ─────────────────────────────────────────────────
@@ -634,44 +820,44 @@ model CustomerSession {
 // the token row itself.
 
 enum AuthTokenType {
-  magic_link          // Email-based passwordless login (15 min TTL)
-  phone_otp           // SMS 6-digit code (10 min TTL)
-  email_verification  // Confirm email ownership, typically on claim (24 hr TTL)
-  email_change        // Confirm a new email before switching (1 hr TTL)
-  phone_change        // Confirm a new phone before switching (10 min TTL)
+  magic_link // Email-based passwordless login (15 min TTL)
+  phone_otp // SMS 6-digit code (10 min TTL)
+  email_verification // Confirm email ownership, typically on claim (24 hr TTL)
+  email_change // Confirm a new email before switching (1 hr TTL)
+  phone_change // Confirm a new phone before switching (10 min TTL)
 }
 
 model CustomerAuthToken {
-  id             String        @id @default(uuid())
-  customer_id    String?       // Nullable: pre-signup verification has no customer yet
-  type           AuthTokenType
+  id          String        @id @default(uuid())
+  customer_id String? // Nullable: pre-signup verification has no customer yet
+  type        AuthTokenType
 
   // For email_verification / email_change: the email being verified
   // For phone_otp / phone_change: the phone being verified
   // Denormalized so we can rate-limit by email/phone even without customer_id
-  target_email   String?
-  target_phone   String?
+  target_email String?
+  target_phone String?
 
   // SHA-256 hash of the raw token or OTP code. Never store raw.
-  token_hash     String        @unique
+  token_hash String @unique
 
   // Rate limiting for OTPs — max attempts before the token is burned
-  attempts       Int           @default(0)
-  max_attempts   Int           @default(5)
+  attempts     Int @default(0)
+  max_attempts Int @default(5)
 
   // Lifecycle
-  expires_at     DateTime      // Short TTL (10m – 24h depending on type)
-  consumed_at    DateTime?     // Null = still valid, not null = used
-  created_at     DateTime      @default(now())
+  expires_at  DateTime // Short TTL (10m – 24h depending on type)
+  consumed_at DateTime? // Null = still valid, not null = used
+  created_at  DateTime  @default(now())
 
   // Audit context
-  ip_address     String?
-  user_agent     String?
+  ip_address String?
+  user_agent String?
 
-  customer       Customer?     @relation(fields: [customer_id], references: [id], onDelete: Cascade)
+  customer Customer? @relation(fields: [customer_id], references: [id], onDelete: Cascade)
 
   @@index([customer_id])
   @@index([type, target_email]) // Rate limit: count recent tokens by email
   @@index([type, target_phone]) // Rate limit: count recent tokens by phone
-  @@index([expires_at])         // Cleanup job for expired tokens
+  @@index([expires_at]) // Cleanup job for expired tokens
 }
