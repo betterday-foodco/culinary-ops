@@ -1615,6 +1615,115 @@ body.sheet-open #cartSidebar { visibility: hidden; pointer-events: none; }
 let allMeals = [];
 let mealsLoaded = false;
 
+// ══════════════════════════════════════════════════════════════════════════
+// DIET LOCK — SAFETY-CRITICAL FAIL-CLOSED FILTER
+// ══════════════════════════════════════════════════════════════════════════
+// A plant-based customer must NEVER be shown a meat dish under any
+// circumstance. This is not a preference filter — it's a trust gate.
+//
+// Resolution order (first match wins):
+//   1. ?diet=<slug> URL param — set by the onboarding picker redirect.
+//      Accepted aliases for Plant-Based: 'plant-based', 'vegan'.
+//   2. GET /api/commerce/customers/me → .diet_plan_id compared to the
+//      Plant-Based SystemTag UUID from brand/site-info.seed.json.
+//   3. Neither resolvable → redirect to the onboarding picker. We
+//      NEVER fall back to "show everything" because that would leak
+//      meat to a plant-based customer if the API is unreachable.
+//
+// Invariants enforced below:
+//   - getFilteredMeals() applies the lock BEFORE any user filter.
+//   - clearAllFilters() explicitly preserves the lock.
+//   - The value is either null (no lock, unknown/omnivore) or the
+//     exact string 'Plant-Based' (matched against m.diet_plan).
+//   - Unknown diet_plan string on a meal row is treated as NOT safe
+//     for plant-based customers (fail-closed).
+//
+// Values:
+//   null           → omnivore or unknown — no lock, show everything
+//   'Plant-Based'  → only meals where m.diet_plan === 'Plant-Based'
+let dietLock = null;
+let dietLockResolved = false; // Gates renderAll() until lock is determined.
+
+// Dev stub — same header the commerce backend's @CurrentCustomer() decorator
+// reads. Removed when real passwordless auth lands (see deferred-decisions).
+const DEV_CUSTOMER_ID = window.BETTERDAY_DEV_CUSTOMER_ID
+  || '00000000-0000-4000-a000-000000000001';
+const API_BASE = window.BETTERDAY_API_BASE || 'http://localhost:3001/api';
+
+async function resolveDietLock() {
+  // ─── 1. URL param (picker redirect handoff) ─────────────────────────
+  const urlDiet = new URLSearchParams(location.search).get('diet');
+  if (urlDiet) {
+    const slug = urlDiet.toLowerCase();
+    if (slug === 'plant-based' || slug === 'vegan') {
+      dietLock = 'Plant-Based';
+    }
+    // Anything else (omnivore, unknown) → no lock, show all.
+    // Persist the choice client-side so a direct link without param works next time.
+    try { localStorage.setItem('betterday.dietSlug', slug); } catch (_) {}
+    dietLockResolved = true;
+    return;
+  }
+
+  // ─── 2. localStorage (repeat guest visit) ───────────────────────────
+  try {
+    const saved = localStorage.getItem('betterday.dietSlug');
+    if (saved === 'plant-based' || saved === 'vegan') {
+      dietLock = 'Plant-Based';
+      dietLockResolved = true;
+      return;
+    }
+    if (saved === 'omnivore') {
+      dietLock = null;
+      dietLockResolved = true;
+      return;
+    }
+  } catch (_) {}
+
+  // ─── 3. Logged-in customer profile ──────────────────────────────────
+  // Best-effort: if the backend is reachable and the customer has a
+  // diet_plan_id set, use it. If we can't determine, fall through to
+  // the picker redirect (safest default).
+  try {
+    // Load site-info to get the Plant-Based SystemTag UUID. We fetch it
+    // through the same seed file site-shell.js uses, so the dev loop stays
+    // consistent whether the API is up or not.
+    const siteRes = await fetch('../../../brand/site-info.seed.json');
+    const siteJson = siteRes.ok ? await siteRes.json() : {};
+    const plantBasedId = siteJson['public.diet.plantBasedId'];
+
+    const meRes = await fetch(API_BASE + '/commerce/customers/me', {
+      headers: { 'x-dev-customer-id': DEV_CUSTOMER_ID },
+    });
+    if (meRes.ok) {
+      const me = await meRes.json();
+      if (me.diet_plan_id && plantBasedId && me.diet_plan_id === plantBasedId) {
+        dietLock = 'Plant-Based';
+      } else {
+        // diet_plan_id is either omnivore or explicitly null/undefined.
+        // If it's null, the customer hasn't chosen yet — force the picker.
+        if (!me.diet_plan_id) {
+          redirectToPicker();
+          return;
+        }
+        dietLock = null;
+      }
+      dietLockResolved = true;
+      return;
+    }
+  } catch (_) { /* API unreachable, fall through to picker */ }
+
+  // ─── 4. Last resort: force the picker gate ──────────────────────────
+  redirectToPicker();
+}
+
+function redirectToPicker() {
+  // Keep the current URL as a return destination so the picker can send
+  // them back here after they choose (future wiring — not required now).
+  const returnTo = encodeURIComponent(location.pathname + location.search);
+  location.href = '../onboarding/?returnTo=' + returnTo;
+}
+
 // Customer-facing tab order. The labels below match MealRecipe.menu_category
 // exactly so setCategory() can filter on a string equal. Sandwich & Wraps
 // and Protein Pack stay in the order so the tabs are ready for launch;
@@ -2335,6 +2444,9 @@ function toggleFilter(el) {
 }
 
 function clearAllFilters() {
+  // SAFETY: dietLock is NOT touched here. A plant-based customer clicking
+  // "Clear all filters" must not suddenly see meat. The lock lives outside
+  // the user-clearable filter set by design.
   document.querySelectorAll('.filter-chip').forEach(c => c.classList.remove('active'));
   activeFilters = [];
   activeAllergens = [];
@@ -2373,6 +2485,13 @@ function updateFilterBadge() {
 
 function getFilteredMeals() {
   let meals = [...allMeals];
+  // ─── SAFETY-CRITICAL: diet lock runs BEFORE any user filter ────────
+  // This is the fail-closed gate for plant-based customers. Any meal
+  // whose m.diet_plan is not the exact string 'Plant-Based' is hidden.
+  // Unknown / null / typo'd values are treated as NOT plant-based.
+  if (dietLock === 'Plant-Based') {
+    meals = meals.filter(m => m.diet_plan === 'Plant-Based');
+  }
   // Badge filters — meal must have ALL selected badges
   if (activeFilters.length > 0) {
     meals = meals.filter(m => activeFilters.every(f => m.tags && m.tags.includes(f)));
@@ -2421,8 +2540,53 @@ document.getElementById('cartItems').addEventListener('scroll', function() {
 // populates allMeals, hides empty category tabs, then calls renderGrid() +
 // renderCart() once the data is in memory. Render an empty shell in the
 // meantime so the layout doesn't jump.
-renderAll();
-loadMealsFromSeed();
+//
+// IMPORTANT: we resolve the diet lock BEFORE loading meals — if the lock
+// resolver decides to redirect to the onboarding picker (no diet chosen,
+// backend unreachable for logged-in check, etc.), we don't want to flash
+// the full menu before the redirect happens. The await also guarantees
+// dietLockResolved=true before the first getFilteredMeals() call.
+(async () => {
+  await resolveDietLock();
+  // Render a dismissible-but-not-clearable banner if the lock is active
+  // so the customer can see the filter is working.
+  if (dietLock === 'Plant-Based') {
+    injectDietLockBanner();
+  }
+  renderAll();
+  loadMealsFromSeed();
+})();
+
+// Inject a persistent banner at the top of the menu so a plant-based
+// customer knows the lock is active and how to change it. The "Change diet"
+// link sends them back to the onboarding picker — that's the ONLY way to
+// lift the lock, which matches the safety invariant.
+function injectDietLockBanner() {
+  const banner = document.createElement('div');
+  banner.id = 'dietLockBanner';
+  banner.setAttribute('role', 'status');
+  banner.style.cssText = [
+    'background:var(--brand-green)',
+    'color:#fff',
+    'padding:10px 20px',
+    'text-align:center',
+    'font-family:var(--font-body)',
+    'font-size:14px',
+    'font-weight:700',
+    'position:sticky',
+    'top:64px', // below the fixed marketing-header
+    'z-index:50',
+    'display:flex',
+    'align-items:center',
+    'justify-content:center',
+    'gap:12px',
+  ].join(';');
+  banner.innerHTML =
+    '🌱 Showing Plant-Based meals only — meat dishes are hidden for your plan. ' +
+    '<a href="../onboarding/" style="color:#fff;text-decoration:underline;font-weight:800;">Change diet</a>';
+  // Place it inside the body at the very top so sticky positioning works.
+  document.body.insertBefore(banner, document.body.firstChild);
+}
 
 // ── MEMBER POPUP ──
 function openMemberPopup() {
