@@ -5,14 +5,8 @@ import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { api, Ingredient, SubRecipe, PortionSpec, PortionSpecComponent } from '../../../lib/api';
 
-// ─── Reference constants (from BetterDay reference design) ────────────────────
-const ALLERGEN_OPTIONS = ['Coconut','Dairy','Eggs','Fish','Gluten','Mustard','Peanuts','Sesame','Shellfish','Soy','Sulphites','Tree Nuts','Wheat'];
-const DISLIKE_OPTIONS  = ['Beef','Kale','Mushrooms','Onion','Pork','Raw Veg','Seafood','Spicy'];
-const DIETARY_BADGE_OPTIONS = ['Gluten Friendly','High Protein','Dairy Free','Vegan','Family Friendly','Freezable','Spicy','New Dish'];
-const PROTEIN_TYPE_OPTIONS  = ['Chicken','Turkey','Beef','Pork','Seafood','Plant Protein'];
-const STARCH_OPTIONS   = ['Rice','Pasta','Potato','Quinoa','Other','None'];
+// ─── Fallback constants ─────────────────────────────────────────────────────
 const CONTAINER_OPTIONS = ['Meal Tray','Salad Container'];
-const CATEGORIES = ['Meat','Vegan','Vegetarian','Fish & Seafood','Breakfast','Snack','Soup','Salad','Granola','Other'];
 
 interface MealVariant { id: string; name: string; display_name: string; category: string | null; }
 
@@ -85,6 +79,99 @@ function componentCost(c: ComponentDetail): number {
   return 0;
 }
 
+// ─── Smart variant matching ──────────────────────────────────────────────────
+const PROTEIN_WORDS = new Set(['chicken','beef','turkey','pork','salmon','shrimp','prawn','fish','lamb','steak','meatball','sausage','bacon']);
+
+function variantScore(nameA: string, nameB: string): number {
+  const normalize = (s: string) => s.toLowerCase().replace(/[^a-z0-9\s]/g, '').split(/\s+/).filter(w => w.length > 1);
+  const wordsA = normalize(nameA).filter(w => !PROTEIN_WORDS.has(w));
+  const wordsB = normalize(nameB).filter(w => !PROTEIN_WORDS.has(w));
+  if (!wordsA.length || !wordsB.length) return 0;
+  const setB = new Set(wordsB);
+  const shared = wordsA.filter(w => setB.has(w)).length;
+  return shared / Math.max(wordsA.length, wordsB.length);
+}
+
+// ─── Omnivore toggle component ──────────────────────────────────────────────
+function OmniToggle({ enabled, onToggle, linkedMealId, linkedMealName, currentMealId, currentMealName, allMeals, onSelect }: {
+  enabled: boolean; onToggle: () => void;
+  linkedMealId: string | null; linkedMealName: string;
+  currentMealId: string; currentMealName: string;
+  allMeals: MealVariant[]; onSelect: (id: string) => void;
+}) {
+  const [search, setSearch] = useState('');
+  const [showDD, setShowDD] = useState(false);
+
+  // Auto-suggest best match when toggle turns on
+  const suggested = useMemo(() => {
+    if (!currentMealName || !allMeals.length) return [];
+    return allMeals
+      .filter(m => m.id !== currentMealId)
+      .map(m => ({ ...m, score: variantScore(currentMealName, m.display_name) }))
+      .filter(m => m.score > 0.3)
+      .sort((a, b) => b.score - a.score)
+      .slice(0, 5);
+  }, [currentMealName, currentMealId, allMeals]);
+
+  const filtered = useMemo(() => {
+    if (!search.trim()) return suggested.length ? suggested : allMeals.filter(m => m.id !== currentMealId).slice(0, 12);
+    const q = search.toLowerCase();
+    return allMeals.filter(m => m.id !== currentMealId && m.display_name.toLowerCase().includes(q)).slice(0, 12);
+  }, [search, suggested, allMeals, currentMealId]);
+
+  return (
+    <div className="col-span-2" style={{ marginBottom: 4 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+        <button type="button" onClick={onToggle}
+          style={{ width: 36, height: 20, borderRadius: 10, background: enabled ? '#22c55e' : '#d1d5db', position: 'relative', border: 'none', cursor: 'pointer', flexShrink: 0, transition: 'background .2s' }}>
+          <span style={{ position: 'absolute', width: 16, height: 16, borderRadius: '50%', background: '#fff', top: 2, left: enabled ? 18 : 2, transition: 'left .2s', boxShadow: '0 1px 3px rgba(0,0,0,.2)' }} />
+        </button>
+        <span style={{ fontSize: 13, fontWeight: 600, color: '#374151' }}>Omnivore Dish</span>
+        <span style={{ fontSize: 11, color: '#9ca3af' }}>Has both a meat and plant-based version — links the two together</span>
+      </div>
+
+      {enabled && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 8, background: '#f9fafb', border: '1px solid #e5e7eb', borderRadius: 8, padding: '10px 14px' }}>
+          <span style={{ fontSize: 12, color: '#6b7280', whiteSpace: 'nowrap' }}>Plant-based version:</span>
+          <div style={{ position: 'relative', flex: 1 }}>
+            <input type="text" value={search} onChange={e => { setSearch(e.target.value); setShowDD(true); }}
+              onFocus={() => setShowDD(true)} onBlur={() => setTimeout(() => setShowDD(false), 200)}
+              placeholder="Search dishes..." autoComplete="off"
+              style={{ width: '100%', padding: '5px 10px', border: '1px solid #e5e7eb', borderRadius: 6, fontSize: 12, outline: 'none' }} />
+            {showDD && (
+              <div style={{ position: 'absolute', zIndex: 30, top: '100%', left: 0, marginTop: 4, background: '#fff', border: '1px solid #e5e7eb', borderRadius: 8, boxShadow: '0 8px 24px rgba(0,0,0,.15)', maxHeight: 240, overflowY: 'auto', minWidth: 320, width: 'max-content' }}>
+                {suggested.length > 0 && !search.trim() && (
+                  <div style={{ padding: '6px 10px', fontSize: 10, fontWeight: 700, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '.5px', borderBottom: '1px solid #f3f4f6' }}>
+                    Auto-suggested matches
+                  </div>
+                )}
+                {filtered.map(m => (
+                  <button key={m.id} type="button"
+                    onMouseDown={(e) => { e.preventDefault(); onSelect(m.id); setSearch(m.display_name); setShowDD(false); }}
+                    style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', textAlign: 'left', padding: '8px 12px', border: 'none', background: 'transparent', cursor: 'pointer', fontSize: 12, borderBottom: '1px solid #f9fafb', whiteSpace: 'nowrap' }}
+                    onMouseEnter={e => (e.currentTarget.style.background = '#f0f7ff')}
+                    onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}>
+                    <span style={{ fontFamily: 'monospace', color: '#3b82f6', fontSize: 11 }}>#{(m as any).meal_code ?? m.id.slice(0, 4)}</span>
+                    <span style={{ fontWeight: 500, color: '#1f2937' }}>{m.display_name}</span>
+                    {(m as any).score && <span style={{ marginLeft: 'auto', fontSize: 10, color: '#22c55e', fontWeight: 700 }}>{Math.round((m as any).score * 100)}% match</span>}
+                  </button>
+                ))}
+                {filtered.length === 0 && <div style={{ padding: '12px', fontSize: 12, color: '#9ca3af', textAlign: 'center' }}>No dishes found</div>}
+              </div>
+            )}
+          </div>
+          {linkedMealId && (
+            <div style={{ background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: 6, padding: '6px 12px', display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: '#1e40af', whiteSpace: 'nowrap' }}>
+              <span style={{ fontFamily: 'monospace', fontSize: 11, color: '#3b82f6' }}>#{linkedMealId.slice(0, 4)}</span>
+              {linkedMealName || '...'}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── Pill picker helper ────────────────────────────────────────────────────────
 function PillPicker({ options, selected, onToggle, color = 'brand' }: {
   options: string[]; selected: string[]; onToggle: (v: string) => void; color?: string;
@@ -144,6 +231,14 @@ export default function MealDetailPage() {
   const [containerType, setContainerType] = useState('');
   const [portionScore, setPortionScore] = useState<number | null>(null);
 
+  // Dynamic tag options from SystemTag
+  const [allergenOpts, setAllergenOpts] = useState<string[]>([]);
+  const [dislikeOpts, setDislikeOpts] = useState<string[]>([]);
+  const [badgeOpts, setBadgeOpts] = useState<string[]>([]);
+  const [proteinOpts, setProteinOpts] = useState<string[]>([]);
+  const [categoryOpts, setCategoryOpts] = useState<string[]>([]);
+  const [starchOpts, setStarchOpts] = useState<string[]>(['Rice','Pasta','Potato','Quinoa','Other','None']);
+
   // Macros
   const [calories, setCalories] = useState('');
   const [proteinG, setProteinG] = useState('');
@@ -194,6 +289,18 @@ export default function MealDetailPage() {
   }>>([]);
   const [psSaving, setPsSaving] = useState(false);
 
+  // Fetch dynamic tag options from SystemTag on mount
+  useEffect(() => {
+    api.getTagsByType('allergens').then(tags => {
+      setAllergenOpts(tags.filter((t: any) => t.subtype === 'Allergen').map((t: any) => t.name));
+      setDislikeOpts(tags.filter((t: any) => t.subtype === 'Dislike').map((t: any) => t.name));
+    }).catch(() => {});
+    api.getTagsByType('proteins').then(tags => setProteinOpts(tags.map((t: any) => t.name))).catch(() => {});
+    api.getTagsByType('badges').then(tags => setBadgeOpts(tags.map((t: any) => t.name))).catch(() => {});
+    api.getTagsByType('menu-cats').then(tags => setCategoryOpts(tags.map((t: any) => t.name))).catch(() => {});
+    api.getTagsByType('starches').then(tags => { const n = tags.map((t: any) => t.name); if (n.length) setStarchOpts(n); }).catch(() => {});
+  }, []);
+
   const loadMeal = useCallback(async () => {
     setLoading(true);
     try {
@@ -227,6 +334,7 @@ export default function MealDetailPage() {
       setShelfLifeDays(data.shelf_life_days?.toString() ?? '');
       setLabelIngredients(data.label_ingredients ?? '');
       setLinkedMealId(data.linked_meal_id ?? null);
+      setLinkedMealSearch(data.linked_meal?.display_name ?? '');
       // init portioning notes from saved data
       const notes: Record<string, string> = {};
       data.components.forEach((c) => { notes[c.id] = c.portioning_notes ?? ''; });
@@ -244,6 +352,18 @@ export default function MealDetailPage() {
       setAllMeals(m as MealVariant[]);
     });
   }, [loadMeal]);
+
+  // Auto-enable omnivore toggle if we find a strong variant match
+  useEffect(() => {
+    if (!meal || !allMeals.length || linkedMealId) return; // already linked or no data yet
+    const best = allMeals
+      .filter(m => m.id !== id)
+      .map(m => ({ id: m.id, score: variantScore(meal.display_name, m.display_name) }))
+      .sort((a, b) => b.score - a.score)[0];
+    if (best && best.score >= 0.5) {
+      setLinkedMealId(best.id);
+    }
+  }, [meal, allMeals, id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Load suggested variants once meal id is known
   useEffect(() => {
@@ -390,7 +510,7 @@ export default function MealDetailPage() {
         cooking_instructions: cookingInstructions || undefined,
         allergen_tags: allergenTags,
         dislikes,
-        linked_meal_id: linkedMealId,
+        linked_meal_id: linkedMealId || null,
         // New fields
         short_description: shortDescription || undefined,
         dietary_tags: dietaryTags,
@@ -572,9 +692,11 @@ export default function MealDetailPage() {
             <select value={category} onChange={(e) => setCategory(e.target.value)}
               className="w-full px-2 py-1.5 border border-gray-200 rounded-lg text-xs bg-white focus:outline-none focus:ring-2 focus:ring-brand-400">
               <option value="">— none —</option>
-              {CATEGORIES.map((c) => <option key={c} value={c}>{c}</option>)}
+              {categoryOpts.map((c) => <option key={c} value={c}>{c}</option>)}
             </select>
           </div>
+
+          {/* Omnivore toggle moved to main content area (after description) */}
 
           {/* Sell price */}
           <div>
@@ -701,13 +823,75 @@ export default function MealDetailPage() {
                   </div>
                 </div>
 
+                {/* Omnivore Toggle — matching betterday-kitchen-v4 layout */}
+                {(() => {
+                  const isOmni = linkedMealId !== null;
+                  const hasVariant = !!(meal?.linked_meal_id) || !!(meal?.variant_meals?.length);
+                  const linkedName = allMeals.find(m => m.id === linkedMealId)?.display_name
+                    ?? meal?.linked_meal?.display_name ?? '';
+
+                  // Build scored list once
+                  const scored = allMeals
+                    .filter(m => m.id !== id)
+                    .map(m => ({ ...m, score: variantScore(displayName, m.display_name) }))
+                    .sort((a, b) => b.score - a.score);
+                  const suggestions = scored.filter(m => m.score > 0.3);
+                  const rest = scored.filter(m => m.score <= 0.3);
+
+                  return (
+                    <div className="bg-white rounded-xl border border-gray-200 p-5">
+                      <div className="flex items-center gap-3">
+                        <button type="button" onClick={() => {
+                          if (isOmni) { setLinkedMealId(null); }
+                          else {
+                            // Auto-select best match when turning on
+                            const best = suggestions[0];
+                            setLinkedMealId(best ? best.id : '');
+                          }
+                        }}
+                          className={`relative w-9 h-5 rounded-full transition-colors flex-shrink-0 ${isOmni ? 'bg-green-500' : 'bg-gray-300'}`}>
+                          <span className={`absolute top-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform ${isOmni ? 'translate-x-4' : 'translate-x-0.5'}`} />
+                        </button>
+                        <span className="text-sm font-semibold text-gray-700">Omnivore Dish</span>
+                        <span className="text-xs text-gray-400">Has both a meat and plant-based version — links the two together</span>
+                      </div>
+
+                      {isOmni && (
+                        <div className="mt-3 bg-gray-50 border border-gray-200 rounded-lg p-3 flex items-center gap-3 flex-wrap">
+                          <span className="text-xs text-gray-500 whitespace-nowrap flex-shrink-0">Plant-based version:</span>
+                          <select value={linkedMealId || ''} onChange={e => setLinkedMealId(e.target.value || '')}
+                            className="flex-1 min-w-[200px] px-2.5 py-1.5 border border-gray-200 rounded-lg text-xs bg-white focus:outline-none focus:ring-2 focus:ring-brand-400">
+                            <option value="">— Select —</option>
+                            {suggestions.length > 0 && (
+                              <optgroup label="Suggested matches">
+                                {suggestions.map(m => <option key={m.id} value={m.id}>{m.display_name} ({Math.round(m.score * 100)}%)</option>)}
+                              </optgroup>
+                            )}
+                            <optgroup label="All dishes">
+                              {rest.slice(0, 50).map(m => <option key={m.id} value={m.id}>{m.display_name}</option>)}
+                            </optgroup>
+                          </select>
+                          {linkedMealId && linkedMealId.length > 1 && (
+                            <a href={`/meals/${linkedMealId}`}
+                              className="bg-blue-50 border border-blue-200 rounded-lg px-3 py-1.5 flex items-center gap-2 text-xs text-blue-800 whitespace-nowrap flex-shrink-0 hover:bg-blue-100 transition-colors cursor-pointer no-underline">
+                              <span className="font-mono text-blue-500">#{linkedMealId.slice(0, 4)}</span>
+                              {linkedName}
+                              <span className="text-blue-400">→</span>
+                            </a>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })()}
+
                 {/* Allergens */}
                 <div className="bg-white rounded-xl border border-gray-200 p-5">
                   <div className="flex items-center justify-between mb-3">
                     <h2 className="text-sm font-semibold text-gray-700">Allergens</h2>
                     <span className="text-xs text-gray-400">{allergenTags.length} selected</span>
                   </div>
-                  <PillPicker options={ALLERGEN_OPTIONS} selected={allergenTags}
+                  <PillPicker options={allergenOpts} selected={allergenTags}
                     onToggle={(v) => toggleTag(allergenTags, setAllergenTags, v)} color="red" />
                 </div>
 
@@ -717,7 +901,7 @@ export default function MealDetailPage() {
                     <h2 className="text-sm font-semibold text-gray-700">Dislikes</h2>
                     <span className="text-xs text-gray-400">{dislikes.length} selected</span>
                   </div>
-                  <PillPicker options={DISLIKE_OPTIONS} selected={dislikes}
+                  <PillPicker options={dislikeOpts} selected={dislikes}
                     onToggle={(v) => toggleTag(dislikes, setDislikes, v)} color="orange" />
                 </div>
 
@@ -727,7 +911,7 @@ export default function MealDetailPage() {
                     <h2 className="text-sm font-semibold text-gray-700">Dietary Badges</h2>
                     <span className="text-xs text-gray-400">{dietaryTags.length} selected</span>
                   </div>
-                  <PillPicker options={DIETARY_BADGE_OPTIONS} selected={dietaryTags}
+                  <PillPicker options={badgeOpts} selected={dietaryTags}
                     onToggle={(v) => toggleTag(dietaryTags, setDietaryTags, v)} color="green" />
                 </div>
 
@@ -735,13 +919,13 @@ export default function MealDetailPage() {
                 <div className="grid grid-cols-2 gap-4">
                   <div className="bg-white rounded-xl border border-gray-200 p-5">
                     <h2 className="text-sm font-semibold text-gray-700 mb-3">Protein Types</h2>
-                    <PillPicker options={PROTEIN_TYPE_OPTIONS} selected={proteinTypes}
+                    <PillPicker options={proteinOpts} selected={proteinTypes}
                       onToggle={(v) => toggleTag(proteinTypes, setProteinTypes, v)} color="purple" />
                   </div>
                   <div className="bg-white rounded-xl border border-gray-200 p-5">
                     <h2 className="text-sm font-semibold text-gray-700 mb-3">Starch</h2>
                     <div className="flex flex-wrap gap-2">
-                      {STARCH_OPTIONS.map((opt) => (
+                      {starchOpts.map((opt) => (
                         <button key={opt} onClick={() => setStarchType(starchType === opt ? '' : opt)}
                           className={`px-3 py-1 rounded-full text-xs font-medium border transition-all ${starchType === opt ? 'bg-yellow-100 text-yellow-700 border-yellow-300' : 'bg-white text-gray-500 border-gray-200 hover:border-gray-400'}`}>
                           {starchType === opt ? '✓ ' : ''}{opt}
