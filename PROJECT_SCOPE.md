@@ -677,5 +677,5 @@ FOUR UI contexts (the first three live in Gurleen's frontend/, the fourth in con
 - [ ] `CommercePrismaService` in NestJS — second Prisma client pointing at `COMMERCE_DATABASE_URL`
 - [ ] First commerce module (likely `commerce-customers` — auth + profile + addresses)
 - [ ] First page in `conner/client-website/`: homepage (`index.html`) built fresh, consuming `brand/tokens.css`, proving the end-to-end brand pipeline
-- [ ] Helcim Recurring API research — verify variable-amount weekly subscriptions are supported before committing to the subscription module architecture
+- [x] ~~Helcim Recurring API research — verify variable-amount weekly subscriptions are supported before committing to the subscription module architecture~~ **Resolved 2026-04-09:** the Recurring API is the wrong model for our use case — BetterDay's weekly subscription is a variable-amount merchant-initiated card-on-file (MIT) charge, not a fixed-cadence fixed-amount subscription. Full research in `conner/data-model/helcim-integration.md`, implementation plan in `conner/data-model/helcim-integration-plan.md`. Three blocking open questions remain pending Helcim support contact (MIT flag, ipAddress on MIT, dispute webhooks) — see research §14.
 - [ ] Future: transfer `culinary-ops` Neon project ownership from Gurleen's org to `BetterDay Food Co` org so both projects live under one umbrella

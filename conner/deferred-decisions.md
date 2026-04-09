@@ -10,6 +10,18 @@ A running list of things that came up in chats but were consciously deferred —
 
 ## 🔮 Edge cases to handle later
 
+- [2026-04-09] **Card removed from Helcim vault outside our admin UI**
+  If someone deletes a card directly in the Helcim dashboard (not via our admin), our `PaymentMethod.processor_token` becomes orphaned and the next weekly charge fails with "invalid token." Need to either periodically refresh from `GET /customers/{id}/cards` or treat the specific error as "card removed" in the decline classifier and auto-pause. Surfaced during Helcim integration research — see `conner/data-model/helcim-integration.md` §4.
+
+- [2026-04-09] **Reconciliation cron finds a transaction we don't recognize**
+  The daily reconciliation cron may find a Helcim transaction with no matching `CustomerOrder.processor_charge_id`. Could be (a) an admin processing a manual charge in the Helcim dashboard, (b) a race condition between the weekly cron and the reconciliation cron, (c) a reconciliation bug. Current plan: log + alert ops, don't auto-create a placeholder order. Needs a policy decision before v1 ships.
+
+- [2026-04-09] **Two worktrees running the weekly charge cron simultaneously**
+  In dev, if two Claude chats both run the backend with `@Cron` registered, both will try to charge the same cart at the same time. Idempotency-key prevents the actual double-charge but we'd get two `CustomerOrder` rows racing to claim the same `processor_charge_id`. Mitigation: disable the weekly cron in dev entirely; trigger manually via a dev-only `POST /admin/commerce/weekly-charge/run-once` endpoint. Baked into the Helcim implementation plan (`helcim-integration-plan.md` §7).
+
+- [2026-04-09] **Helcim checkout session expires mid-entry**
+  `checkoutToken` + `secretToken` are valid for ~60 minutes. If a customer opens the HelcimPay.js modal, walks away to make dinner, comes back 90 minutes later, the iframe will fail silently. UI needs to detect this (via a timestamp check on `HelcimCheckoutSession.expires_at`) and gracefully re-initialize a fresh session instead of showing a broken form.
+
 - [2026-04-08] **Meal removed from menu after customer has it in a pre-order cart**
   Admin drops cookies from the April 20 menu but a subscriber already has cookies in their April 20 draft cart. Likely: show a warning in cart, silently drop at cutoff, optionally suggest an alternative. Needs UI + cart validation design. Not blocking Migration #3 coupon work.
 
@@ -23,6 +35,15 @@ A running list of things that came up in chats but were consciously deferred —
 
 ## 🎯 Design decisions pending
 
+- [2026-04-09] **Tax calculation strategy — hardcoded AB GST 5% vs TaxJar vs manual**
+  Helcim has no Stripe-Tax equivalent; we must compute tax on our side before calling `/v2/payment/purchase`. Three options in `conner/data-model/helcim-integration.md` §11. Recommended: ship Option A (hardcoded 5% behind a `TaxCalculator` interface) contingent on an accountant confirming BetterDay prepared meals are classified as taxable under CRA rules (prepared food, NOT basic groceries). Cannot be confirmed without accountant review.
+
+- [2026-04-09] **Stored-credential consent copy — legal review before production ship**
+  Visa/MC stored-credential framework requires language shown at card capture authorizing future merchant-initiated charges. Draft copy in `conner/data-model/helcim-integration.md` §4. Safe to ship to sandbox without review; cannot ship to production without a light legal review. Lower priority than the three Helcim-support blockers but a hard gate.
+
+- [2026-04-09] **Customer-facing charge-failure email copy (3 templates)**
+  First-decline / retry / fatal. Draft copy in `conner/data-model/helcim-integration.md` §6. Needs the same marketing-voice review that coupon error messages need — track together.
+
 - [2026-04-08] **DOTW scheduler access control — separate role for head chef / ops manager?**
   Should the DOTW scheduler be accessible to a restricted role (e.g. "Operations" or "Culinary") that can only touch DOTWs + menu planning, without seeing customer PII or full coupon admin? Worth resolving before the admin UI ships. Not urgent for the schema.
 
@@ -35,6 +56,24 @@ A running list of things that came up in chats but were consciously deferred —
 ---
 
 ## 🛠️ Implementation TODOs
+
+- [2026-04-09] **Email `tier2support@helcim.com` to request a test account**
+  Provide existing Helcim merchant ID + description of the weekly-variable-amount MIT use case. Must be done on day 1 of the Helcim implementation chat since test-account provisioning is manual and takes 1–2 business days. Nothing in sandbox can be verified until this lands.
+
+- [2026-04-09] **Draft Helcim support email covering the three blocking open questions**
+  Q1: MIT flag parameter on `/v2/payment/purchase` (research §14 Q1). Q2: ipAddress population for cron-initiated MIT charges (§14 Q2). Q3: dispute/chargeback notification mechanism (§14 Q3). Single email, three questions. Block production ship until answers come back. Draft in the implementation chat, send before any production cutover attempt.
+
+- [2026-04-09] **Sandbox decline classifier — run every CVV>=200 variation and record error strings**
+  Helcim decline errors come back as free-text strings, not machine-readable codes. Build `sandbox-decline-catalog.ts` to hit `/v2/payment/purchase` with every decline variation (CVV=200, 500, 999, expired card, invalid card, etc.) and populate `helcim/decline-classifier.ts` patterns. Current classifier uses guessed regex patterns that will almost certainly be wrong.
+
+- [2026-04-09] **Verify the Helcim "get transaction by ID" endpoint in sandbox**
+  Server-side verification in Flow A (helcim-integration.md §4) depends on our backend being able to look up a transaction by its ID to validate what the browser reported. Legacy docs URL timed out during research; confirmed to exist but exact shape unverified. Test in sandbox before Phase 2 of implementation plan.
+
+- [2026-04-09] **Write a sandbox webhook sender script**
+  If Helcim's sandbox doesn't fire real webhooks (unknown — not documented), we need a local script that constructs a properly-signed webhook body and POSTs it to our dev backend for HMAC verification testing. One-off dev tool, lives in `backend/scripts/`.
+
+- [2026-04-09] **Verify `customerCode` is Helcim-generated or merchant-supplied**
+  Docs don't specify. Affects whether `Customer.helcim_customer_id` is written before or after the `POST /customers` call. Answer falls out of the first sandbox call — low-effort verification.
 
 - [2026-04-08] **Cart line item snapshot fields** *(Migration #4 scope)*
   Add `menu_price_at_add`, `promised_price_at_add`, `promised_coupon_id` to the cart line item table. Implements the "price ceiling" rule — customers always get the best price they were ever shown. See `project_dotw_preorder_rules` memory for the full rule. NOT Migration #3 coupon scope.
@@ -60,6 +99,18 @@ A running list of things that came up in chats but were consciously deferred —
 ---
 
 ## 💡 Future ideas (not on the roadmap yet)
+
+- [2026-04-09] **Port culinary-ops Helcim patterns back to betterday-app**
+  Once the culinary-ops Helcim integration is proven in production, translate the NestJS patterns (secretToken validation, persistent `HelcimCheckoutSession` table, webhook HMAC verifier, daily reconciliation cron) back to `betterday-foodco/betterday-app`'s Flask codebase. That app's Helcim integration is a minimal first draft with known shortcuts (in-memory token store, no secretToken verification, no webhooks). culinary-ops becomes the canonical pattern; betterday-app inherits the fixes.
+
+- [2026-04-09] **Automated dispute evidence submission to Helcim**
+  When the daily reconciliation cron detects a dispute, automatically gather order details (line items, delivery confirmation, customer correspondence) and submit via Helcim's dispute-evidence API — if one exists. Currently v1 handles evidence submission manually via the Helcim dashboard. Low priority until disputes actually happen at volume.
+
+- [2026-04-09] **Pre-authorization + delayed capture for perishable orders**
+  Instead of charging on Thursday cutoff, pre-auth via `/v2/payment/preauth` on Thursday and capture via `/v2/payment/capture` on actual delivery day. Locks in funds without collecting them until the meal actually ships. Better customer experience for delivery failures (no refund loop needed). Extra state-machine complexity — defer until we see real fulfillment failures that would benefit from it.
+
+- [2026-04-09] **Helcim Recurring API for fixed-price add-ons**
+  If we ever sell something that IS a fixed-amount subscription (e.g., a $29/mo meal-planning coaching add-on separate from the weekly cart), that's where Helcim's Recurring API fits. Out of scope for the cart-based core product, but would be a clean use case.
 
 - [2026-04-08] **Welcome series / birthday / abandoned cart automation**
   All T3 in the coupon feature picker. Require a scheduled-job runner that doesn't exist yet. Layer in as a separate migration once execution infrastructure is in place.
