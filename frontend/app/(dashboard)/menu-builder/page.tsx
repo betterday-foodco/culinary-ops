@@ -63,10 +63,22 @@ function psColor(total:number):{bg:string;fg:string}{
 }
 
 // ── Meal attribute helpers ─────────────────────────────────────────────────────
-function getMealAttrs(meal: MenuQueueItem['meal']) {
+// Accepts both MenuQueueItem['meal'] and MealRecipe (duck-typed — same fields used)
+function getMealAttrs(meal: { allergen_tags?: string[]|null; dietary_tags?: string[]|null; display_name: string; category?: string|null; portion_score?: number|null }) {
   const tags = (meal.allergen_tags??[]).map(t=>t.toLowerCase());
   const name = meal.display_name.toLowerCase();
   const cat  = (meal.category??'').toLowerCase();
+
+  // Starch detection: return '' (no starch) unless a specific starch is identified.
+  // 'Other' is reserved for known non-rice/pasta/potato starches (soba, udon, quinoa, etc.)
+  // IMPORTANT: do NOT use a catch-all 'Other' — pure protein dishes have no starch.
+  const st =
+    cat.includes('pasta') || name.includes('pasta') || name.includes('linguine') || name.includes('rotini') || name.includes('orzo') || name.includes('spaghetti') || name.includes(' mac ') || name.includes('mac &') || name.includes('penne') || name.includes('fettuccine') || name.includes('gnocchi') ? 'Pasta'
+    : cat.includes('rice') || name.includes('rice') || name.includes('sushi') || name.includes('poke bowl') || name.includes('burrito bowl') || cat.includes('curry') || name.includes('curry') || name.includes('thai') || name.includes('burrito') || name.includes('fajita') ? 'Rice'
+    : name.includes('potato') || name.includes('mashed') || name.includes('hash') || name.includes('fries') ? 'Potato'
+    : name.includes('soba') || name.includes('udon') || name.includes('noodle') || name.includes('glass noodle') || name.includes('quinoa') || name.includes('couscous') || name.includes('barley') || name.includes('farro') || name.includes('grain') || name.includes('pad thai') ? 'Other'
+    : '';  // no starch — do NOT count in st_other
+
   return {
     ch: tags.includes('chicken') || name.includes('chicken') ? 1 : 0,
     tr: tags.includes('turkey')  || name.includes('turkey')  ? 1 : 0,
@@ -76,10 +88,7 @@ function getMealAttrs(meal: MenuQueueItem['meal']) {
     da: tags.includes('dairy')   || tags.includes('milk') || tags.includes('cheese') || name.includes('parmesan') || name.includes('alfredo') ? 1 : 0,
     gl: tags.includes('gluten')  || tags.includes('wheat') ? 1 : 0,
     peanut: tags.includes('peanut') || name.includes('peanut') || name.includes('satay') ? 1 : 0,
-    st: cat.includes('pasta') || name.includes('pasta') || name.includes('linguine') || name.includes('rotini') || name.includes('orzo') || name.includes('spaghetti') || name.includes('mac') || name.includes('penne') ? 'Pasta'
-      : cat.includes('rice') || name.includes('rice') || name.includes('sushi') || name.includes('bowl') || cat.includes('curry') || name.includes('curry') || name.includes('thai') || name.includes('burrito') ? 'Rice'
-      : name.includes('potato') || name.includes('mashed') || name.includes('hash') ? 'Potato'
-      : 'Other',
+    st,
     ps: meal.portion_score ?? 0,
     isGluten: tags.includes('gluten') || tags.includes('wheat'),
   };
@@ -151,6 +160,7 @@ export default function MenuBuilderPage() {
   // Pair assignment modal
   const [pairModal, setPairModal] = useState<{mealId:string}|null>(null);
   const [pairSearch, setPairSearch] = useState('');
+  const [pendingPairId, setPendingPairId] = useState<string|null>(null); // row being linked — drives the loading state in the pair modal
 
   // Local column overrides (rename, color, order) — persist visual changes
   const [colOverrides, setColOverrides] = useState<Record<string,{label?:string;color?:string}>>({});
@@ -270,14 +280,21 @@ export default function MenuBuilderPage() {
         if(!tog.meatOff && !countedMeat.has(item.meal_id)){ s.mt++; countedMeat.add(item.meal_id); }
       }
 
-      const a=getMealAttrs(item.meal);
+      // When meatOff is active on an omni dish, use the plant pair's attributes
+      // so protein/allergen/starch tallies reflect what customers actually receive.
+      let attrSource: Parameters<typeof getMealAttrs>[0] = item.meal;
+      if(colType==='omni' && plantId && tog.meatOff){
+        const pm = allMealsById.get(plantId);
+        if(pm) attrSource = pm;
+      }
+      const a=getMealAttrs(attrSource);
       s.total++; s.ps_total+=a.ps;
       s.ch+=a.ch; s.tr+=a.tr; s.bf+=a.bf; s.pk+=a.pk; s.sf+=a.sf; s.da+=a.da;
       s.gl+=a.gl; s.peanut+=a.peanut;
-      if(a.st==='Rice') s.st_rice++;
-      else if(a.st==='Pasta') s.st_pasta++;
+      if(a.st==='Rice')        s.st_rice++;
+      else if(a.st==='Pasta')  s.st_pasta++;
       else if(a.st==='Potato') s.st_potato++;
-      else s.st_other++;
+      else if(a.st==='Other')  s.st_other++; // only explicitly-identified other starches; '' (no starch) is skipped
     });
     return hasAny?s:null;
   }
@@ -964,21 +981,54 @@ export default function MenuBuilderPage() {
               <input autoFocus value={pairSearch} onChange={e=>setPairSearch(e.target.value)} placeholder="Search plant-based dishes…" style={{width:'100%',padding:'6px 10px',border:'1px solid #e5e7eb',borderRadius:6,fontSize:12,outline:'none',fontFamily:'inherit',boxSizing:'border-box' as any}}/>
             </div>
             <div style={{flex:1,overflowY:'auto',padding:'4px 0'}}>
-              {pairFiltered.slice(0,50).map(m=>(
+              {pairFiltered.slice(0,50).map(m=>{
+                const isThisPending = pendingPairId === m.id;
+                const isOtherPending = pendingPairId !== null && !isThisPending;
+                return (
                 <div key={m.id} onClick={async()=>{
-                  // Link meal pair via API — use the linked_meal PATCH
+                  if(pendingPairId) return; // guard: already linking, ignore extra clicks
+                  // Link meal pair via the typed API client. Previously used a raw
+                  // relative fetch() which (a) hit the Next.js frontend origin
+                  // instead of the NestJS backend on :3001, (b) read the wrong
+                  // localStorage key for the auth token ('token' vs 'access_token'),
+                  // and (c) silently swallowed errors.
+                  setPendingPairId(m.id);
                   setSaving(true);
                   try{
-                    await fetch(`/api/meals/${pairModal.mealId}/link-variant`,{method:'PATCH',headers:{'Content-Type':'application/json',Authorization:`Bearer ${localStorage.getItem('token')??''}`},body:JSON.stringify({linked_meal_id:m.id})});
+                    await api.linkMealVariant(pairModal.mealId, m.id);
                     setQueueData(await api.getMenuQueue());
                     setPairModal(null);
-                  } catch{} finally{ setSaving(false); }
-                }} style={{display:'flex',alignItems:'center',gap:8,padding:'8px 14px',cursor:'pointer',transition:'background .1s'}} onMouseEnter={e=>(e.currentTarget.style.background='#f0faf4')} onMouseLeave={e=>(e.currentTarget.style.background='')}>
-                  <div style={{width:8,height:8,borderRadius:'50%',background:C.veganHdr,flexShrink:0}}/>
-                  <div style={{flex:1,fontSize:12,fontWeight:600,color:'#111'}}>{m.display_name}</div>
-                  {m.meal_code&&<div style={{fontSize:10,color:'#9ca3af',fontFamily:'monospace'}}>{m.meal_code}</div>}
+                  } catch(e:any){
+                    alert(e?.message ?? 'Failed to link pair');
+                  } finally{
+                    setSaving(false);
+                    setPendingPairId(null);
+                  }
+                }}
+                style={{
+                  display:'flex',alignItems:'center',gap:8,padding:'8px 14px',
+                  cursor:isOtherPending?'not-allowed':(isThisPending?'progress':'pointer'),
+                  opacity:isOtherPending?0.35:1,
+                  background:isThisPending?'#dbeafe':'',
+                  borderLeft:isThisPending?'3px solid #2563eb':'3px solid transparent',
+                  transition:'background .15s, opacity .15s',
+                  pointerEvents:isOtherPending?'none':'auto',
+                }}
+                onMouseEnter={e=>{ if(!pendingPairId) e.currentTarget.style.background='#f0faf4'; }}
+                onMouseLeave={e=>{ if(!isThisPending) e.currentTarget.style.background=''; }}>
+                  {isThisPending ? (
+                    <div className="animate-spin" style={{width:12,height:12,border:'2px solid #bfdbfe',borderTopColor:'#2563eb',borderRadius:'50%',flexShrink:0}}/>
+                  ) : (
+                    <div style={{width:8,height:8,borderRadius:'50%',background:C.veganHdr,flexShrink:0}}/>
+                  )}
+                  <div style={{flex:1,fontSize:12,fontWeight:600,color:isThisPending?'#1e3a8a':'#111'}}>
+                    {m.display_name}
+                    {isThisPending && <span style={{marginLeft:6,fontSize:10,fontWeight:500,color:'#2563eb',fontStyle:'italic'}}>Linking…</span>}
+                  </div>
+                  {m.meal_code&&<div style={{fontSize:10,color:isThisPending?'#3b82f6':'#9ca3af',fontFamily:'monospace'}}>{m.meal_code}</div>}
                 </div>
-              ))}
+                );
+              })}
               {pairFiltered.length===0&&<div style={{padding:20,textAlign:'center',color:'#9ca3af',fontSize:12}}>No plant-based meals found</div>}
             </div>
           </div>
