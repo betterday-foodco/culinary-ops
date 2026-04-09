@@ -36,8 +36,9 @@ guest who placed a one-time order).
 | `stripe_customer_id` | text | nullable — reference to processor's customer object |
 | `sms_opt_in` | bool | default true |
 | `email_opt_in` | bool | default true |
+| `diet_preference` | enum | `meat-and-plants` \| `plants-only` — set by the onboarding diet selector. Drives which meals appear in the customer's menu. Nullable until the user picks one (anonymous guests get the URL query param instead). See ADR `2026-04-08-diet-as-preference-not-product.md` for why this is a simple enum rather than an FK to a `meal_plan` table. |
 | `allergens` | text[] | e.g. `['Shellfish', 'Gluten']` |
-| `diet_tags` | text[] | e.g. `['High Protein', 'Keto']` |
+| `diet_tags` | text[] | e.g. `['High Protein', 'Keto']` — soft dietary interests / labels. Distinct from `diet_preference` which is the hard plan choice. |
 | `disliked_meals` | text[] | manual "never swap TO this" list |
 | `favorite_meals` | text[] | manual preferred list |
 | `internal_notes` | text | **admin-only**, CS notes |
@@ -60,6 +61,11 @@ guest who placed a one-time order).
 - `allergens` drives the auto-swap logic when the weekly menu rotates.
 - `disliked_meals` is a MANUAL override separate from allergens — used
   when a customer says "I just don't like beef" which isn't an allergy.
+- `diet_preference` is the single top-level diet choice made via the
+  onboarding diet selector. `diet_tags` is a secondary list of softer
+  dietary interests ("High Protein", "Keto"). A customer on the
+  `plants-only` preference with `['Keto']` tags sees only plant-based
+  meals but gets them sorted/highlighted by keto-friendliness.
 - `internal_notes` and `tags` are hidden from the customer's own UI and
   only visible in the admin dashboard.
 
@@ -157,9 +163,15 @@ subscription at a time.
 - Only subscribers can have a subscription row. Guests and gift recipients
   do not get one.
 - `savings_tier` is computed from `default_meal_count` against the tier
-  table (4→5%, 5→8%, 7→11%, 8→free delivery, 9→14%, 11→17%, 13→20%).
+  table (4→5%, 5→8%, 7→11%, 8→free delivery, 9→14%, 11→17%, 13→20%). This
+  ladder is **global** — one ladder applies to every subscription regardless
+  of diet preference. See `decisions/2026-04-08-diet-as-preference-not-product.md`
+  for why this isn't per-diet.
 - Cancelled subscriptions are soft-deleted (status change), not hard-deleted,
   for win-back campaigns.
+- The customer's diet is **not** stored on the subscription — it lives on
+  the `customer` record (`customer.diet_preference`) so it can outlast any
+  individual subscription. See the `customer` entity above.
 
 ---
 
@@ -306,7 +318,13 @@ The product catalog. Weekly menu items.
 | `ingredients` | text | nullable |
 | `heating_instructions` | text | nullable |
 
-**Implemented in:** `app/menu-overlay.html` as `allMeals` array
+**Implemented in:**
+- Prototype: `conner/app/menu-overlay.html` as inline `allMeals` array
+- Canonical: `conner/client-website/menu/index.html` — loads from `meals.seed.json`
+  (152 customer-facing rows snapshotted from culinary-ops `MealRecipe` on
+  the `conner-local-dev` Neon branch, cleaned per 2026-04-09 vocab pass:
+  `menu_category` + `diet_plan` split out of legacy `category`,
+  `dietary_tags` normalized to customer-facing names).
 
 ---
 

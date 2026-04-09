@@ -52,6 +52,13 @@
   font-display: swap;
 }
 
+@font-face {
+  font-family: 'Fastpen';
+  src: url('fonts/Fastpen.otf') format('opentype');
+  font-weight: 400;
+  font-display: swap;
+}
+
 :root {
   /* ─── Brand palette ─── */
   --brand-primary:     #4EA2FD;
@@ -107,6 +114,7 @@
   --font-display: 'BDSupper', Georgia, serif;
   --font-heading: 'Gaya', Georgia, serif;
   --font-body:    'Sofia Pro Soft', 'Sofia Pro', system-ui, -apple-system, sans-serif;
+  --font-accent:  'Fastpen', 'Caveat', cursive;  /* signature / handwritten feel */
 
   /* Type scale */
   --fs-display-lg:  48px;

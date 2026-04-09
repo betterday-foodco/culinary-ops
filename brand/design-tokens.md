@@ -135,13 +135,14 @@ Concrete examples of how buttons are composed from the tokens above.
 
 ## Typography
 
-Three font families, used for clearly distinct purposes. Do not mix.
+Four font families, used for clearly distinct purposes. Do not mix.
 
 | Family | Role | When to reach for it |
 |---|---|---|
 | **BDSupper Bold** (`font-display`) | Display | Meal names on cards, logo wordmark, visual accent text. Use sparingly — this is a personality font, not a workhorse. |
 | **Gaya** (`font-heading`) | Headings | Section headers, cart title, nav logo, page titles. Serifs add editorial feel without being stuffy. |
 | **Sofia Pro Soft** (`font-body`) | Body / UI | All body copy, buttons, labels, macro stats, prices. This is the everyday workhorse. |
+| **Fastpen** (`font-accent`) | Accent / signature | Founder signatures ("Amy + Conner"), hand-written flourishes, conversational accents. Use VERY sparingly — one or two touches per page max. Never for body copy, never for headings. |
 
 ### Type scale
 
@@ -179,12 +180,13 @@ Three font families, used for clearly distinct purposes. Do not mix.
 
 Located in `brand/fonts/`:
 
-| Font file | Family | Weight |
-|---|---|---|
-| `BDSupperBold.otf` | BDSupper | 700 |
-| `Gaya.otf` | Gaya | 400 |
-| `SofiaProSoftRegular.otf` | Sofia Pro Soft | 400 |
-| `SofiaProSoftBold.otf` | Sofia Pro Soft | 700 |
+| Font file | Family | Weight | CSS variable |
+|---|---|---|---|
+| `BDSupperBold.otf` | BDSupper | 700 | `--font-display` |
+| `Gaya.otf` | Gaya | 400 | `--font-heading` |
+| `SofiaProSoftRegular.otf` | Sofia Pro Soft | 400 | `--font-body` |
+| `SofiaProSoftBold.otf` | Sofia Pro Soft | 700 | `--font-body` |
+| `Fastpen.otf` | Fastpen | 400 | `--font-accent` |
 
 If you add more weights (regular BDSupper, italic Gaya, medium/semibold Sofia),
 drop the file in `brand/fonts/` and register it in both `typography.json`

@@ -1,0 +1,392 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>BetterDay — Choose your diet</title>
+  <meta name="description" content="Pick your diet to see this week's menu. Omnivore or Vegan — switch anytime.">
+
+  <!-- Brand tokens: fonts + colors + type scale. Single source of truth. -->
+  <link rel="stylesheet" href="/brand/tokens.css">
+
+  <style>
+    /* ═══════════════════════════════════════════════════════════════
+       Page-specific styles. Brand tokens from /brand/tokens.css do
+       the heavy lifting — nothing in here should hardcode a hex.
+       ═══════════════════════════════════════════════════════════════ */
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { height: 100%; width: 100%; }
+    body {
+      font-family: var(--font-body);
+      color: var(--text-primary);
+      background: var(--bg-page);
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+    }
+
+    /* ── MAIN CONTENT ─────────────────────────────────────────── */
+    .page-content {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      padding: 148px 32px 64px;  /* 64px nav + breathing room */
+    }
+
+    /* ── HEADLINE ─────────────────────────────────────────────── */
+    .headline-area {
+      text-align: center;
+      margin-bottom: 36px;
+      animation: fadeUp 0.6s ease-out;
+    }
+    .headline {
+      font-family: var(--font-heading);
+      font-size: clamp(32px, 4vw, 52px);
+      font-weight: var(--fw-regular);
+      line-height: 1.15;
+      color: var(--text-primary);
+      letter-spacing: -0.01em;
+      margin-bottom: 12px;
+    }
+    .headline em {
+      font-style: italic;
+      color: var(--brand-primary);
+    }
+    .subline {
+      font-family: var(--font-body);
+      font-size: var(--fs-body-lg);
+      line-height: 1.5;
+      color: var(--text-muted);
+    }
+
+    /* ── CARDS ────────────────────────────────────────────────── */
+    .cards-row {
+      display: flex;
+      gap: 32px;
+      justify-content: center;
+      animation: fadeUp 0.6s ease-out 0.15s both;
+    }
+
+    .diet-card {
+      position: relative;
+      width: 420px;
+      border-radius: var(--radius-card);
+      overflow: hidden;
+      cursor: pointer;
+      background: var(--bg-card);
+      border: none;
+      padding: 0;
+      text-align: left;
+      transition: transform 0.2s ease, box-shadow 0.2s ease;
+      font-family: inherit;
+      color: inherit;
+    }
+    .diet-card:hover {
+      transform: translateY(-4px);
+      box-shadow: 10px 12px 0 var(--brand-navy-dark);
+    }
+    .diet-card:focus-visible {
+      outline: 3px solid var(--brand-primary);
+      outline-offset: 4px;
+    }
+    .diet-card:active {
+      transform: translateY(-1px);
+      box-shadow: 6px 7px 0 var(--brand-navy-dark);
+    }
+
+    /* ── Card image ── */
+    .card-image {
+      position: relative;
+      height: 240px;
+      overflow: hidden;
+    }
+    .card-image img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      transition: transform 0.4s ease;
+      display: block;
+    }
+    .diet-card:hover .card-image img {
+      transform: scale(1.03);
+    }
+
+    /* ── Card body ── */
+    .card-body {
+      padding: 20px 24px 28px;
+      text-align: center;
+    }
+    .card-title {
+      font-family: var(--font-display);
+      font-size: var(--fs-heading);
+      font-weight: var(--fw-bold);
+      color: var(--text-primary);
+      text-transform: uppercase;
+      letter-spacing: 0.03em;
+      margin-bottom: 8px;
+    }
+    .card-desc {
+      font-family: var(--font-body);
+      font-size: var(--fs-body);
+      line-height: 1.4;
+      color: var(--text-muted);
+      margin-bottom: 20px;
+    }
+    .card-cta {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      justify-content: center;
+      padding: 14px 36px;
+      width: 100%;
+      border: none;
+      border-radius: var(--radius-button);
+      background: var(--brand-yellow);
+      color: var(--brand-navy-dark);
+      font-family: var(--font-body);
+      font-size: var(--fs-meal-name);
+      font-weight: var(--fw-bold);
+      cursor: pointer;
+      transition: background 0.15s, transform 0.15s;
+    }
+    .card-cta:hover {
+      background: var(--brand-yellow-dark);
+      transform: translateY(-1px);
+    }
+    .card-cta:active { transform: translateY(0); }
+    .card-cta svg {
+      width: 16px; height: 16px;
+      transition: transform 0.2s;
+    }
+    .diet-card:hover .card-cta svg {
+      transform: translateX(3px);
+    }
+
+    /* Plant-only safety badge */
+    .card-safety {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      justify-content: center;
+      margin-top: 12px;
+      font-family: var(--font-body);
+      font-size: var(--fs-caption);
+      font-weight: var(--fw-semibold);
+      color: var(--brand-green-dark);
+    }
+    .card-safety svg {
+      width: 14px; height: 14px;
+      color: var(--brand-green-dark);
+    }
+
+    /* ── Bottom note ──────────────────────────────────────────── */
+    .bottom-note {
+      margin-top: 40px;
+      text-align: center;
+      animation: fadeUp 0.6s ease-out 0.3s both;
+    }
+    .bottom-note p {
+      font-family: var(--font-body);
+      font-size: var(--fs-body-sm);
+      color: var(--text-muted);
+      line-height: 1.5;
+    }
+    .bottom-note a {
+      color: var(--brand-primary);
+      text-decoration: none;
+      font-weight: var(--fw-semibold);
+    }
+    .bottom-note a:hover { text-decoration: underline; }
+
+    /* ── Animations ───────────────────────────────────────────── */
+    @keyframes fadeUp {
+      from { opacity: 0; transform: translateY(20px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+
+    /* ── Page transition overlay (click → redirect) ──────────── */
+    .page-transition {
+      position: fixed; inset: 0;
+      background: var(--bg-page);
+      z-index: 1000;
+      display: flex; align-items: center; justify-content: center;
+      opacity: 0; pointer-events: none;
+      transition: opacity 0.3s ease;
+    }
+    .page-transition.active { opacity: 1; pointer-events: all; }
+    .page-transition .loading-text {
+      font-family: var(--font-heading);
+      font-size: var(--fs-heading-lg);
+      color: var(--text-primary);
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .page-transition .spinner {
+      width: 24px; height: 24px;
+      border: 3px solid rgba(0, 49, 65, 0.15);
+      border-top-color: var(--brand-primary);
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ── Responsive ───────────────────────────────────────────── */
+    @media (max-width: 840px) {
+      .page-content {
+        padding: 80px 0 0;  /* 60px mobile nav + breathing room */
+        justify-content: flex-start;
+      }
+      .headline-area {
+        margin-bottom: 20px;
+        padding: 20px 20px 0;
+      }
+      .headline { font-size: 28px; }
+      .subline { font-size: var(--fs-body); }
+      .cards-row {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 0;
+        width: 100%;
+        flex: 1;
+      }
+      .diet-card {
+        width: 100%;
+        border-radius: 0;
+        box-shadow: none;
+        flex: 1;
+        display: flex;
+        flex-direction: row;
+        border-bottom: 2px solid rgba(0, 49, 65, 0.08);
+      }
+      .diet-card:last-child { border-bottom: none; }
+      .diet-card:hover,
+      .diet-card:active {
+        transform: none;
+        box-shadow: none;
+      }
+      .diet-card:active { background: rgba(78, 162, 253, 0.06); }
+      .card-image {
+        width: 40%;
+        height: auto;
+        min-height: 180px;
+        flex-shrink: 0;
+      }
+      .card-body {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        padding: 16px 20px;
+        text-align: left;
+      }
+      .card-title { font-size: var(--fs-heading-sm); margin-bottom: 6px; }
+      .card-desc  { font-size: var(--fs-body-sm); margin-bottom: 14px; }
+      .card-cta {
+        padding: 12px 24px;
+        font-size: var(--fs-body);
+        width: auto;
+        align-self: flex-start;
+      }
+      .card-safety {
+        justify-content: flex-start;
+        margin-top: 8px;
+      }
+      .bottom-note { display: none; }
+    }
+  </style>
+</head>
+
+<body data-site="marketing">
+
+  <!-- Header injected from ../shared/marketing-header.html -->
+  <div data-shell="header"></div>
+
+  <!-- PAGE CONTENT -->
+  <main class="page-content">
+
+    <div class="headline-area">
+      <h1 class="headline">Choose your <em>diet</em></h1>
+      <p class="subline">New menu every week &middot; Chef-crafted &middot; Ready in 2 minutes</p>
+    </div>
+
+    <div class="cards-row">
+
+      <!-- Omnivore (SystemTag slug: omnivore) -->
+      <button type="button" class="diet-card" onclick="selectDiet('omnivore')" aria-label="Omnivore diet">
+        <div class="card-image">
+          <img src="/brand/photos/diet-omnivore.jpg" alt="Omnivore meals">
+        </div>
+        <div class="card-body">
+          <h2 class="card-title">Omnivore</h2>
+          <p class="card-desc">Mixed protein options. Choose between meat and plant-based meals in whatever ratio fits your vibe. Perfect for mixed-diet households or flexitarians.</p>
+          <span class="card-cta">
+            Select your meals
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+          </span>
+        </div>
+      </button>
+
+      <!-- Vegan (SystemTag slug: vegan) -->
+      <button type="button" class="diet-card" onclick="selectDiet('vegan')" aria-label="Vegan diet">
+        <div class="card-image">
+          <img src="/brand/photos/diet-vegan.jpg" alt="Vegan meals">
+        </div>
+        <div class="card-body">
+          <h2 class="card-title">Vegan</h2>
+          <p class="card-desc">100% plant-based. Wholesome, meat &amp; dairy-free meals powered by grains, legumes, veggies, and good vibes. Big on flavour, packed with protein.</p>
+          <span class="card-cta">
+            Select your meals
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+          </span>
+          <div class="card-safety">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+            100% plant-based menu, always
+          </div>
+        </div>
+      </button>
+
+    </div>
+
+    <div class="bottom-note">
+      <p>You can switch between diets anytime &middot; Both menus change weekly</p>
+    </div>
+
+  </main>
+
+  <!-- Transition overlay (shown while routing to the menu) -->
+  <div class="page-transition" id="pageTransition" aria-hidden="true">
+    <div class="loading-text">
+      <div class="spinner"></div>
+      <span id="transitionText">Loading your menu&hellip;</span>
+    </div>
+  </div>
+
+  <script>
+    // Diet selection → redirect to the weekly menu with ?diet=<slug>.
+    // Slugs match SystemTag.slug rows where type='diets' (see /settings/tags):
+    //   omnivore  → SystemTag fc0a70f3… — shows Omnivore + Vegan tagged meals
+    //   vegan     → SystemTag 9c68ba40… — shows Vegan tagged meals only
+    // Target menu page doesn't exist yet; a 404 here during staged dev is expected.
+    function selectDiet(slug) {
+      const transition = document.getElementById('pageTransition');
+      const text = document.getElementById('transitionText');
+
+      text.textContent = slug === 'vegan'
+        ? 'Loading vegan menu\u2026'
+        : 'Loading your menu\u2026';
+
+      transition.classList.add('active');
+      transition.setAttribute('aria-hidden', 'false');
+
+      setTimeout(() => {
+        window.location.href = '/conner/client-website/menu/?diet=' + encodeURIComponent(slug);
+      }, 800);
+    }
+  </script>
+
+  <script src="../shared/site-shell.js" defer></script>
+</body>
+</html>

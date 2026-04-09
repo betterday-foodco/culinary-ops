@@ -88,8 +88,9 @@ takes us from "mocked" to "wired."
 | Page | File | Status |
 |---|---|---|
 | Homepage | `index.html` | ✅ built (2026-04-08) |
+| Onboarding — diet selector | `onboarding/index.html` | ✅ built (2026-04-08) |
 | Login | `login.html` | 💭 planned |
-| Menu browse | `menu/index.html` | 💭 planned |
+| Menu browse | `menu/index.html` | ✅ built (2026-04-09) |
 | Meal detail | `menu/[meal-code].html` | 💭 planned |
 | Cart | `cart.html` | 💭 planned |
 | Checkout | `checkout.html` | 💭 planned |

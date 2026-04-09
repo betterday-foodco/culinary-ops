@@ -32,7 +32,8 @@ because a typo would break the brand everywhere.
 | `tokens.css` | Same values as CSS custom properties (`--brand-primary`, etc.) | Any standalone HTML file can `<link>` to it directly without a build step |
 | `design-tokens.md` | Human-readable reference doc | Humans reading in GitHub. Explains *why* each token exists and when to use it |
 | `fonts/` | The actual .otf / .woff2 font files | Loaded by `@font-face` in `tokens.css` and by `frontend/app/globals.css` |
-| `logos/` | SVG logo variants (primary, mark, wordmark, favicon) | `frontend/public/` symlinks or copies them, email templates link them |
+| `logos/` | PNG / SVG logo variants (primary, mark, wordmark, favicon) | `frontend/public/` symlinks or copies them, email templates link them |
+| `photos/` | Product + lifestyle + section-illustration photos extracted from prototypes | Standalone HTML pages reference via `/brand/photos/<file>`; eventually also served through a CDN |
 
 **To edit anything in Layer 1:** branch, edit, commit, open PR. Takes 5 minutes.
 
@@ -119,16 +120,18 @@ Full details in `conner/prototypes/website/shared/SITE_DATA_SPEC.md`.
 
 | Piece | Status |
 |---|---|
-| `colors.json` | ✅ Created (BetterDay palette, 9 brand colors) |
-| `typography.json` | ✅ Created (BDSupper, Gaya, Sofia Pro) |
-| `tokens.css` | ✅ Created (CSS custom properties for standalone HTML) |
+| `colors.json` | ✅ Created (BetterDay palette, 12 brand colors + semantic tokens) |
+| `typography.json` | ✅ Created (BDSupper, Gaya, Sofia Pro Soft, **Fastpen** accent) |
+| `tokens.css` | ✅ Created (CSS custom properties for standalone HTML, incl. `--font-accent`) |
 | `design-tokens.md` | ✅ Created (human-readable reference, ECC multi-brand stripped) |
-| `fonts/` | ✅ Populated (4 font files: BDSupperBold, Gaya, SofiaProSoftBold, SofiaProSoftRegular) |
-| `logos/` | ⚠️ Placeholder — no SVG logo files exist in the repo yet. Drop them here when available. |
+| `fonts/` | ✅ Populated (5 font files: BDSupperBold, Gaya, SofiaProSoftBold, SofiaProSoftRegular, **Fastpen**) |
+| `logos/` | ✅ Populated (PNG variants: Centered + Left Justified, Cream/Blue/Navy). SVG variants still pending. |
+| `photos/` | ✅ Populated (22 product / lifestyle / section-illustration photos extracted from prototype base64, 2026-04-08) |
 | `site-info.seed.json` | ✅ Created (15 initial `public.*` keys for Layer 2) |
 | `GET /api/system-config/public` endpoint | ✅ Built on branch `conner/universal-brand-folder` |
 | Seed runs on deploy | ✅ Wired into `backend/prisma/seed.ts` |
 | Tailwind config wired to `colors.json` | ⏳ Pending — requires PR into `frontend/` (Gurleen's territory). Brand colors still use the default Next.js template palette until that lands. |
+| Tailwind config wired to `typography.json` (incl. Fastpen) | ⏳ Pending — same PR as above. |
 
 ---
 
