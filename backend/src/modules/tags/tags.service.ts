@@ -12,6 +12,13 @@ export class TagsService {
     });
   }
 
+  findByType(type: string) {
+    return this.prisma.systemTag.findMany({
+      where: { type },
+      orderBy: [{ sort_order: 'asc' }, { name: 'asc' }],
+    });
+  }
+
   create(data: { name: string; type: string; subtype?: string; source?: string; visible?: boolean; label_bold?: boolean; rule?: string; emoji?: string }) {
     return this.prisma.systemTag.create({ data });
   }
@@ -79,10 +86,19 @@ export class TagsService {
       { name: 'Omnivore Plan', type: 'diets', subtype: 'Plan', source: 'dish', visible: true },
       { name: 'Plant-Based Plan', type: 'diets', subtype: 'Plan', source: 'dish', visible: true },
       // Menu Categories
-      { name: 'Entree', type: 'menu-cats', subtype: 'Category', source: 'dish', visible: true },
-      { name: 'Breakfast', type: 'menu-cats', subtype: 'Category', source: 'dish', visible: true },
-      { name: 'Snack', type: 'menu-cats', subtype: 'Category', source: 'dish', visible: true },
-      { name: 'Protein Pack', type: 'menu-cats', subtype: 'Category', source: 'dish', visible: true },
+      { name: 'Meat', type: 'menu-cats', subtype: 'Category', source: 'dish', visible: true, sort_order: 1 },
+      { name: 'Plant-Based', type: 'menu-cats', subtype: 'Category', source: 'dish', visible: true, sort_order: 2 },
+      { name: 'Entree', type: 'menu-cats', subtype: 'Category', source: 'dish', visible: true, sort_order: 3 },
+      { name: 'Breakfast', type: 'menu-cats', subtype: 'Category', source: 'dish', visible: true, sort_order: 4 },
+      { name: 'Snack', type: 'menu-cats', subtype: 'Category', source: 'dish', visible: true, sort_order: 5 },
+      { name: 'Protein Pack', type: 'menu-cats', subtype: 'Category', source: 'dish', visible: true, sort_order: 6 },
+      // Starch Types
+      { name: 'Rice', type: 'starches', subtype: 'Starch', source: 'dish', visible: true, sort_order: 1 },
+      { name: 'Pasta', type: 'starches', subtype: 'Starch', source: 'dish', visible: true, sort_order: 2 },
+      { name: 'Potato', type: 'starches', subtype: 'Starch', source: 'dish', visible: true, sort_order: 3 },
+      { name: 'Quinoa', type: 'starches', subtype: 'Starch', source: 'dish', visible: true, sort_order: 4 },
+      { name: 'Other', type: 'starches', subtype: 'Starch', source: 'dish', visible: true, sort_order: 5 },
+      { name: 'None', type: 'starches', subtype: 'Starch', source: 'dish', visible: true, sort_order: 6 },
       // Ingredient Categories
       { name: 'Proteins', type: 'ingredient-cats', subtype: 'Location', source: 'ingredient', visible: false },
       { name: 'Vegetables', type: 'ingredient-cats', subtype: 'Location', source: 'ingredient', visible: false },

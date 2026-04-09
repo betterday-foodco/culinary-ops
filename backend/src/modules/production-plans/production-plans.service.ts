@@ -189,7 +189,7 @@ export class ProductionPlansService {
         },
       },
     });
-    const srById = new Map(allSubRecipes.map((sr) => [sr.id, sr]));
+    const srById = new Map<string, typeof allSubRecipes[number]>(allSubRecipes.map((sr) => [sr.id, sr]));
 
     // totals: srId → { subRecipe, total quantity needed, unit, mealBreakdown }
     const totals = new Map<string, { subRecipe: any; total: number; unit: string; mealBreakdown: { meal: string; qty: number }[] }>();

@@ -10,6 +10,9 @@ export class TagsController {
   @Get()
   findAll() { return this.service.findAll(); }
 
+  @Get('by-type/:type')
+  findByType(@Param('type') type: string) { return this.service.findByType(type); }
+
   @Post('seed')
   seed() { return this.service.seed(); }
 

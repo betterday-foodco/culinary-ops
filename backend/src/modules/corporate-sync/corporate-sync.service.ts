@@ -57,7 +57,7 @@ export class CorporateSyncService {
       },
     });
 
-    const companyIds  = [...new Set(items.map(i => i.order.company_id))];
+    const companyIds = Array.from(new Set(items.map(i => i.order.company_id))) as string[];
     const companies   = await this.prisma.corporateCompany.findMany({
       where: { id: { in: companyIds } }, select: { id: true, name: true },
     });

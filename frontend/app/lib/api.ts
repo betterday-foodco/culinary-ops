@@ -547,6 +547,7 @@ export const api = {
 
   // System Tags
   getTags: () => request<any[]>('/tags'),
+  getTagsByType: (type: string) => request<any[]>(`/tags/by-type/${type}`),
   seedTags: () => request<any>('/tags/seed', { method: 'POST' }),
   createTag: (data: any) => request<any>('/tags', { method: 'POST', body: JSON.stringify(data) }),
   updateTag: (id: string, data: any) => request<any>(`/tags/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
@@ -619,6 +620,58 @@ export const api = {
     request<{ ok: boolean; orders: BdOrder[] }>(`/corp-admin/companies/${companyId}/orders${limit ? `?limit=${limit}` : ''}`),
   bdGetCompanyInvoices: (companyId: string) =>
     request<{ ok: boolean; invoices: BdInvoice[] }>(`/corp-admin/companies/${companyId}/invoices`),
+
+  // BD Admin — Global endpoints
+  bdGetOverview: () =>
+    request<BdOverview>('/corp-admin/overview'),
+  bdGetAllInvoices: (page = 1, limit = 50) =>
+    request<{ ok: boolean; invoices: BdInvoiceWithCompany[]; total: number; page: number; limit: number }>(
+      `/corp-admin/invoices?page=${page}&limit=${limit}`,
+    ),
+  bdGetAllOrders: (page = 1, limit = 50) =>
+    request<{ ok: boolean; orders: BdOrderWithCompany[]; total: number; page: number; limit: number }>(
+      `/corp-admin/orders?page=${page}&limit=${limit}`,
+    ),
+  bdGetInvoiceDetail: (id: string) =>
+    request<BdInvoiceDetail>(`/corp-admin/invoices/${id}`),
+  bdGetAllOrdersGlobal: () =>
+    request<{ ok: boolean; orders: BdOrderWithCompany[] }>('/corp-admin/orders?limit=500'),
+  bdGetArSummary: () =>
+    request<{ ok: boolean; total_outstanding: number; overdue_count: number }>('/corp-admin/ar-summary'),
+  bdMarkInvoice: (id: string, status: string) =>
+    request<any>(`/corp-admin/invoices/${id}/status`, { method: 'PATCH', body: JSON.stringify({ status }) }),
+  bdCreateCreditNote: (data: { company_id: string; employee_id?: string; amount: number; reason?: string }) =>
+    request<any>('/corp-admin/credit-notes', { method: 'POST', body: JSON.stringify(data) }),
+
+  // BD Admin — Company detail
+  bdGetCompanyDetail: (id: string) =>
+    request<{ ok: boolean; company: BdCompanyFull }>(`/corp-admin/companies/${id}`),
+  bdUpdateCompany: (id: string, data: any) =>
+    request<{ ok: boolean; company: BdCompany }>(`/corp-admin/companies/${id}`, {
+      method: 'PATCH', body: JSON.stringify(data),
+    }),
+  bdGetCompanyBenefitLevels: (companyId: string) =>
+    request<{ ok: boolean; benefit_levels: BdBenefitLevel[] }>(`/corp-admin/companies/${companyId}/benefit-levels`),
+  bdUpsertBenefitLevels: (companyId: string, levels: any[]) =>
+    request<{ ok: boolean; benefit_levels: BdBenefitLevel[] }>(`/corp-admin/companies/${companyId}/benefit-levels`, {
+      method: 'POST', body: JSON.stringify({ levels }),
+    }),
+  bdGetCompanyParLevels: (companyId: string) =>
+    request<{ ok: boolean; par_levels: BdParLevel[] }>(`/corp-admin/companies/${companyId}/par-levels`),
+  bdUpsertParLevels: (companyId: string, levels: any[]) =>
+    request<{ ok: boolean; par_levels: BdParLevel[] }>(`/corp-admin/companies/${companyId}/par-levels`, {
+      method: 'POST', body: JSON.stringify({ levels }),
+    }),
+
+  // BD Admin — Reports
+  bdGetDeliveryReport: (week?: string) =>
+    request<BdDeliveryReport>(`/corp-admin/reports/delivery${week ? `?week=${week}` : ''}`),
+  bdGetLabelsReport: (week?: string) =>
+    request<BdLabelsReport>(`/corp-admin/reports/labels${week ? `?week=${week}` : ''}`),
+  bdGetPicklistReport: (week?: string) =>
+    request<BdPicklistReport>(`/corp-admin/reports/picklists${week ? `?week=${week}` : ''}`),
+  bdGetProductionReport: (week?: string) =>
+    request<BdPicklistReport>(`/corp-admin/reports/production${week ? `?week=${week}` : ''}`),
 
   // Corporate Sync
   getCorporateOrders: (week?: string) =>
@@ -1370,6 +1423,7 @@ export interface BdCompanyDashboard {
 export interface BdOrder {
   id: string;
   order_code: string;
+  company_id?: string;
   status: string;
   delivery_date: string | null;
   created_at: string;
@@ -1390,11 +1444,143 @@ export interface BdOrder {
 export interface BdInvoice {
   id: string;
   invoice_number: string;
+  company_id?: string;
   period_start: string;
   period_end: string;
   total_amount: number;
+  amount_paid: number;
   status: string;
   pdf_url: string | null;
+  due_at: string | null;
   created_at: string;
+}
+
+export interface BdInvoiceWithCompany extends BdInvoice {
+  company: { id: string; name: string };
+}
+
+export interface BdOrderWithCompany extends BdOrder {
+  company: { id: string; name: string };
+}
+
+export interface BdOverview {
+  ok: boolean;
+  total_companies: number;
+  active_companies: number;
+  total_employees: number;
+  total_orders: number;
+  total_revenue: number;
+  total_employee_cost: number;
+  total_company_cost: number;
+  total_bd_cost: number;
+  total_meals: number;
+  outstanding_amount: number;
+  avg_order_value: number;
+  total_invoices: number;
+}
+
+export interface BdCompanyFull {
+  id: string;
+  name: string;
+  email: string | null;
+  phone: string | null;
+  address: string | null;
+  city: string | null;
+  province: string | null;
+  postal_code: string | null;
+  contact_name: string | null;
+  contact_phone: string | null;
+  contact_email: string | null;
+  is_active: boolean;
+  plan_type: string | null;
+  delivery_day: string | null;
+  delivery_notes: string | null;
+  extra: Record<string, unknown> | null;
+  benefit_levels: BdBenefitLevel[];
+  par_levels: BdParLevel[];
+  company_pin: { updated_at: string } | null;
+  _count: { employees: number; orders: number; invoices: number };
+}
+
+export interface BdBenefitLevel {
+  id: string;
+  company_id: string;
+  level_id: string;
+  level_name: string | null;
+  level_order: number;
+  free_meals_week: number;
+  max_meals_week: number;
+  full_price: number;
+  tier_config: Record<string, unknown> | null;
+}
+
+export interface BdParLevel {
+  id: string;
+  company_id: string;
+  category_id: string;
+  category_name: string | null;
+  par_quantity: number;
+}
+
+export interface BdInvoiceDetail {
+  ok: boolean;
+  invoice: BdInvoiceWithCompany;
+  line_items: {
+    employee_name: string;
+    delivery_date: string | null;
+    dish: string;
+    tier: string;
+    quantity: number;
+    retail: number;
+    employee_paid: number;
+    company_covers: number;
+    bd_covers: number;
+  }[];
+  summary: {
+    total_meals: number;
+    total_employee: number;
+    total_company: number;
+    total_bd: number;
+  };
+}
+
+export interface BdDeliveryReport {
+  ok: boolean;
+  week_start: string;
+  rows: {
+    client: string;
+    company_id: string;
+    meals: number;
+    total: number;
+    address: string;
+    email: string;
+    phone: string;
+    notes: string;
+    delivery_day: string;
+  }[];
+}
+
+export interface BdLabelsReport {
+  ok: boolean;
+  week_start: string;
+  labels: {
+    dish: string;
+    diet: string;
+    allergens: string;
+    employee: string;
+    company: string;
+    quantity: number;
+  }[];
+}
+
+export interface BdPicklistReport {
+  ok: boolean;
+  week_start: string;
+  rows: {
+    qty: number;
+    diet: string;
+    dish: string;
+    sku: string;
+  }[];
 }
 
