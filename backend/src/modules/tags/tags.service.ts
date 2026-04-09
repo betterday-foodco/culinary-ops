@@ -13,23 +13,17 @@ export class TagsService {
     });
   }
 
-  async create(data: { name: string; type: string; subtype?: string; source?: string; visible?: boolean; label_bold?: boolean; rule?: string; emoji?: string }) {
-    // SystemTag.slug is scoped unique per (type, slug), so the same slug can exist
-    // across types (e.g. "shellfish" as both allergen and protein). We still want
-    // to disambiguate within a type by appending a counter if a collision occurs.
-    const baseSlug = slugifyOr(data.name, data.type);
-    const slug = await this.uniqueTagSlug(data.type, baseSlug);
-    return this.prisma.systemTag.create({ data: { ...data, slug } });
+  findByType(type: string) {
+    return this.prisma.systemTag.findMany({
+      where: { type },
+      orderBy: [{ sort_order: 'asc' }, { name: 'asc' }],
+    });
   }
 
-  /** Find a slug that doesn't collide within this tag type. */
-  private async uniqueTagSlug(type: string, base: string): Promise<string> {
-    let candidate = base;
-    let n = 2;
-    while (await this.prisma.systemTag.findUnique({ where: { type_slug: { type, slug: candidate } } })) {
-      candidate = `${base}-${n++}`;
-    }
-    return candidate;
+  async create(data: { name: string; type: string; subtype?: string; source?: string; visible?: boolean; label_bold?: boolean; rule?: string; emoji?: string }) {
+    const slugify = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+    const slug = slugify(data.name) || slugify(data.type);
+    return this.prisma.systemTag.create({ data: { ...data, slug } });
   }
 
   update(id: string, data: Partial<{ name: string; visible: boolean; label_bold: boolean; rule: string; subtype: string; source: string }>) {
@@ -95,10 +89,19 @@ export class TagsService {
       { name: 'Omnivore Plan', type: 'diets', subtype: 'Plan', source: 'dish', visible: true },
       { name: 'Plant-Based Plan', type: 'diets', subtype: 'Plan', source: 'dish', visible: true },
       // Menu Categories
-      { name: 'Entree', type: 'menu-cats', subtype: 'Category', source: 'dish', visible: true },
-      { name: 'Breakfast', type: 'menu-cats', subtype: 'Category', source: 'dish', visible: true },
-      { name: 'Snack', type: 'menu-cats', subtype: 'Category', source: 'dish', visible: true },
-      { name: 'Protein Pack', type: 'menu-cats', subtype: 'Category', source: 'dish', visible: true },
+      { name: 'Meat', type: 'menu-cats', subtype: 'Category', source: 'dish', visible: true, sort_order: 1 },
+      { name: 'Plant-Based', type: 'menu-cats', subtype: 'Category', source: 'dish', visible: true, sort_order: 2 },
+      { name: 'Entree', type: 'menu-cats', subtype: 'Category', source: 'dish', visible: true, sort_order: 3 },
+      { name: 'Breakfast', type: 'menu-cats', subtype: 'Category', source: 'dish', visible: true, sort_order: 4 },
+      { name: 'Snack', type: 'menu-cats', subtype: 'Category', source: 'dish', visible: true, sort_order: 5 },
+      { name: 'Protein Pack', type: 'menu-cats', subtype: 'Category', source: 'dish', visible: true, sort_order: 6 },
+      // Starch Types
+      { name: 'Rice', type: 'starches', subtype: 'Starch', source: 'dish', visible: true, sort_order: 1 },
+      { name: 'Pasta', type: 'starches', subtype: 'Starch', source: 'dish', visible: true, sort_order: 2 },
+      { name: 'Potato', type: 'starches', subtype: 'Starch', source: 'dish', visible: true, sort_order: 3 },
+      { name: 'Quinoa', type: 'starches', subtype: 'Starch', source: 'dish', visible: true, sort_order: 4 },
+      { name: 'Other', type: 'starches', subtype: 'Starch', source: 'dish', visible: true, sort_order: 5 },
+      { name: 'None', type: 'starches', subtype: 'Starch', source: 'dish', visible: true, sort_order: 6 },
       // Ingredient Categories
       { name: 'Proteins', type: 'ingredient-cats', subtype: 'Location', source: 'ingredient', visible: false },
       { name: 'Vegetables', type: 'ingredient-cats', subtype: 'Location', source: 'ingredient', visible: false },

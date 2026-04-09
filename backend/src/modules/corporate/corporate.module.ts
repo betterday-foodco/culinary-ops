@@ -10,6 +10,7 @@ import { CorpPortalController } from './portal/corp-portal.controller';
 
 import { CorpAdminService } from './admin/corp-admin.service';
 import { CorpManagerController, CorpBdAdminController } from './admin/corp-admin.controller';
+import { CorporateParSchedulerService } from './admin/corp-par-scheduler.service';
 
 /**
  * CorporateModule
@@ -30,7 +31,7 @@ import { CorpManagerController, CorpBdAdminController } from './admin/corp-admin
  */
 @Module({
   imports: [PrismaModule, AuthModule],
-  providers: [CorpAuthService, CorpPortalService, CorpAdminService],
+  providers: [CorpAuthService, CorpPortalService, CorpAdminService, CorporateParSchedulerService],
   controllers: [
     CorpAuthController,
     CorpPortalController,

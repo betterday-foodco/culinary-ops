@@ -14,12 +14,16 @@ export default function MealsPage() {
   async function load() {
     setLoading(true);
     try {
-      const [data, cats] = await Promise.all([
+      const [data, tagCats, dbCats] = await Promise.all([
         api.getMeals(),
-        apiExtra.getMealCategories(),
+        api.getTagsByType('menu-cats').catch(() => []),
+        apiExtra.getMealCategories().catch(() => []),
       ]);
       setMeals(data);
-      setCategories(cats as string[]);
+      // Merge SystemTag categories with DB-discovered categories (for any existing data)
+      const tagNames = tagCats.map((t: any) => t.name);
+      const merged = [...new Set([...tagNames, ...(dbCats as string[])])];
+      setCategories(merged);
     } finally {
       setLoading(false);
     }
