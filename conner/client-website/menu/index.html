@@ -1936,14 +1936,38 @@ async function loadMealsFromSeed() {
   }
 }
 
+// SAFETY: returns the subset of allMeals that the customer's diet plan
+// allows. Every cart-counting, category-counting, and totaling function
+// below MUST use this helper instead of allMeals directly so a plant-based
+// customer never sees, counts, or is charged for a meat meal anywhere in
+// the UI — not in the grid, not in the cart, not in category tab counts,
+// not in the subtotal, not in the order.
+//
+// This is the SECOND layer of the safety story. Layer one (the grid
+// filter inside getFilteredMeals + renderGrid) hides meat from the
+// visible browse list. Layer two (this helper) ensures every numeric
+// rollup of "meals" honors the same lock — preventing the case where a
+// meat meal slipped into qty>0 from a prior session and would show in
+// the cart sidebar / get charged at checkout.
+function getDietSafeMeals() {
+  if (dietLock === 'Plant-Based') {
+    return allMeals.filter(m => m.diet_plan === 'Plant-Based');
+  }
+  return allMeals;
+}
+
 // Auto-hide category tabs whose count is 0 (Sandwich & Wraps, Protein Pack
 // are kept in the HTML ready for launch but stay hidden until they have
-// meals). Called after the seed loads.
+// meals). Called after the seed loads. Uses getDietSafeMeals() so a
+// plant-based customer doesn't see a category tab that's empty under
+// their lock (e.g. an "Entrees" tab where every entree happens to be
+// omnivore-only).
 function hideEmptyCategoryTabs() {
+  const safe = getDietSafeMeals();
   document.querySelectorAll('.tab-pill[data-cat]').forEach(tab => {
     const cat = tab.dataset.cat;
     if (cat === 'All') return;
-    const count = allMeals.filter(m => m.cat === cat).length;
+    const count = safe.filter(m => m.cat === cat).length;
     tab.style.display = count > 0 ? '' : 'none';
   });
 }
@@ -1963,13 +1987,20 @@ function getPrice(meal) {
 function fmtPrice(n) { return '$' + n.toFixed(2); }
 
 // ── CART CALCULATIONS ──
-function getCartMeals() { return allMeals.filter(m => m.qty > 0); }
-function getTotalItems() { return allMeals.reduce((s, m) => s + m.qty, 0); }
+// SAFETY: all three functions below drive the cart sidebar, the item
+// counter, and the subtotal. They MUST iterate getDietSafeMeals() rather
+// than the raw allMeals so a plant-based customer can never see, count,
+// or be charged for a meat meal that slipped into qty>0 from a prior
+// session or a mid-session diet switch. This is layer two of the
+// fail-closed diet lock — layer one (renderGrid) hides meat from the
+// browse grid; layer two (here) hides it from every numeric rollup.
+function getCartMeals() { return getDietSafeMeals().filter(m => m.qty > 0); }
+function getTotalItems() { return getDietSafeMeals().reduce((s, m) => s + m.qty, 0); }
 
 function getSubtotal(mode) {
   let prev = subscribeMode;
   subscribeMode = mode;
-  let t = allMeals.reduce((s, m) => s + getPrice(m) * m.qty, 0);
+  let t = getDietSafeMeals().reduce((s, m) => s + getPrice(m) * m.qty, 0);
   subscribeMode = prev;
   return t;
 }
@@ -2020,7 +2051,16 @@ function getTagClass(tag) {
 // ── RENDER GRID ──
 function renderGrid() {
   const area = document.getElementById('gridArea');
-  let base = (activeFilters.length > 0 || activeAllergens.length > 0 || activeDiets.length > 0 || activeProteins.length > 0 || activeSort) ? getFilteredMeals() : allMeals;
+  // SAFETY: dietLock is checked here too. The original conditional below
+  // was a micro-optimization that skipped getFilteredMeals() when no user
+  // filters were active — but the diet lock lives INSIDE getFilteredMeals(),
+  // so skipping the call also skipped the safety filter and meat dishes
+  // leaked through to plant-based customers who hadn't toggled any other
+  // filter yet. dietLock is now part of the "must call getFilteredMeals()"
+  // condition so the lock cannot be bypassed by the optimization path.
+  const hasUserFilters = activeFilters.length > 0 || activeAllergens.length > 0 || activeDiets.length > 0 || activeProteins.length > 0 || activeSort;
+  const hasDietLock = dietLock !== null;
+  let base = (hasUserFilters || hasDietLock) ? getFilteredMeals() : allMeals;
   let filtered = base.filter(m => {
     if (currentCat !== 'All' && m.cat !== currentCat) return false;
     if (searchQuery) {
