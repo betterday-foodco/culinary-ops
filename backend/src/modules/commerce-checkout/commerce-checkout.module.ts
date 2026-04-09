@@ -4,6 +4,7 @@ import { AuthModule } from '../auth/auth.module';
 
 import { AdminCommerceCheckoutController } from './admin/admin-commerce-checkout.controller';
 import { CommerceCheckoutController } from './commerce-checkout.controller';
+import { CardExpiryWarningCron } from './crons/card-expiry-warning.cron';
 import { DailyReconciliationCron } from './crons/daily-reconciliation.cron';
 import { WeeklyChargeCron } from './crons/weekly-charge.cron';
 import { HelcimApiClient } from './helcim/helcim-api-client';
@@ -66,6 +67,7 @@ import { HelcimWebhookController } from './webhooks/helcim-webhook.controller';
     HmacVerifier,
     WeeklyChargeCron,
     DailyReconciliationCron,
+    CardExpiryWarningCron,
   ],
   exports: [HelcimService],
 })
