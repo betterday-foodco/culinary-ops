@@ -1,9 +1,15 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException, Logger } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../../../prisma/prisma.service';
+import * as nodemailer from 'nodemailer';
 
 @Injectable()
 export class CorpAdminService {
-  constructor(private prisma: PrismaService) {}
+  private readonly logger = new Logger(CorpAdminService.name);
+  constructor(
+    private prisma: PrismaService,
+    private config: ConfigService,
+  ) {}
 
   // ── Manager dashboard ──────────────────────────────────────────────────────
 
@@ -720,5 +726,77 @@ export class CorpAdminService {
       data:  { published_to_corporate: published },
     });
     return { ok: true, plan_id: plan.id, published_to_corporate: plan.published_to_corporate };
+  }
+
+  /** Send order reminder emails to all active employees who haven't ordered this week */
+  async sendOrderReminders(company_id: string) {
+    const company = await this.prisma.corporateCompany.findUnique({ where: { id: company_id } });
+    if (!company) throw new NotFoundException('Company not found');
+
+    // Find employees who haven't ordered this week
+    const now = new Date();
+    const sun = new Date(now); sun.setDate(now.getDate() - now.getDay()); sun.setHours(0, 0, 0, 0);
+    const sat = new Date(sun); sat.setDate(sun.getDate() + 7);
+
+    const employees = await this.prisma.corporateEmployee.findMany({
+      where: { company_id, is_active: true },
+    });
+
+    const ordersThisWeek = await this.prisma.corporateOrder.findMany({
+      where: { company_id, created_at: { gte: sun, lt: sat } },
+      select: { employee_id: true },
+    });
+    const orderedIds = new Set(ordersThisWeek.map(o => o.employee_id));
+    const needReminder = employees.filter(e => !orderedIds.has(e.id));
+
+    if (!needReminder.length) return { ok: true, sent: 0, message: 'All employees have already ordered this week!' };
+
+    // Send emails
+    const smtpEmail = this.config.get<string>('SMTP_EMAIL');
+    const smtpPassword = this.config.get<string>('SMTP_PASSWORD');
+    if (!smtpEmail || !smtpPassword) {
+      return { ok: true, sent: 0, message: `SMTP not configured. ${needReminder.length} employees need reminders.` };
+    }
+
+    const transporter = nodemailer.createTransport({
+      host: 'smtp.gmail.com', port: 587, secure: false,
+      auth: { user: smtpEmail, pass: smtpPassword },
+    });
+
+    const baseUrl = this.config.get<string>('FRONTEND_URL') ?? 'http://localhost:3000';
+    let sent = 0;
+
+    for (const emp of needReminder) {
+      try {
+        await transporter.sendMail({
+          from: `BetterDay Meals <${smtpEmail}>`,
+          to: emp.email,
+          subject: `Don't forget to order your meals this week — ${company.name}`,
+          html: `<div style="font-family:Arial,sans-serif;max-width:500px;margin:0 auto;padding:20px">
+            <div style="background:#00465e;padding:24px 30px;border-radius:12px 12px 0 0">
+              <p style="margin:0;color:#fff;font-size:20px;font-weight:700">BetterDay Meals</p>
+              <p style="margin:4px 0 0;color:#a3c8d8;font-size:13px">${company.name} Employee Meals</p>
+            </div>
+            <div style="background:#fff;padding:30px;border:1px solid #e5e7eb;border-top:none;border-radius:0 0 12px 12px">
+              <p style="margin:0 0 12px;color:#222;font-size:15px">Hi ${emp.name},</p>
+              <p style="margin:0 0 20px;color:#555;font-size:14px;line-height:1.6">
+                This is a friendly reminder that you haven't placed your meal order for this week yet.
+                Don't miss out on your meals!
+              </p>
+              <a href="${baseUrl}/corporate/login" style="display:inline-block;background:#00465e;color:#fff;text-decoration:none;font-size:14px;font-weight:600;padding:12px 28px;border-radius:8px">
+                Order Now →
+              </a>
+              <p style="margin:20px 0 0;color:#999;font-size:12px">This is an automated reminder from BetterDay Meals.</p>
+            </div>
+          </div>`,
+        });
+        sent++;
+      } catch (err) {
+        this.logger.error(`[REMINDER] Failed to send to ${emp.email}: ${err}`);
+      }
+    }
+
+    this.logger.log(`[REMINDERS] Sent ${sent}/${needReminder.length} reminders for ${company.name}`);
+    return { ok: true, sent, total: needReminder.length, message: `Sent ${sent} reminder${sent !== 1 ? 's' : ''}` };
   }
 }

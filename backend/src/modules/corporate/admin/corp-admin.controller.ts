@@ -128,7 +128,7 @@ export class CorpManagerController {
 
   @Post('send-reminders')
   sendReminders(@Request() req: { user: CorporateUser }) {
-    return { ok: true, message: 'Reminders sent (stub)' };
+    return this.svc.sendOrderReminders(req.user.company_id);
   }
 }
 
