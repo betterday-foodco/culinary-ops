@@ -4,13 +4,18 @@ import { AuthModule } from '../auth/auth.module';
 
 import { AdminCommerceCheckoutController } from './admin/admin-commerce-checkout.controller';
 import { CommerceCheckoutController } from './commerce-checkout.controller';
+import { DailyReconciliationCron } from './crons/daily-reconciliation.cron';
 import { WeeklyChargeCron } from './crons/weekly-charge.cron';
 import { HelcimApiClient } from './helcim/helcim-api-client';
 import { HelcimService } from './helcim/helcim.service';
+import { HelcimWebhookService } from './helcim/helcim-webhook.service';
 import { HelcimCheckoutSessionRepository } from './helcim/helcim-checkout-session.repository';
 import { DeclineClassifier } from './helcim/decline-classifier';
 import { HmacVerifier } from './helcim/hmac-verifier';
 import { OrderRefundRepository } from './helcim/order-refund.repository';
+import { ReconciliationLogRepository } from './helcim/reconciliation-log.repository';
+import { WebhookEventRepository } from './helcim/webhook-event.repository';
+import { HelcimWebhookController } from './webhooks/helcim-webhook.controller';
 
 
 /**
@@ -44,15 +49,23 @@ import { OrderRefundRepository } from './helcim/order-refund.repository';
  */
 @Module({
   imports: [AuthModule], // For JwtAuthGuard on the admin controller
-  controllers: [CommerceCheckoutController, AdminCommerceCheckoutController],
+  controllers: [
+    CommerceCheckoutController,
+    AdminCommerceCheckoutController,
+    HelcimWebhookController,
+  ],
   providers: [
     HelcimApiClient,
     HelcimService,
+    HelcimWebhookService,
     HelcimCheckoutSessionRepository,
     OrderRefundRepository,
+    WebhookEventRepository,
+    ReconciliationLogRepository,
     DeclineClassifier,
     HmacVerifier,
     WeeklyChargeCron,
+    DailyReconciliationCron,
   ],
   exports: [HelcimService],
 })
