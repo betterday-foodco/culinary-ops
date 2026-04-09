@@ -1,6 +1,6 @@
 # BetterDay Food Co. — Culinary Ops: Project Scope
 
-> **Last updated**: 2026-04-08 — commerce infrastructure provisioned, Helcim replaces Stripe, brand/ folder scaffolded
+> **Last updated**: 2026-04-09 — two sessions shipped today. **(AM, meal-edit chat)** `diet_plan_id` classifier landed as NOT NULL on `MealRecipe`, meal edit page + new-meal form rebuilt, variant linking fixed to unidirectional N-to-1, category column bulk-backfilled to Entree/Breakfast/Snacks. **(PM, checkout chat)** customer-facing checkout page ported to `client-website/checkout.html`, subscriber discount calculator rewritten around the corrected single-price-with-quantity-tier model, new `subscription-config.js` as single source of truth for PERK_TIERS + delivery/tax constants, menu→checkout cart handoff wired (localStorage v2). (see Progress Log §14 for both session writeups)
 > **Maintainers**: Gurleen Kaur (owner), Conner (@conner-kadz)
 > **Repo**: github.com/betterday-foodco/culinary-ops
 
@@ -651,6 +651,108 @@ FOUR UI contexts (the first three live in Gurleen's frontend/, the fourth in con
 ---
 
 ## 14. Progress Log
+
+### 2026-04-09 (PM) — Checkout page port + corrected subscriber discount pricing model
+
+**Landed on `conner/2026-04-09-checkout-page` → merged into `conner/universal-brand-folder` (commit `701fec0` + merge commit `0314429`, held off origin pending smoke test):**
+
+**New customer-facing checkout page**
+
+- ✅ **New `conner/client-website/checkout.html`** (3,023 lines) — ported the 4-step accordion checkout from the `conner/app/subscriber-hub-2.0.html` prototype into a standalone guest-first page. Steps: **Contact** (first/last/email/phone + newsletter opt-in) → **Delivery** (gift toggle, delivery/pickup method, inline address form for guests + saved-address radio list path preserved for future logged-in users, pickup location + date picker, estimated-arrival banner) → **Payment** (inline card form with cardholder name / number / MM-YY expiry / CVC, auto-formatter, card-type detection, PCI-compliant reassurance row with Visa/MC/Amex/Disc tile badges, saved-card radio list preserved for future) → **Review & Place Order** (populated review list with contact / fulfillment / payment / itemized totals + consent checkboxes + large yellow CTA). Fully brand-tokenized — every BetterDay color via `var(--brand-*)` from `/brand/tokens.css`; all non-brand tints (cream variants, warm greys, derived borders, Apple/Google brand marks for the express-pay buttons) gathered in a single `:root` locals block for auditability. Sidebar is sticky on desktop (>980px), drops below the stepper on tablet/mobile. Mobile sticky-bottom "Place Order" bar appears below 980px.
+- ✅ **Right-hand sticky order summary** — items list, "Have a code or gift card?" disclosure toggle with promo-code + gift-card inputs, reward points row (mocked balance 1,239 pts), totals breakdown (Subtotal → Subscriber discount → Code → Gift card → Reward points → GST → Delivery → Grand Total), "You saved $X.XX" green savings badge, "perks of every BetterDay box" block (Skip a week / Free delivery on 8+ / No contracts), and a "Need help?" footer that interpolates `{{contact.phone}}` and `{{contact.email}}` via the existing `shared/site-shell.js` token pipeline.
+- ✅ **Navy header bar** with live cutoff countdown (days/hours/min/sec, recomputed every second against a mocked "2 days from now, end of day" cutoff) and the cutoff date label. Subscribe upsell banner only shows for one-time carts and projects the savings the customer would earn by switching.
+- ✅ **Express checkout row** (Apple Pay + Google Pay) mocked with a 2-second processing overlay → inline success panel. Real Helcim integration lives in the `culinary-ops-helcim-integration` worktree (separate chat owns that work). Buttons use the actual Apple and Google brand colors + SVG logos but no real SDK is loaded.
+- ✅ **Inline success panel** — swaps in for the stepper on Place Order. Big green checkmark, order ID (`BD-NNNNNN`), delivery date, total paid, item count, "Order more meals" + "Back home" CTAs. Clears `localStorage['betterday.cart.v1']` on submit so bouncing back to the menu shows an empty cart. Full order payload logged to console for future backend handoff.
+
+**Corrected subscriber discount pricing model (the big architectural fix)**
+
+- ✅ **Pricing model rule established: ONE price per meal + percentage discount applied at checkout.** Previously the menu page's `normalizeMeal()` synthesized a fake `retail_price = price * 1.08` and the checkout module inherited a two-price model where `m.price` was treated as the already-discounted subscriber price. **That model was wrong.** Corrected model (now authoritative across the customer-facing site): `meal.price` is the regular full retail price, one-time customers pay it exactly, subscribers get `price × (1 − tierPct/100)` where `tierPct` comes from a quantity-based tier table (`PERK_TIERS`: 4 meals → 5%, 5 → 8%, 7 → 11%, 9 → 14%, 11 → 17%, 13+ → 20%). The checkout's totals breakdown is now **verifiable end-to-end**: `regularSubtotal − mealSavings + GST + delivery = total` ✓ (previously it was off by exactly `mealSavings` because the discount line was displayed but never deducted, and the percentage label came from `PERK_TIERS` but was unrelated to the actual displayed price differential).
+- ✅ **`conner/client-website/shared/subscription-config.js`** — new file, single source of truth for `PERK_TIERS`, `FREE_DELIVERY_MEALS` (8), `DELIVERY_FEE` ($7.99), `GST_RATE` (0.05), `POINTS_PER_DOLLAR` (0.03), and `lookupSubscriberDiscountPct(totalMeals)`. Both the menu page and the checkout page consume it via `<script src>` before their main script blocks, so they can never disagree on the tier percentages or the delivery-fee math again. Replaces the drifted local copies that used to live in `menu/index.html` and the never-existed copies that the checkout was inheriting verbatim from the subscriber-hub prototype. **Future destination** for admin-editability documented in `conner/deferred-decisions.md`: move into the existing `SystemConfig` key-value table, serve via `/api/system-config/public`, build an admin UI at `frontend/app/(dashboard)/settings/subscription-plans/page.tsx`.
+- ✅ **`menu/index.html` cleaned up** — dropped `normalizeMeal()`'s synthesized `retail_price` field, fixed `getPrice()` to apply the tier discount in subscribe mode (per-card prices now tick down as the cart grows: $16.99 → $16.14 at 4 meals, $15.63 at 5, $15.12 at 7, $14.61 at 9, $14.10 at 11, $13.59 at 13+, matching the "the more you order, the more you save" marketing copy that was previously a hollow promise), removed duplicate local `PERK_TIERS` / `FREE_DELIVERY_MEALS` / `DELIVERY_FEE` const declarations (now imported from `subscription-config.js`).
+
+**Menu → checkout cart handoff contract**
+
+- ✅ **`handleCheckout()` stub wired** at `menu/index.html:2305` — serializes the cart to `localStorage['betterday.cart.v1']` and navigates to `../checkout.html`. The localStorage key name stays `v1` (backwards-compatible read path) but the **schema inside it is bumped to v2** — items now carry only `{id, name, qty, price, img}` (dropped the synthesized `retail_price`). `loadCart()` in `checkout.html` checks `parsed.version === 2` and falls back to `SAMPLE_CART` if the version doesn't match, so old v1 payloads left in localStorage from pre-fix browsing are gracefully invalidated.
+
+**Architectural insight — corporate `/work` flow is on a completely separate pricing system**
+
+- ✅ **Traced the corporate B2B employee-ordering flow end to end** to confirm whether the upcoming `pricing_override → item_price` rename (see deferred-decisions) would break anything on that side. Result: **`/corporate/work` never touches `pricing_override` at all.** The price an employee sees is built entirely from `CorporateCompany.extra` JSONB (stringly-typed keys like `'Tier1_EmployeePrice'`, `'Tier1_BDSubsidy'`, `'Tier1_CompanySubsidy'`, `'FreeMealsPerWeek'`), looked up per-employee via `getEmployeeTierConfig()` in `backend/src/modules/corporate/portal/corp-portal.service.ts:79-125`. The `getWeeklyMenu()` endpoint's `select` clause at lines 35-52 deliberately does NOT include `pricing_override` in the returned meal fields. `placeOrder()` at line 137 loads the full `MealRecipe` row (bug: no `select` clause — tracked as a deferred perf cleanup) but only reads `id` / `meal_code` / `display_name` / `name` and derives every dollar from the tier config. Verified by `grep pricing_override` across `backend/src/modules/corporate/` and `frontend/app/(corporate)/` — **zero matches**. **Takeaway:** the customer-facing meal-kit and the corporate B2B program are two completely separate revenue models sharing only the meal catalog's cosmetic fields (name, image, macros, allergens). The `pricing_override → item_price` rename has zero impact on the corporate side.
+
+**4 new deferred-decisions entries captured** in `conner/deferred-decisions.md`:
+
+- [ ] **Rename `MealRecipe.pricing_override → item_price`** — the customer-facing sell-price column has a misleading name; the "override" word is a vestige of a never-built auto-pricing-from-cost feature. **Validated safe** by running the `ALTER TABLE` SQL on a throwaway Neon child branch off production (branch `br-flat-bird-ae16p3nc`, created and deleted during this session): 164 meals before, 164 meals after; 142 priced before, 142 priced after; range $15.99–$16.99 unchanged; avg $16.52 unchanged. Touches ~19 files, mostly in Gurleen's `frontend/app/(dashboard)/` admin pages + `backend/src/modules/meals/` culinary modules + backend import/export scripts. Atomic execution required (schema rename + Prisma migration on `conner-local-dev` + all 19 find/replace edits + `prisma generate` + dev server restart, in one PR). Text draft for Gurleen lives in the chat transcript.
+- [ ] **Update `conner/data-model/entities.md:297` `meal` entity** — currently defines the meal with two price fields (`price` + `retail_price`) reflecting the old broken two-price model. Fix: drop the `retail_price` row, rename `price` → `item_price` (matching the column rename above), clarify it's the regular full retail price with the subscriber discount applied at checkout. Small doc edit, pair with the column rename PR.
+- [ ] **Corporate `placeOrder()` over-fetches `MealRecipe` rows** at `backend/src/modules/corporate/portal/corp-portal.service.ts:137` — no `select` clause means every column loads even though only `id` / `meal_code` / `display_name` / `name` are read. Same file's `getWeeklyMenu()` gets this right. Tiny perf win, not urgent.
+- [ ] **Move corporate tier config out of `CorporateCompany.extra` JSONB** — same architectural cleanup as the subscription tier config just got via `subscription-config.js`. Future destination: `frontend/app/(dashboard)/settings/corporate-tiers/page.tsx` (sibling of `settings/subscription-plans/`), backed by proper schema columns on `CorporateCompany` (or a new `CorporateTierConfig` model) instead of stringly-typed JSONB keys. Defer until the subscription-plans admin page work is in flight — same lane, same migration pattern.
+
+**Deferred / still pending (not blocking anything shipped today)**
+
+- [ ] Smoke-test the checkout page in a browser end to end — start a `python3 -m http.server 8000` from the worktree root, open `http://localhost:8000/conner/client-website/checkout.html` and `/menu/index.html`, walk through a happy path + the express-pay mock + the mobile breakpoint.
+- [ ] Push `conner/universal-brand-folder` to origin. Currently 2 commits ahead of origin (the calculator-fix commit + the merge commit + this PROJECT_SCOPE log update). Held deliberately until smoke test is done.
+- [ ] Text Gurleen to execute the `pricing_override → item_price` rename on her next available window. Validated SQL is ready, text draft is ready, ~5 minutes of her time.
+- [ ] The `culinary-ops-checkout-page` worktree is still alive on disk. Clean it up with `git worktree remove` after the smoke test passes and the rename is handed off.
+
+### 2026-04-09 — Diet plan classifier, meal edit page refactor, Tier 1 create form rebuild
+
+**Landed via PR #10 → merged into `conner/universal-brand-folder` (commits `c7b2dec` + `df48543`):**
+
+**Data model — the "every dish has a diet plan" rule**
+
+- ✅ **`MealRecipe.diet_plan_id` added** as `String NOT NULL` FK to `SystemTag.id` where `type = 'diets'`. Every customer-facing dish now belongs to exactly one of two plans: **Omnivore** (`fc0a70f3-644b-4248-b9c1-65882cc503de`) or **Plant-Based** (`9c68ba40-f59d-40a8-8210-bdc1f3cd3973`). Two migrations: `20260409025946_add_meal_diet_plan_id` (nullable add) → `20260409032836_diet_plan_id_not_null` (flip after backfill). This is the classifier the customer-facing diet selector on the website reads from — no more heuristic `category.includes('vegan')` fallbacks.
+- ✅ **ADR** `conner/data-model/decisions/2026-04-08-mandatory-diet-plan-on-dishes.md` — full design rationale, N-to-1 vs bidirectional analysis, backfill plan, UI requirement. Status still "Proposed" pending Gurleen's formal signoff on the wider product rule.
+- ✅ **Flow doc** `conner/data-model/flows/meal-variants.md` — captures the two-axes model (UX axis / data axis), Vegan Alfredo N-to-1 reasoning, current vs. target state, variant linking mechanics for future readers.
+- ✅ **CSV-driven backfill on Neon `conner-local-dev` branch** — parsed `Buffer + Weekly Labels - 7.1 Dish Masterlist (15).csv` (168 classified rows), cross-referenced against 159 production meals by `BD-NNN ↔ #NNN` matching, classified every row. **Final distribution: 88 Omnivore + 71 Plant-Based + 47 meat→plant variant pairings, 0 nulls.** Production DB untouched — same SQL can run against prod after Gurleen approves.
+- ✅ **5 SPRWT-legacy `Bulk Prep`/`Bulk Sauce` rows deleted** from the Neon branch — these were kitchen-intermediate sub-recipes masquerading as `MealRecipe` rows in the old SPRWT ordering system. `MealRecipe` is now cleanly customer-dishes-only.
+- ✅ **Category column bulk-backfilled to `Entree`** — every meal at the $16.99 (meat) or $15.99 (vegan) price point got `category = 'Entree'` via a single `UPDATE WHERE pricing_override IN (16.99, 15.99)`. Clean 1:1 correlation, zero mixed cases. Final category distribution: **Entree 142, Breakfast 10, Snacks 7.** No more Meat/Vegan category values duplicating `diet_plan_id`.
+- ✅ **`SystemTag` rename `Snack` → `Snacks`** (singular/plural mismatch against 7 existing meals). Slug updated too.
+
+**Variant linking — rewrite to unidirectional N-to-1**
+
+- ✅ **`linkVariant` rewritten** in `backend/src/modules/meals/meals.service.ts` to be **meat-side-only**. The old bidirectional write (`Promise.all` setting `linked_meal_id` on both rows) was impossible-by-construction for N-to-1: a single Vegan Alfredo can be the counterpart for Shrimp Alfredo, Chicken Alfredo, AND Beef Alfredo, but the plant dish's `linked_meal_id` column can only hold one UUID. Now the meat dish owns the pointer; plant dishes are discovered via the `variant_meals` Prisma reverse relation.
+- ✅ **`unlinkVariant` simplified** — single Prisma update, no race-condition window.
+- ✅ **Legacy bidirectional plant-side pointers cleaned up** — 0 plant-based dishes carry forward links after the backfill. Data model is consistent with the new invariant.
+
+**Meal edit page — full refactor (`frontend/app/(dashboard)/meals/[id]/page.tsx`)**
+
+- ✅ **Diet Plan segmented toggle at the top of the left aside** — 🍖 Omnivore / 🌱 Plant-Based, required, with a red "Required — pick one before saving" warning when null. Replaces inference via `category` string matching.
+- ✅ **Conditional plant-based variant picker** — only renders when `diet_plan_id === OMNIVORE_ID`. Shows the linked variant as a green pill with Unlink button, or a search input + smart-match suggestions. Switching Omnivore → Plant-Based while linked prompts before clearing.
+- ✅ **Smart word-match suggestions** — new `smartPairSuggestions` useMemo. Tokenizes the current meal's display_name and every plant-based meal's display_name, filters out stopwords and "protein noise" words (chicken, beef, veggie, tofu, etc.), scores by shared-token count. Top 3 render as "⚡ Smart matches (by shared words)" with `×N` score badge and matched-words tooltip. Example: "All Hail the Chicken Caesar" → "Blackened Chick'n Caesar Bowl" via shared "caesar" token.
+- ✅ **Category dropdown swapped from hardcoded `CATEGORIES` const to live `SystemTag(type='menu-cats')` fetch.** Sorted by `sort_order` then name. Emoji prefix if present. Includes a "Manage" link to `/settings/tags`. **Legacy-value orphan handling:** meals with a category not in the current menu-cats list surface as a disabled `⚠ {value} (legacy — not in menu-cats)` option with an amber warning — prevents silent data loss on save.
+- ✅ **Internal name collapsed into a toggle-revealed admin disclosure.** Default hidden. Grandfathered from the old SPRWT system where admins prefixed names like `[Meat] Chicken Alfredo` for sorting. Backend auto-mirrors `display_name` into `name` when blank. Fringe cases can still set a distinct internal name via the disclosure.
+- ✅ **Allergens + Dislikes merged into one section** with three stacked sub-blocks: (1) auto-detected from ingredient rollup (read-only red pills, walks `meal.components` + nested sub-recipes), (2) manual `allergen_tags` PillPicker overrides, (3) `dislikes` PillPicker. Matches the `conner/betterday-kitchen-v4.html` reference layout.
+- ✅ **Removed** the bottom "🔗 Meal Variant (Meat ↔ Vegan)" card — the picker lives in the conditional left-aside block now. **Replaced** with a "Referenced from omnivore dishes" pill row that only renders on plant-based dishes with `variant_meals.length > 0` (N-to-1 reverse-relation display).
+
+**New meal create form rebuild (`frontend/app/(dashboard)/meals/new/page.tsx`)**
+
+- ✅ **Tier 1 rewrite** — 4 required e-commerce fields instead of the legacy 5-field kitchen skeleton:
+  - **Display Name** (the only customer-facing name)
+  - **Diet Plan** (same segmented toggle as the edit page)
+  - **Category** (same menu-cats dropdown as the edit page)
+  - **Sell Price**
+- ✅ Legacy fields removed from the create form: `name` / internal name (optional at DTO level now, auto-mirrored from display_name server-side), `final_yield_weight` (deferred to edit page's ⚡ Calc from components button), `components` editor (deferred entirely — admins assemble the recipe on the edit page after create). On submit, redirects to `/meals/{newId}` so the admin can fill in photo, description, macros, components, variant link, etc.
+- ✅ **Backend changes** to support Tier 1: `name?: string` in `CreateMealDto` (was required), `meals.service.ts:create()` auto-mirrors `display_name → name` when blank. The NOT NULL DB constraint on the legacy `name` column is satisfied silently; capability preserved for fringe cases.
+
+**Bug fixes shipped**
+
+- ✅ **Menu builder pair modal silent-fail** (at `frontend/app/(dashboard)/menu-builder/page.tsx:968-975`) — three compounding bugs: wrong URL (relative `fetch('/api/...')` hit the Next.js frontend origin instead of NestJS `:3001`), wrong auth token key (`localStorage.getItem('token')` instead of `'access_token'` → empty `Bearer ` header), and silent error swallow (`catch {}`). Fixed by swapping the raw fetch for the typed `api.linkMealVariant()` helper. Added loading state: clicked row turns blue with animated spinner, non-clicked rows dim to 35% opacity, double-click guard.
+- ✅ **8 backend TS compile errors from the `slug` column** (added to 5 models by the linter but no code was setting it). Created new `backend/src/lib/slugify.ts` helper (`slugify()` + `slugifyOr()`), updated 5 `create()` methods to derive and pass a unique slug, added per-model `unique{Ingredient,SubRecipe,Meal,Tag}Slug` collision helpers.
+- ✅ **New meal create form 400'd every submit** after the `diet_plan_id` NOT NULL flip (legacy form didn't collect a diet plan). Fixed by the Tier 1 rewrite above.
+
+**Deferred / still pending (not blocking anything shipped today)**
+
+- [ ] `MealRecipe.net_weight_kg` column removal (9 orphan references, zero load-bearing use). Documented in ADR as "bundled cleanup" but migration not yet run — needs Gurleen's review first.
+- [ ] Menu builder diet inference at `menu-builder/page.tsx:511-514` — currently does `cat.includes('vegan')` which happens to work by accident but should read `diet_plan_id === PLANT_BASED_ID` directly.
+- [ ] `backend/src/modules/meals/meals.service.ts` `getSuggestedVariants` endpoint — should filter to opposite diet plan on the server side.
+- [ ] `Customer.diet_plan_id` field in `schema.commerce.prisma` for persistent customer preference (belongs in a separate commerce-side commit).
+- [ ] Protected `SystemTag` rows — tags service should refuse to delete the two diet-plan classifier IDs.
+- [ ] Public `/api/public/menu-categories` endpoint (unauthenticated) for the future client-website menu tabs to read the same `menu-cats` list as the admin UI.
+- [ ] Tier 2 fields on the create form (photo, tagline) — deliberately deferred to keep the initial form focused.
+- [ ] **Production diet_plan backfill.** The Neon branch has all 159 meals classified and the SQL is proven; same UPDATE statements can run against production after the ADR lands.
+
+**Multi-chat workflow — shared-working-tree contamination issue documented**
+
+- ✅ **`conner/MULTI-CHAT-STATUS.md`** (untracked scratch file) — tracks 5 separate cross-branch contamination incidents that happened during the session when parallel chats' `git checkout` commands affected the shared working tree. Includes verified merge-conflict verdict for the 4 files that diverged between the meal-edit and coupons branches (all resolve "take meal-edit" — documented with file-by-file diff stats and recommended `git checkout --theirs` commands).
+- ✅ **Durable fix documented** in `conner/README.md` — future chats should use `git worktree add` per-chat so each chat has its own checked-out copy of the repo and can't stomp on another chat's `HEAD` (commit `214849d docs(readme): switch multi-chat workflow to git worktrees` on the integration branch).
 
 ### 2026-04-08 — Commerce infrastructure + brand system sprint
 
