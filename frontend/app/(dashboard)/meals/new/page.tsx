@@ -1,154 +1,253 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { api, Ingredient, SubRecipe } from '../../../lib/api';
+import { api } from '../../../lib/api';
 
-interface ComponentRow {
-  type: 'ingredient' | 'sub_recipe';
-  ref_id: string;
-  quantity: number;
-  unit: string;
+// ─── Diet Plan SystemTag IDs (source of truth: /settings/tags) ────────────────
+// These two rows in SystemTag (type='diets') are the classifier for every dish.
+// See conner/data-model/decisions/2026-04-08-mandatory-diet-plan-on-dishes.md
+const DIET_PLAN_OMNIVORE_ID    = 'fc0a70f3-644b-4248-b9c1-65882cc503de';
+const DIET_PLAN_PLANT_BASED_ID = '9c68ba40-f59d-40a8-8210-bdc1f3cd3973';
+
+/**
+ * SystemTag row shape (from /api/tags). Same interface as meals/[id]/page.tsx.
+ */
+interface SystemTag {
+  id: string;
+  name: string;
+  type: string;   // 'menu-cats' | 'diets' | 'allergens' | ...
+  subtype: string | null;
+  source: string | null;
+  visible: boolean;
+  sort_order: number;
+  emoji: string | null;
 }
 
+/**
+ * New Meal Recipe — focused Tier 1 create form.
+ *
+ * Only collects the four fields required to put a dish on the customer-facing
+ * menu: Display Name, Diet Plan, Category, Sell Price. Everything else
+ * (components, photo, description, macros, allergens, variant linking, etc.)
+ * is filled in on the full edit page after the dish is created.
+ *
+ * Legacy fields like `internal_name`, `final_yield_weight`, and `components`
+ * are deliberately NOT on this form. The backend auto-fills `name` from
+ * `display_name` when it's missing, so the NOT NULL DB constraint on the
+ * legacy `name` column is satisfied silently. Fringe "admin internal name"
+ * cases are handled via the disclosure toggle on the edit page.
+ */
 export default function NewMealPage() {
   const router = useRouter();
-  const [name, setName] = useState('');
   const [displayName, setDisplayName] = useState('');
-  const [finalYield, setFinalYield] = useState(0);
+  const [dietPlanId, setDietPlanId] = useState<string | null>(null);
+  const [categoryName, setCategoryName] = useState('');
   const [pricingOverride, setPricingOverride] = useState('');
-  const [components, setComponents] = useState<ComponentRow[]>([]);
-  const [ingredients, setIngredients] = useState<Ingredient[]>([]);
-  const [subRecipes, setSubRecipes] = useState<SubRecipe[]>([]);
+  const [allTags, setAllTags] = useState<SystemTag[]>([]);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
+  // Load SystemTag rows on mount so the Category dropdown can filter to
+  // type='menu-cats' at render time. Same pattern as the edit page.
   useEffect(() => {
-    Promise.all([api.getIngredients(), api.getSubRecipes()]).then(([i, s]) => {
-      setIngredients(i);
-      setSubRecipes(s);
-    });
+    api.getTags().then((t) => setAllTags(t as SystemTag[])).catch(() => {});
   }, []);
 
-  function addComponent() {
-    setComponents((c) => [...c, { type: 'sub_recipe', ref_id: '', quantity: 1, unit: 'serving' }]);
-  }
+  // Memoized menu categories — sorted by sort_order then name so admins can
+  // re-order in /settings/tags without touching code.
+  const menuCats = useMemo(
+    () =>
+      allTags
+        .filter((t) => t.type === 'menu-cats')
+        .sort((a, b) => (a.sort_order - b.sort_order) || a.name.localeCompare(b.name)),
+    [allTags],
+  );
 
-  function updateComponent(idx: number, field: keyof ComponentRow, value: string | number) {
-    setComponents((cs) => cs.map((c, i) => (i === idx ? { ...c, [field]: value } : c)));
-  }
-
-  function removeComponent(idx: number) {
-    setComponents((cs) => cs.filter((_, i) => i !== idx));
-  }
+  const canSave = Boolean(displayName.trim()) && dietPlanId !== null && categoryName !== '' && !saving;
 
   async function handleSave() {
+    if (!canSave) return;
     setSaving(true);
     setError('');
     try {
-      await api.createMeal({
-        name,
-        display_name: displayName,
-        final_yield_weight: Number(finalYield),
+      const created = await api.createMeal({
+        // Internal `name` is intentionally omitted — backend mirrors display_name.
+        // See meals.service.ts:create (auto-fill logic + ADR 2026-04-08).
+        display_name: displayName.trim(),
+        diet_plan_id: dietPlanId,
+        category: categoryName || undefined,
         pricing_override: pricingOverride ? Number(pricingOverride) : undefined,
-        components: components.map((c) => ({
-          ingredient_id: c.type === 'ingredient' ? c.ref_id : undefined,
-          sub_recipe_id: c.type === 'sub_recipe' ? c.ref_id : undefined,
-          quantity: Number(c.quantity),
-          unit: c.unit,
-        })),
-      });
-      router.push('/meals');
+        // final_yield_weight is required by the DB (@default(0) in the schema)
+        // but the API client interface still marks it required, so pass 0. The
+        // admin fills it in on the edit page via the ⚡ Calc from components button.
+        final_yield_weight: 0,
+      } as any);
+      // Redirect to the full edit page so the admin can fill in photo,
+      // description, macros, components, variant link, etc.
+      const newId = (created as any)?.id;
+      if (newId) {
+        router.push(`/meals/${newId}`);
+      } else {
+        router.push('/meals');
+      }
     } catch (e: any) {
-      setError(e.message);
+      setError(e?.message ?? 'Failed to create meal');
     } finally {
       setSaving(false);
     }
   }
 
   return (
-    <div className="p-8 max-w-3xl">
-      <div className="flex items-center gap-3 mb-8">
-        <button onClick={() => router.push('/meals')} className="text-gray-400 hover:text-gray-600 text-lg">←</button>
+    <div className="p-8 max-w-2xl">
+      {/* ── Header ──────────────────────────────────────────────────────── */}
+      <div className="flex items-center gap-3 mb-2">
+        <button
+          onClick={() => router.push('/meals')}
+          className="text-gray-400 hover:text-gray-600 text-lg"
+          aria-label="Back to meals list"
+        >
+          ←
+        </button>
         <h1 className="text-2xl font-bold text-gray-900">New Meal Recipe</h1>
       </div>
+      <p className="text-sm text-gray-500 mb-8 ml-8">
+        The essentials to get this dish on the menu. Photo, description, components, and macros
+        are filled in on the edit page after you save.
+      </p>
 
+      {/* ── The form ────────────────────────────────────────────────────── */}
       <div className="bg-white rounded-xl border border-gray-200 p-6 space-y-5">
-        <div className="grid grid-cols-2 gap-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Internal Name (SKU reference)</label>
-            <input type="text" value={name} onChange={(e) => setName(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
-              placeholder="chicken-rice-bowl" />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Display Name</label>
-            <input type="text" value={displayName} onChange={(e) => setDisplayName(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
-              placeholder="Chicken Rice Bowl" />
-          </div>
-        </div>
-
-        <div className="grid grid-cols-2 gap-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Final Yield Weight (g)</label>
-            <input type="number" min="0" value={finalYield} onChange={(e) => setFinalYield(Number(e.target.value))}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-500" />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Sell Price Override ($) <span className="text-gray-400 font-normal">optional</span></label>
-            <input type="number" min="0" step="0.01" value={pricingOverride} onChange={(e) => setPricingOverride(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
-              placeholder="12.99" />
-          </div>
-        </div>
-
+        {/* Display Name */}
         <div>
-          <div className="flex items-center justify-between mb-3">
-            <label className="text-sm font-medium text-gray-700">Components</label>
-            <button onClick={addComponent} className="text-xs text-brand-600 hover:underline">+ Add Component</button>
+          <label className="block text-sm font-medium text-gray-700 mb-1">
+            Dish Name <span className="text-red-500">*</span>
+          </label>
+          <input
+            type="text"
+            value={displayName}
+            onChange={(e) => setDisplayName(e.target.value)}
+            placeholder="All Hail the Chicken Caesar"
+            autoFocus
+            maxLength={100}
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
+          />
+          <p className="mt-1 text-[11px] text-gray-400">
+            The only name customers ever see — on the menu card, the cart, the order, the label.
+          </p>
+        </div>
+
+        {/* Diet Plan */}
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">
+            Diet Plan <span className="text-red-500">*</span>
+          </label>
+          <div className="grid grid-cols-2 gap-2 rounded-lg border border-gray-200 p-1 bg-gray-50">
+            <button
+              type="button"
+              onClick={() => setDietPlanId(DIET_PLAN_OMNIVORE_ID)}
+              className={`py-2 rounded text-sm font-semibold transition-all ${
+                dietPlanId === DIET_PLAN_OMNIVORE_ID
+                  ? 'bg-red-500 text-white shadow-sm'
+                  : 'text-gray-500 hover:text-gray-700'
+              }`}
+            >
+              🍖 Omnivore
+            </button>
+            <button
+              type="button"
+              onClick={() => setDietPlanId(DIET_PLAN_PLANT_BASED_ID)}
+              className={`py-2 rounded text-sm font-semibold transition-all ${
+                dietPlanId === DIET_PLAN_PLANT_BASED_ID
+                  ? 'bg-green-600 text-white shadow-sm'
+                  : 'text-gray-500 hover:text-gray-700'
+              }`}
+            >
+              🌱 Plant-Based
+            </button>
           </div>
-          {components.length === 0 ? (
-            <p className="text-sm text-gray-400 py-4 text-center border border-dashed border-gray-200 rounded-lg">
-              No components yet.
-            </p>
-          ) : (
-            <div className="space-y-2">
-              {components.map((comp, idx) => (
-                <div key={idx} className="grid grid-cols-[120px_1fr_80px_80px_32px] gap-2 items-center">
-                  <select value={comp.type} onChange={(e) => updateComponent(idx, 'type', e.target.value as any)}
-                    className="px-2 py-1.5 border border-gray-300 rounded-lg text-xs focus:outline-none focus:ring-1 focus:ring-brand-500">
-                    <option value="sub_recipe">Sub-Recipe</option>
-                    <option value="ingredient">Ingredient</option>
-                  </select>
-                  <select value={comp.ref_id} onChange={(e) => updateComponent(idx, 'ref_id', e.target.value)}
-                    className="px-2 py-1.5 border border-gray-300 rounded-lg text-xs focus:outline-none focus:ring-1 focus:ring-brand-500">
-                    <option value="">Select...</option>
-                    {comp.type === 'sub_recipe'
-                      ? subRecipes.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)
-                      : ingredients.map((i) => <option key={i.id} value={i.id}>{i.internal_name} ({i.sku})</option>)}
-                  </select>
-                  <input type="number" min="0" step="0.001" value={comp.quantity}
-                    onChange={(e) => updateComponent(idx, 'quantity', e.target.value)}
-                    className="px-2 py-1.5 border border-gray-300 rounded-lg text-xs focus:outline-none focus:ring-1 focus:ring-brand-500" />
-                  <input type="text" value={comp.unit} onChange={(e) => updateComponent(idx, 'unit', e.target.value)}
-                    className="px-2 py-1.5 border border-gray-300 rounded-lg text-xs focus:outline-none focus:ring-1 focus:ring-brand-500" />
-                  <button onClick={() => removeComponent(idx)} className="text-red-400 hover:text-red-600 text-lg leading-none">×</button>
-                </div>
-              ))}
-            </div>
+          {dietPlanId === null && (
+            <p className="mt-1 text-[11px] text-red-500 font-medium">Required — pick one before saving</p>
           )}
         </div>
 
-        {error && <p className="text-sm text-red-600 bg-red-50 px-3 py-2 rounded-lg">{error}</p>}
+        {/* Category + Sell Price side-by-side */}
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <div className="flex items-center justify-between mb-1">
+              <label className="block text-sm font-medium text-gray-700">
+                Category <span className="text-red-500">*</span>
+              </label>
+              <a
+                href="/settings/tags"
+                className="text-[10px] text-gray-400 hover:text-brand-600 font-medium"
+                title="Manage menu-cats in Settings → Tags"
+              >
+                Manage
+              </a>
+            </div>
+            <select
+              value={categoryName}
+              onChange={(e) => setCategoryName(e.target.value)}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-brand-500"
+            >
+              <option value="">— pick one —</option>
+              {menuCats.map((c) => (
+                <option key={c.id} value={c.name}>
+                  {c.emoji ? `${c.emoji} ${c.name}` : c.name}
+                </option>
+              ))}
+            </select>
+            <p className="mt-1 text-[11px] text-gray-400">Which menu tab this dish belongs to.</p>
+          </div>
 
-        <div className="flex gap-3 justify-end pt-2">
-          <button onClick={() => router.push('/meals')}
-            className="px-4 py-2 border border-gray-300 text-gray-700 text-sm rounded-lg hover:bg-gray-50">Cancel</button>
-          <button onClick={handleSave} disabled={saving}
-            className="px-4 py-2 bg-brand-500 text-white text-sm font-medium rounded-lg hover:bg-brand-600 disabled:opacity-50">
-            {saving ? 'Saving...' : 'Create Meal Recipe'}
-          </button>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Sell Price ($) <span className="text-red-500">*</span>
+            </label>
+            <input
+              type="number"
+              min="0"
+              step="0.01"
+              value={pricingOverride}
+              onChange={(e) => setPricingOverride(e.target.value)}
+              placeholder="16.99"
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
+            />
+            <p className="mt-1 text-[11px] text-gray-400">What the customer pays.</p>
+          </div>
+        </div>
+
+        {/* Error banner */}
+        {error && (
+          <p className="text-sm text-red-600 bg-red-50 border border-red-200 px-3 py-2 rounded-lg">
+            {error}
+          </p>
+        )}
+
+        {/* Actions */}
+        <div className="flex gap-3 justify-between items-center pt-3 border-t border-gray-100">
+          <p className="text-[11px] text-gray-400 italic">
+            After saving, you'll be redirected to the full edit page to add photo, description,
+            components, and macros.
+          </p>
+          <div className="flex gap-3">
+            <button
+              type="button"
+              onClick={() => router.push('/meals')}
+              className="px-4 py-2 border border-gray-300 text-gray-700 text-sm rounded-lg hover:bg-gray-50"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={handleSave}
+              disabled={!canSave}
+              className="px-4 py-2 bg-brand-500 text-white text-sm font-medium rounded-lg hover:bg-brand-600 disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              {saving ? 'Creating…' : 'Create Meal Recipe'}
+            </button>
+          </div>
         </div>
       </div>
     </div>
