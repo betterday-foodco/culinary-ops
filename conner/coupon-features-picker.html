@@ -1,0 +1,904 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Coupon Features — Picker</title>
+  <link rel="stylesheet" href="../brand/tokens.css">
+  <style>
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      padding: 40px 24px 120px;
+      background: var(--bg-page);
+      color: var(--text-primary);
+    }
+
+    .wrap { max-width: 1100px; margin: 0 auto; }
+
+    header {
+      text-align: center;
+      margin-bottom: 32px;
+    }
+    header h1 {
+      font-family: var(--font-display);
+      font-size: var(--fs-display);
+      margin: 0 0 8px;
+      color: var(--brand-navy-dark);
+    }
+    header p {
+      margin: 0;
+      color: var(--text-secondary);
+      font-size: var(--fs-body-lg);
+    }
+
+    /* ─── Sticky summary bar ─── */
+    .summary {
+      position: sticky;
+      top: 0;
+      z-index: 50;
+      margin: 0 -24px 32px;
+      padding: 16px 24px;
+      background: var(--brand-navy);
+      color: var(--text-on-dark);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      flex-wrap: wrap;
+      box-shadow: 0 4px 16px rgba(0, 49, 65, 0.15);
+    }
+    .summary .counts {
+      font-family: var(--font-body);
+      font-weight: var(--fw-bold);
+      font-size: var(--fs-heading-sm);
+    }
+    .summary .counts .on { color: var(--brand-yellow); }
+    .summary .actions {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+    .summary button {
+      font-family: var(--font-body);
+      font-weight: var(--fw-bold);
+      font-size: var(--fs-button);
+      padding: 10px 18px;
+      border-radius: var(--radius-button);
+      border: 2px solid var(--brand-yellow);
+      background: var(--brand-yellow);
+      color: var(--brand-navy-dark);
+      cursor: pointer;
+      transition: transform 0.1s, box-shadow 0.1s;
+    }
+    .summary button.ghost {
+      background: transparent;
+      color: var(--brand-yellow);
+    }
+    .summary button:hover {
+      transform: translate(-2px, -2px);
+      box-shadow: 4px 4px 0 var(--brand-yellow-dark);
+    }
+
+    /* ─── Section cards ─── */
+    section.group {
+      background: var(--bg-card);
+      border-radius: var(--radius-card);
+      box-shadow: var(--shadow-card);
+      margin-bottom: 20px;
+      overflow: hidden;
+    }
+    section.group > header {
+      padding: 20px 24px 16px;
+      border-bottom: 1px solid var(--border-section);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      text-align: left;
+      margin: 0;
+    }
+    section.group > header h2 {
+      font-family: var(--font-heading);
+      font-size: var(--fs-heading);
+      margin: 0;
+      color: var(--brand-navy-dark);
+    }
+    section.group > header .group-meta {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: var(--fs-body-sm);
+      color: var(--text-muted);
+    }
+    section.group > header .group-count {
+      font-family: var(--font-body);
+      font-weight: var(--fw-bold);
+    }
+    section.group > header .group-toggle-all {
+      font-family: var(--font-body);
+      font-size: var(--fs-caption);
+      font-weight: var(--fw-bold);
+      letter-spacing: 0.5px;
+      text-transform: uppercase;
+      padding: 6px 14px;
+      border-radius: var(--radius-button);
+      border: 1px solid var(--border-tab);
+      background: transparent;
+      color: var(--text-secondary);
+      cursor: pointer;
+    }
+    section.group > header .group-toggle-all:hover {
+      background: var(--brand-navy);
+      color: var(--text-on-dark);
+      border-color: var(--brand-navy);
+    }
+
+    /* ─── Feature row ─── */
+    .feature {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 16px;
+      padding: 14px 24px;
+      border-top: 1px solid rgba(224, 208, 188, 0.5);
+      align-items: center;
+    }
+    .feature:first-of-type { border-top: none; }
+
+    .feature .info {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+      min-width: 0;
+    }
+
+    .feature .name-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+    .feature .name {
+      font-family: var(--font-body);
+      font-weight: var(--fw-bold);
+      font-size: var(--fs-body-lg);
+      color: var(--text-primary);
+    }
+    .feature .tier {
+      font-family: var(--font-body);
+      font-size: 10px;
+      font-weight: var(--fw-bold);
+      letter-spacing: 0.5px;
+      text-transform: uppercase;
+      padding: 2px 8px;
+      border-radius: var(--radius-badge);
+    }
+    .feature .tier.t1 { background: var(--brand-green); color: white; }
+    .feature .tier.t2 { background: var(--brand-purple); color: white; }
+    .feature .tier.t3 { background: var(--brand-yellow); color: var(--brand-navy-dark); }
+
+    .feature .desc {
+      font-size: var(--fs-body-sm);
+      color: var(--text-secondary);
+      line-height: 1.4;
+    }
+
+    .feature .help {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      background: var(--brand-primary);
+      color: white;
+      font-size: 10px;
+      font-weight: var(--fw-bold);
+      cursor: help;
+      position: relative;
+      flex-shrink: 0;
+    }
+    .feature .help:hover .tooltip,
+    .feature .help:focus .tooltip {
+      display: block;
+    }
+    .feature .tooltip {
+      display: none;
+      position: absolute;
+      left: 24px;
+      top: 50%;
+      transform: translateY(-50%);
+      background: var(--brand-navy-dark);
+      color: white;
+      padding: 10px 14px;
+      border-radius: 10px;
+      width: 300px;
+      font-size: var(--fs-body-sm);
+      font-weight: var(--fw-regular);
+      line-height: 1.45;
+      z-index: 100;
+      box-shadow: 0 6px 20px rgba(0, 49, 65, 0.25);
+      white-space: normal;
+      text-align: left;
+    }
+    .feature .tooltip::before {
+      content: '';
+      position: absolute;
+      left: -6px;
+      top: 50%;
+      transform: translateY(-50%);
+      border: 6px solid transparent;
+      border-right-color: var(--brand-navy-dark);
+    }
+
+    /* ─── Toggle switch ─── */
+    .toggle {
+      position: relative;
+      display: inline-block;
+      width: 52px;
+      height: 30px;
+      flex-shrink: 0;
+    }
+    .toggle input {
+      opacity: 0;
+      width: 0;
+      height: 0;
+    }
+    .slider {
+      position: absolute;
+      cursor: pointer;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background: #d1c6b5;
+      transition: 0.2s;
+      border-radius: 30px;
+    }
+    .slider::before {
+      position: absolute;
+      content: '';
+      height: 24px;
+      width: 24px;
+      left: 3px;
+      bottom: 3px;
+      background: white;
+      transition: 0.2s;
+      border-radius: 50%;
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+    }
+    .toggle input:checked + .slider {
+      background: var(--brand-green);
+    }
+    .toggle input:checked + .slider::before {
+      transform: translateX(22px);
+    }
+
+    /* ─── Feature row turned off state ─── */
+    .feature:has(input:not(:checked)) .info {
+      opacity: 0.4;
+    }
+    .feature:has(input:not(:checked)) .name {
+      text-decoration: line-through;
+    }
+
+    /* ─── Export modal ─── */
+    .export-area {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 49, 65, 0.7);
+      z-index: 100;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+    }
+    .export-area.visible { display: flex; }
+    .export-box {
+      background: var(--bg-card);
+      border-radius: var(--radius-card);
+      padding: 28px;
+      max-width: 700px;
+      width: 100%;
+      max-height: 80vh;
+      overflow: auto;
+    }
+    .export-box h3 {
+      font-family: var(--font-heading);
+      font-size: var(--fs-heading-lg);
+      margin: 0 0 16px;
+    }
+    .export-box textarea {
+      width: 100%;
+      height: 400px;
+      font-family: ui-monospace, 'SF Mono', Monaco, monospace;
+      font-size: var(--fs-body-sm);
+      padding: 12px;
+      border-radius: 10px;
+      border: 1px solid var(--border-section);
+      background: var(--bg-page);
+      color: var(--text-primary);
+      resize: vertical;
+    }
+    .export-box .close {
+      margin-top: 12px;
+      padding: 10px 20px;
+      border-radius: var(--radius-button);
+      background: var(--brand-navy);
+      color: white;
+      border: none;
+      font-weight: var(--fw-bold);
+      cursor: pointer;
+    }
+
+    /* ─── Legend ─── */
+    .legend {
+      display: flex;
+      gap: 16px;
+      flex-wrap: wrap;
+      padding: 16px 20px;
+      background: var(--bg-card);
+      border-radius: var(--radius-card);
+      margin-bottom: 20px;
+      box-shadow: var(--shadow-card);
+      font-size: var(--fs-body-sm);
+    }
+    .legend strong { color: var(--text-primary); }
+    .legend-item {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .legend-item .tier {
+      font-size: 10px;
+      font-weight: var(--fw-bold);
+      padding: 2px 8px;
+      border-radius: var(--radius-badge);
+      letter-spacing: 0.5px;
+      text-transform: uppercase;
+    }
+    .legend-item .tier.t1 { background: var(--brand-green); color: white; }
+    .legend-item .tier.t2 { background: var(--brand-purple); color: white; }
+    .legend-item .tier.t3 { background: var(--brand-yellow); color: var(--brand-navy-dark); }
+
+    @media (max-width: 640px) {
+      body { padding: 20px 12px 100px; }
+      .summary { margin: 0 -12px 24px; padding: 14px 16px; }
+      .feature { padding: 14px 16px; grid-template-columns: 1fr auto; }
+      section.group > header { padding: 16px 18px 14px; }
+      .feature .tooltip {
+        left: auto;
+        right: 24px;
+        width: 240px;
+      }
+      .feature .tooltip::before {
+        left: auto;
+        right: -6px;
+        border-right-color: transparent;
+        border-left-color: var(--brand-navy-dark);
+      }
+    }
+  </style>
+</head>
+<body>
+
+<div class="wrap">
+
+  <header>
+    <h1>Coupon Feature Picker</h1>
+    <p>All toggled on by default. Turn off any feature you don't want prebuilt into Migration&nbsp;#3.</p>
+  </header>
+
+  <div class="summary">
+    <div class="counts">
+      <span class="on" id="onCount">0</span> / <span id="totalCount">0</span> features enabled
+    </div>
+    <div class="actions">
+      <button class="ghost" id="allOn">All on</button>
+      <button class="ghost" id="allOff">All off</button>
+      <button class="ghost" id="tier1Only">Tier 1 only</button>
+      <button id="exportBtn">Export selection</button>
+    </div>
+  </div>
+
+  <div class="legend">
+    <strong>Tier legend:</strong>
+    <div class="legend-item"><span class="tier t1">T1</span> HMP parity — must-have</div>
+    <div class="legend-item"><span class="tier t2">T2</span> Beyond HMP — high leverage</div>
+    <div class="legend-item"><span class="tier t3">T3</span> Nice to have — can defer</div>
+  </div>
+
+  <div id="sections"></div>
+
+</div>
+
+<div class="export-area" id="exportArea">
+  <div class="export-box">
+    <h3>Your selection</h3>
+    <textarea id="exportText" readonly></textarea>
+    <button class="close" id="closeExport">Close</button>
+  </div>
+</div>
+
+<script>
+  // ─── Feature catalog ───────────────────────────────────────────────────
+  const SECTIONS = [
+    {
+      title: "1. Identity & Display",
+      features: [
+        { id: "code", name: "Coupon code + auto-generate", tier: 1,
+          desc: "Admin types a code or clicks a button to generate a random unique one",
+          help: "Already in schema. The generate button is a UI concern — the schema just stores a unique string." },
+        { id: "internal_desc", name: "Internal description", tier: 1,
+          desc: "Admin-only note explaining the coupon's purpose",
+          help: "Already in schema. Never shown to customers." },
+        { id: "display_message", name: "Customer-facing display message", tier: 1,
+          desc: "E.g. '20% off your order!' shown on cart and emails",
+          help: "Not in schema yet. Separates internal description from what the customer sees." },
+        { id: "published_status", name: "Published / Draft status", tier: 1,
+          desc: "Turn coupon on/off without deleting it",
+          help: "Already in schema as is_active boolean." },
+      ]
+    },
+
+    {
+      title: "2. Discount Type & Amount",
+      features: [
+        { id: "type_percent", name: "Percentage off", tier: 1,
+          desc: "e.g. 20% off entire order",
+          help: "Already supported via CouponType enum." },
+        { id: "type_fixed", name: "Fixed dollar amount off", tier: 1,
+          desc: "e.g. $10 off",
+          help: "Already supported via CouponType enum." },
+        { id: "type_free_item", name: "Free item", tier: 1,
+          desc: "Grants a specific item for free",
+          help: "Already in enum. Needs target_meal_code (or array) to say WHICH item." },
+        { id: "type_free_delivery", name: "Free delivery", tier: 1,
+          desc: "Waives delivery fee",
+          help: "Already in enum." },
+        { id: "combo_free_delivery", name: "Combo: discount + free delivery", tier: 1,
+          desc: "Stack a percentage off WITH free delivery in the same code",
+          help: "Single boolean 'includes_free_delivery' on any discount-type coupon." },
+      ]
+    },
+
+    {
+      title: "3. Order Value Thresholds",
+      features: [
+        { id: "min_order", name: "Minimum order value", tier: 1,
+          desc: "Coupon only applies if cart total >= $X",
+          help: "Already in schema as min_order_value." },
+        { id: "max_discount_cap", name: "Maximum discount cap", tier: 1,
+          desc: "'20% off, max $50 savings'",
+          help: "Critical for percentage coupons to prevent huge discounts on large orders." },
+        { id: "max_order_value", name: "Maximum order value cap", tier: 1,
+          desc: "Coupon only valid if cart total <= $X",
+          help: "Less common. Useful if you want to exclude big bulk buyers from a promo." },
+      ]
+    },
+
+    {
+      title: "4. Dates & Usage Limits",
+      features: [
+        { id: "start_date", name: "Effective / start date", tier: 1,
+          desc: "Coupon becomes active at this date",
+          help: "Schedule a coupon ahead of time instead of creating it at launch moment." },
+        { id: "expiry_date", name: "Expiration date", tier: 1,
+          desc: "Coupon stops working after this date",
+          help: "Already in schema as expires_at." },
+        { id: "max_uses_global", name: "Max uses (global)", tier: 1,
+          desc: "Limit total redemptions across all customers",
+          help: "Already in schema." },
+        { id: "max_uses_per_customer", name: "Max uses per customer", tier: 1,
+          desc: "Limit how many times each customer can redeem",
+          help: "Already in schema." },
+      ]
+    },
+
+    {
+      title: "5. Restriction Flags",
+      features: [
+        { id: "new_customers_only", name: "New customers only", tier: 1,
+          desc: "Only valid on a customer's first order",
+          help: "Single boolean. Common enough it deserves its own flag instead of a min_order_count=0 workaround." },
+        { id: "exclude_sale_items", name: "Exclude sale items", tier: 1,
+          desc: "Coupon won't apply to items already on sale",
+          help: "Prevents double-discounting. Needs a 'is_on_sale' signal on MealRecipe or equivalent." },
+        { id: "auto_apply", name: "Auto-apply at checkout", tier: 1,
+          desc: "Applied automatically — no code needed",
+          help: "Big UX win. System scans active auto-apply coupons and applies the best match." },
+        { id: "show_on_order_confirmation", name: "Show in order confirmation email", tier: 1,
+          desc: "Display the coupon savings in confirmation emails",
+          help: "Template flag. Doesn't affect redemption logic." },
+        { id: "non_stackable", name: "Cannot combine with other coupons", tier: 1,
+          desc: "Blocks stacking with any other coupon",
+          help: "Single boolean. Inverse of 'stackable'." },
+        { id: "show_as_clippable", name: "Show as clippable on cart", tier: 1,
+          desc: "Appears as a 'clip this coupon' UI on cart",
+          help: "Great discovery UX. Customers see coupons they might be eligible for before checkout." },
+        { id: "exclude_meal_plan_discounts", name: "Exclude meal-plan discounted items", tier: 1,
+          desc: "Don't stack on items already discounted by a subscription tier",
+          help: "Prevents double-dipping between coupon and subscription savings." },
+      ]
+    },
+
+    {
+      title: "6. Subscription & Order History",
+      features: [
+        { id: "subscription_restriction", name: "Subscription restriction", tier: 1,
+          desc: "Any / subscribers only / non-subscribers only",
+          help: "Dropdown enum. 'Win back lapsed subscribers' vs 'new customer acquisition'." },
+        { id: "min_order_count", name: "Minimum order count", tier: 1,
+          desc: "Valid only after customer's Nth order",
+          help: "E.g. 'loyalty reward after 10 orders'." },
+        { id: "max_order_count", name: "Maximum order count", tier: 1,
+          desc: "Valid only for customer's first N orders",
+          help: "E.g. '20% off first 3 orders' — redemption is capped per customer." },
+      ]
+    },
+
+    {
+      title: "7. Email Targeting",
+      features: [
+        { id: "email_allowlist", name: "Email allowlist", tier: 1,
+          desc: "Only specific email addresses can use the coupon",
+          help: "String array. Simpler than the personal-coupon + CustomerCoupon model for mass distribution." },
+        { id: "email_blocklist", name: "Email blocklist", tier: 1,
+          desc: "Specific email addresses explicitly banned from the coupon",
+          help: "Fraud prevention — block known abusers without disabling the whole coupon." },
+      ]
+    },
+
+    {
+      title: "8. Product Targeting",
+      features: [
+        { id: "product_include", name: "Product include list (multi)", tier: 1,
+          desc: "Coupon applies ONLY to these meal codes",
+          help: "String array. Replaces single target_meal_code with multi-select." },
+        { id: "product_exclude", name: "Product exclude list (multi)", tier: 1,
+          desc: "Coupon does NOT apply to these meal codes",
+          help: "String array. E.g. '20% off everything EXCEPT new launches'." },
+      ]
+    },
+
+    {
+      title: "9. Category Targeting",
+      features: [
+        { id: "category_include", name: "Category include list (multi)", tier: 1,
+          desc: "Coupon applies only to these categories",
+          help: "String array. Replaces single target_category with multi-select." },
+        { id: "category_exclude", name: "Category exclude list (multi)", tier: 1,
+          desc: "Coupon does not apply to these categories",
+          help: "String array." },
+      ]
+    },
+
+    {
+      title: "10. Delivery & Location",
+      features: [
+        { id: "shipping_zones", name: "Shipping zone restrictions", tier: 3,
+          desc: "Only valid in specific delivery zones",
+          help: "Requires a DeliveryZone table we don't have yet. Defer until zone-based delivery pricing exists." },
+        { id: "pickup_locations", name: "Pickup location restrictions", tier: 3,
+          desc: "Only valid at specific pickup locations",
+          help: "Requires a PickupLocation table. Small current scope." },
+        { id: "postal_code_targeting", name: "Postal code targeting", tier: 3,
+          desc: "Only valid for customers delivering to specific postal codes",
+          help: "String array. Cheaper than a full zone table if you just want 'NW Calgary only' style targeting." },
+      ]
+    },
+
+    {
+      title: "11. Attached Products & BOGO",
+      features: [
+        { id: "attached_products", name: "Attached free products", tier: 2,
+          desc: "Auto-adds free/discounted items to cart when coupon applies",
+          help: "Like HMP's 'free protein balls'. Needs a CouponAttachedProduct child table." },
+        { id: "bogo_logic", name: "Buy N get N logic", tier: 2,
+          desc: "e.g. 'Buy 3 meals, get 1 free'",
+          help: "Fields: buy_qty, get_qty, get_discount_pct. Flexible BOGO engine." },
+        { id: "cross_category_bogo", name: "Cross-category BOGO", tier: 2,
+          desc: "Buy from category X, get discount on category Y",
+          help: "Extends BOGO with separate trigger and reward categories." },
+      ]
+    },
+
+    {
+      title: "12. Segment Targeting (beyond HMP)",
+      features: [
+        { id: "tag_include", name: "Customer tag include", tier: 2,
+          desc: "Only customers with these tags can use it (e.g. VIP)",
+          help: "Requires Customer.tags[] field. Will also future-proof LTV-based membership tiers." },
+        { id: "tag_exclude", name: "Customer tag exclude", tier: 2,
+          desc: "Customers with these tags cannot use it",
+          help: "String array. Mirror of include." },
+        { id: "min_lifetime_spend", name: "Minimum lifetime spend (LTV floor)", tier: 2,
+          desc: "Only customers with LTV >= $X",
+          help: "Requires Customer.lifetime_spend denormalized column. Great for VIP rewards." },
+        { id: "max_lifetime_spend", name: "Maximum lifetime spend (LTV ceiling)", tier: 2,
+          desc: "Only customers with LTV <= $X",
+          help: "E.g. 'win-back for low-spend customers under $200 lifetime'." },
+        { id: "member_since_range", name: "Member-since range (cohort targeting)", tier: 2,
+          desc: "Only customers who signed up between these dates",
+          help: "Two date fields. 'March 2026 signups only'." },
+        { id: "customer_status_target", name: "Target customer statuses", tier: 2,
+          desc: "Only customers with specific statuses (active / paused / cancelled)",
+          help: "String/enum array on the coupon." },
+      ]
+    },
+
+    {
+      title: "13. Tiered Discounts",
+      features: [
+        { id: "tiered_discounts", name: "Multi-tier spend thresholds", tier: 2,
+          desc: "Spend $50 → 10%, $100 → 20%, $150 → 25% + free delivery",
+          help: "Requires a CouponTier child table. Single coupon expresses multiple rewards." },
+      ]
+    },
+
+    {
+      title: "14. Time Controls",
+      features: [
+        { id: "day_of_week", name: "Day-of-week restriction", tier: 2,
+          desc: "'Weekends only' or 'Monday only'",
+          help: "Int[] with 0-6. Useful for slow-day promos." },
+        { id: "time_of_day", name: "Time-of-day restriction", tier: 3,
+          desc: "e.g. 5pm-9pm flash sale",
+          help: "Two time fields. Rare use case." },
+        { id: "rolling_expiry", name: "Rolling expiry (N days after issued)", tier: 2,
+          desc: "Expires N days after customer receives it",
+          help: "Integer field. For auto-issued welcome/birthday coupons." },
+        { id: "countdown_display", name: "Countdown display hint", tier: 3,
+          desc: "UI flag to show an urgency countdown",
+          help: "Pure UI hint. No redemption impact." },
+      ]
+    },
+
+    {
+      title: "15. Attribution & Analytics",
+      features: [
+        { id: "source_channel", name: "Source channel tracking", tier: 2,
+          desc: "Email / SMS / landing page / app — on CustomerCoupon redemption",
+          help: "Enum column on CustomerCoupon. Lets you answer 'which channel drove this redemption'." },
+        { id: "source_campaign", name: "Source campaign tracking", tier: 2,
+          desc: "Free-text campaign tag",
+          help: "String column on CustomerCoupon. Correlate with external campaign analytics." },
+        { id: "denorm_analytics", name: "Denormalized analytics on Coupon row", tier: 2,
+          desc: "total_redemptions, total_revenue, total_customers, total_discount_given",
+          help: "Fast dashboard reads without running aggregations. Updated on each redemption." },
+      ]
+    },
+
+    {
+      title: "16. Generation & Distribution",
+      features: [
+        { id: "bulk_unique_codes", name: "Bulk unique code generation", tier: 3,
+          desc: "Generate 1,000 unique codes from one template",
+          help: "Separate generator utility. Schema-wise needs a parent_coupon_id or template_id field." },
+        { id: "per_customer_codes", name: "Per-customer unique codes", tier: 3,
+          desc: "Each customer gets their own code like 'JANE-2026-X'",
+          help: "Requires linking coupon to customer at generation time. Kills sharing." },
+        { id: "qr_code_output", name: "QR code output", tier: 3,
+          desc: "Generate a QR code for print marketing",
+          help: "Pure CLI/backend tool. No schema change needed." },
+        { id: "deep_link_urls", name: "Deep-link URL support", tier: 2,
+          desc: "/?coupon=CODE auto-applies on landing",
+          help: "No schema change. Just wire it in the client website." },
+        { id: "partner_portal", name: "Partner portal access", tier: 3,
+          desc: "External partners can generate their own coupons",
+          help: "Major feature — needs auth scoping, per-partner limits, approval workflows." },
+      ]
+    },
+
+    {
+      title: "17. Referral & Sharing",
+      features: [
+        { id: "dual_sided_referral", name: "Dual-sided referral coupons", tier: 2,
+          desc: "Code gives BOTH referrer and friend a reward",
+          help: "referrer_customer_id + referrer_credit fields. Builds referrals into coupon system." },
+        { id: "gift_coupons", name: "Gift coupons", tier: 3,
+          desc: "Customer sends a coupon to a friend via SMS/email",
+          help: "Needs a sender_customer_id field + distribution mechanic." },
+        { id: "partner_codes", name: "Partner / influencer codes", tier: 3,
+          desc: "Track redemptions per partner (e.g. 'JANEFITNESS10')",
+          help: "partner_id field + payout logic. Overlaps with partner portal." },
+      ]
+    },
+
+    {
+      title: "18. Automation & Lifecycle",
+      features: [
+        { id: "auto_winback", name: "Auto win-back (inactivity trigger)", tier: 3,
+          desc: "System issues a coupon N days after last order",
+          help: "Requires a scheduled job — not just schema. Schema side: trigger_type enum + trigger_days field." },
+        { id: "birthday_issuance", name: "Birthday auto-issuance", tier: 3,
+          desc: "Auto-generate a personalized coupon on customer's birthday",
+          help: "Requires scheduled job + Customer.birthday field." },
+        { id: "abandoned_cart_recovery", name: "Abandoned cart recovery", tier: 3,
+          desc: "Auto-issue a recovery coupon when cart is abandoned at checkout",
+          help: "Requires cart abandonment tracking + event hook." },
+        { id: "welcome_series", name: "Welcome series sequences", tier: 3,
+          desc: "Series of 3 coupons delivered over 6 weeks to new customers",
+          help: "Needs a CouponSequence parent table + scheduler." },
+      ]
+    },
+
+    {
+      title: "19. Fraud & Abuse",
+      features: [
+        { id: "device_fingerprint", name: "Device fingerprint tracking", tier: 3,
+          desc: "Catch multi-account abuse by device",
+          help: "Requires fingerprinting infra. Heavy for current scale." },
+        { id: "ip_rate_limit", name: "IP rate limiting", tier: 3,
+          desc: "Block rapid redemptions from same IP",
+          help: "Middleware concern, not schema." },
+        { id: "max_uses_per_household", name: "Max uses per household (by address)", tier: 2,
+          desc: "Prevent multi-account abuse per delivery address",
+          help: "Integer field on coupon + lookup by normalized address." },
+        { id: "verified_email_required", name: "Require verified email", tier: 3,
+          desc: "Coupon only redeems if customer has confirmed their email",
+          help: "Boolean flag. Needs Customer.email_verified signal." },
+      ]
+    },
+
+    {
+      title: "20. Admin UX",
+      features: [
+        { id: "coupon_templates", name: "Coupon templates", tier: 3,
+          desc: "Save common coupons as reusable templates",
+          help: "is_template boolean + cloning UI. Pure admin convenience." },
+        { id: "ab_test_variants", name: "A/B test variant tracking", tier: 2,
+          desc: "Create CODE-A and CODE-B, track which converts better",
+          help: "variant_group_id + variant_letter fields. Built-in experimentation." },
+        { id: "audit_log", name: "Audit log (who changed what)", tier: 3,
+          desc: "Track edits to coupon config over time",
+          help: "Either per-coupon edit_history Json[] or global AuditLog table. Global is cleaner." },
+        { id: "bulk_actions", name: "Bulk actions", tier: 3,
+          desc: "Disable all expiring this week, extend holiday promos, etc.",
+          help: "Admin UI feature. No schema change." },
+      ]
+    },
+
+    {
+      title: "21. Customer UX",
+      features: [
+        { id: "best_coupon_suggestion", name: "Best coupon auto-suggestion", tier: 2,
+          desc: "System picks the best eligible coupon for the current cart",
+          help: "Backend logic. No schema change." },
+        { id: "expiry_notifications", name: "Expiry notification trigger", tier: 3,
+          desc: "'Your $10 off expires tomorrow' emails/SMS",
+          help: "Scheduled job + email template." },
+        { id: "lifetime_savings", name: "Lifetime savings display", tier: 3,
+          desc: "'You've saved $147 this year with coupons'",
+          help: "Derived from CustomerCoupon history. Pure read logic." },
+      ]
+    },
+  ];
+
+  // ─── Render ─────────────────────────────────────────────────────────────
+  const sectionsEl = document.getElementById('sections');
+  let total = 0;
+
+  SECTIONS.forEach((section, sIdx) => {
+    const sEl = document.createElement('section');
+    sEl.className = 'group';
+    sEl.dataset.sectionIdx = sIdx;
+
+    const featureRows = section.features.map(f => {
+      total++;
+      return `
+        <div class="feature" data-tier="${f.tier}">
+          <div class="info">
+            <div class="name-row">
+              <span class="name">${f.name}</span>
+              <span class="tier t${f.tier}">T${f.tier}</span>
+              <span class="help" tabindex="0">?<span class="tooltip">${f.help}</span></span>
+            </div>
+            <div class="desc">${f.desc}</div>
+          </div>
+          <label class="toggle">
+            <input type="checkbox" data-id="${f.id}" data-name="${f.name}" data-tier="${f.tier}" checked>
+            <span class="slider"></span>
+          </label>
+        </div>
+      `;
+    }).join('');
+
+    sEl.innerHTML = `
+      <header>
+        <h2>${section.title}</h2>
+        <div class="group-meta">
+          <span class="group-count">${section.features.length} features</span>
+          <button class="group-toggle-all">Toggle all</button>
+        </div>
+      </header>
+      ${featureRows}
+    `;
+    sectionsEl.appendChild(sEl);
+  });
+
+  document.getElementById('totalCount').textContent = total;
+
+  // ─── Toggle-all per section ─────────────────────────────────────────────
+  document.querySelectorAll('.group-toggle-all').forEach(btn => {
+    btn.addEventListener('click', e => {
+      const section = e.target.closest('section.group');
+      const inputs = section.querySelectorAll('input[type=checkbox]');
+      const anyOff = Array.from(inputs).some(i => !i.checked);
+      inputs.forEach(i => i.checked = anyOff);
+      updateCounts();
+    });
+  });
+
+  // ─── Global actions ─────────────────────────────────────────────────────
+  document.getElementById('allOn').addEventListener('click', () => {
+    document.querySelectorAll('input[type=checkbox]').forEach(i => i.checked = true);
+    updateCounts();
+  });
+  document.getElementById('allOff').addEventListener('click', () => {
+    document.querySelectorAll('input[type=checkbox]').forEach(i => i.checked = false);
+    updateCounts();
+  });
+  document.getElementById('tier1Only').addEventListener('click', () => {
+    document.querySelectorAll('input[type=checkbox]').forEach(i => {
+      i.checked = i.dataset.tier === '1';
+    });
+    updateCounts();
+  });
+
+  // ─── Live counter ──────────────────────────────────────────────────────
+  function updateCounts() {
+    const on = document.querySelectorAll('input[type=checkbox]:checked').length;
+    document.getElementById('onCount').textContent = on;
+  }
+  document.addEventListener('change', e => {
+    if (e.target.matches('input[type=checkbox]')) updateCounts();
+  });
+  updateCounts();
+
+  // ─── Export ─────────────────────────────────────────────────────────────
+  document.getElementById('exportBtn').addEventListener('click', () => {
+    const enabled = [];
+    const disabled = [];
+    SECTIONS.forEach(section => {
+      section.features.forEach(f => {
+        const input = document.querySelector(`input[data-id="${f.id}"]`);
+        const line = `  - ${f.name} [T${f.tier}]`;
+        if (input.checked) enabled.push({ section: section.title, line });
+        else disabled.push({ section: section.title, line });
+      });
+    });
+
+    const groupBy = (arr) => {
+      const out = {};
+      arr.forEach(({ section, line }) => {
+        if (!out[section]) out[section] = [];
+        out[section].push(line);
+      });
+      return Object.entries(out).map(([s, lines]) => `${s}\n${lines.join('\n')}`).join('\n\n');
+    };
+
+    const text =
+`COUPON FEATURE PICKER — SELECTION
+Generated: ${new Date().toLocaleString()}
+
+ENABLED (${enabled.length}):
+${groupBy(enabled) || '  (none)'}
+
+DISABLED (${disabled.length}):
+${groupBy(disabled) || '  (none)'}
+`;
+    document.getElementById('exportText').value = text;
+    document.getElementById('exportArea').classList.add('visible');
+  });
+
+  document.getElementById('closeExport').addEventListener('click', () => {
+    document.getElementById('exportArea').classList.remove('visible');
+  });
+  document.getElementById('exportArea').addEventListener('click', e => {
+    if (e.target.id === 'exportArea') {
+      e.target.classList.remove('visible');
+    }
+  });
+</script>
+
+</body>
+</html>
