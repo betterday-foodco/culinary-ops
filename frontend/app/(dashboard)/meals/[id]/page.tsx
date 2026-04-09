@@ -12,7 +12,11 @@ const DIETARY_BADGE_OPTIONS = ['Gluten Friendly','High Protein','Dairy Free','Ve
 const PROTEIN_TYPE_OPTIONS  = ['Chicken','Turkey','Beef','Pork','Seafood','Plant Protein'];
 const STARCH_OPTIONS   = ['Rice','Pasta','Potato','Quinoa','Other','None'];
 const CONTAINER_OPTIONS = ['Meal Tray','Salad Container'];
-const CATEGORIES = ['Meat','Vegan','Vegetarian','Fish & Seafood','Breakfast','Snack','Soup','Salad','Granola','Other'];
+// NOTE: The Category dropdown is now populated at runtime from SystemTag
+// rows where type='menu-cats' (see the Promise.all in useEffect below and
+// the `menuCats` useMemo). The old hardcoded list used to live here — it's
+// gone because menu-cats is the single source of truth for both admin and
+// the customer-facing website menu tabs.
 
 // ─── Diet Plan SystemTag IDs (source of truth: /settings/tags) ────────────────
 // These two rows in SystemTag (type='diets') are the classifier for every dish.
@@ -23,6 +27,23 @@ const DIET_PLAN_OMNIVORE_ID    = 'fc0a70f3-644b-4248-b9c1-65882cc503de';
 const DIET_PLAN_PLANT_BASED_ID = '9c68ba40-f59d-40a8-8210-bdc1f3cd3973';
 
 interface MealVariant { id: string; name: string; display_name: string; category: string | null; }
+
+/**
+ * SystemTag row shape (from /api/tags). Used here to populate the Category
+ * dropdown from rows where type='menu-cats'. Same SystemTag table feeds the
+ * Diet Plan classifier (type='diets') and the customer-facing website menu
+ * tabs — one source of truth per taxonomy.
+ */
+interface SystemTag {
+  id: string;
+  name: string;
+  type: string;   // 'menu-cats' | 'diets' | 'allergens' | ...
+  subtype: string | null;
+  source: string | null;
+  visible: boolean;
+  sort_order: number;
+  emoji: string | null;
+}
 
 interface MealDetail {
   id: string; meal_code: string | null; name: string; display_name: string; category: string | null;
@@ -175,6 +196,7 @@ export default function MealDetailPage() {
   // Component add state
   const [allIngredients, setAllIngredients] = useState<Ingredient[]>([]);
   const [allSubRecipes, setAllSubRecipes] = useState<SubRecipe[]>([]);
+  const [allTags, setAllTags] = useState<SystemTag[]>([]);
   const [addType, setAddType] = useState<'sub_recipe' | 'ingredient'>('sub_recipe');
   const [addRefId, setAddRefId] = useState('');
   const [addQty, setAddQty] = useState('1');
@@ -248,10 +270,15 @@ export default function MealDetailPage() {
 
   useEffect(() => {
     loadMeal();
-    Promise.all([api.getIngredients(), api.getSubRecipes(), api.getMeals()]).then(([i, s, m]) => {
+    Promise.all([api.getIngredients(), api.getSubRecipes(), api.getMeals(), api.getTags()]).then(([i, s, m, t]) => {
       setAllIngredients(i);
       setAllSubRecipes(s);
       setAllMeals(m as MealVariant[]);
+      // menu-cats is the single source of truth for category — both the admin
+      // dropdown below AND the customer-facing website menu tabs read from the
+      // same SystemTag bucket. Edit /settings/tags → Menu Categories to add
+      // a new category; every surface updates on next load.
+      setAllTags(t as SystemTag[]);
     });
   }, [loadMeal]);
 
@@ -504,6 +531,17 @@ export default function MealDetailPage() {
 
   const totalComponentCost = meal?.components.reduce((sum, c) => sum + componentCost(c), 0) ?? 0;
 
+  // Menu categories — filtered from the SystemTag registry at runtime. Sorted
+  // by sort_order then name so admins can re-order in /settings/tags without a
+  // code change. This same filter pattern is what the customer-facing website
+  // menu tabs should use once the client-website pages start consuming it, so
+  // there's exactly ONE list of valid menu categories and everyone agrees.
+  const menuCats = useMemo(() => {
+    return allTags
+      .filter(t => t.type === 'menu-cats')
+      .sort((a, b) => (a.sort_order - b.sort_order) || a.name.localeCompare(b.name));
+  }, [allTags]);
+
   // Ingredient-derived allergens — roll up from every ingredient this meal
   // touches, whether direct or via a sub-recipe. Case-insensitive, deduped.
   // This is the source-of-truth for what's actually IN the dish; the manual
@@ -750,14 +788,34 @@ export default function MealDetailPage() {
             </button>
           </div>
 
-          {/* Category */}
+          {/* Category — populated from SystemTag(type='menu-cats'). Same
+              list that feeds the customer-facing website menu tabs. Edit
+              at /settings/tags → Menu Categories. */}
           <div>
-            <label className="block text-xs font-medium text-gray-500 mb-1">Category</label>
+            <div className="flex items-center justify-between mb-1">
+              <label className="block text-xs font-medium text-gray-500">Category</label>
+              <a href="/settings/tags" className="text-[9px] text-gray-400 hover:text-brand-600 font-medium" title="Manage categories in Settings → Tags">Manage</a>
+            </div>
             <select value={category} onChange={(e) => setCategory(e.target.value)}
               className="w-full px-2 py-1.5 border border-gray-200 rounded-lg text-xs bg-white focus:outline-none focus:ring-2 focus:ring-brand-400">
               <option value="">— none —</option>
-              {CATEGORIES.map((c) => <option key={c} value={c}>{c}</option>)}
+              {menuCats.map((c) => (
+                <option key={c.id} value={c.name}>{c.emoji ? `${c.emoji} ${c.name}` : c.name}</option>
+              ))}
+              {/* If the meal already has a category that's NOT in the current
+                  menu-cats list (e.g. legacy 'Meat'/'Vegan'/'Snacks'/'Breakfast'),
+                  surface it as a disabled orphan option so the user can see
+                  and intentionally change it. Otherwise a legacy value would
+                  silently show as "— none —" and the save would blank it. */}
+              {category && !menuCats.some(c => c.name === category) && (
+                <option value={category} disabled>⚠ {category} (legacy — not in menu-cats)</option>
+              )}
             </select>
+            {category && !menuCats.some(c => c.name === category) && menuCats.length > 0 && (
+              <p className="mt-1 text-[10px] text-amber-600">
+                This meal's category isn't in <a href="/settings/tags" className="underline">menu-cats</a>. Pick a current one to fix.
+              </p>
+            )}
           </div>
 
           {/* Sell price */}
