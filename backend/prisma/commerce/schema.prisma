@@ -26,7 +26,7 @@
 
 generator commerce_client {
   provider = "prisma-client-js"
-  output   = "../node_modules/@prisma/commerce-client"
+  output   = "../../node_modules/@prisma/commerce-client"
 }
 
 datasource db {
@@ -148,6 +148,11 @@ model Customer {
   disliked_meals      String[] // manual "never swap TO this" list
   favorite_meals      String[] // manual preferred list
 
+  // Rewards — denormalized running balance for fast reads. The
+  // RewardPointsTransaction ledger is the source of truth; this field is
+  // kept in sync via application code on every earn/spend event.
+  points_balance      Int            @default(0)
+
   // Admin-only
   internal_notes      String? // CS notes, hidden from customer UI
   tags                String[] // Admin segmentation e.g. ["VIP", "frequent-edits"]
@@ -161,11 +166,13 @@ model Customer {
   last_login_at       DateTime?
 
   // Relations
-  addresses           CustomerAddress[]
-  payment_methods     PaymentMethod[]
-  subscription        Subscription?
-  orders              CustomerOrder[]
-  weekly_cart_records WeeklyCartRecord[]
+  addresses                  CustomerAddress[]
+  payment_methods            PaymentMethod[]
+  subscription               Subscription?
+  orders                     CustomerOrder[]
+  weekly_cart_records        WeeklyCartRecord[]
+  reward_points_transactions RewardPointsTransaction[]
+  customer_coupons           CustomerCoupon[]
 
   @@index([phone])
   @@index([apple_id_sub])
@@ -176,16 +183,23 @@ model Customer {
 
 // ─── CustomerAddress ─────────────────────────────────────────────────────────
 // Delivery or pickup address. A customer can have many.
-// recipient_name is distinct from the customer's name — supports gift
-// addresses where Jose stores Mom's address with recipient "Sarah Ramirez".
+// Recipient fields are distinct from the customer's own profile — supports
+// gift addresses where Jose stores Mom's address with recipient "Sarah Ramirez"
+// and Mom's contact details. The subscriber-hub-2.0.html "Edit Address" form
+// collects first/last/email/phone per address, matching these four fields.
 
 model CustomerAddress {
   id                    String      @id @default(uuid())
   customer_id           String
   label                 String // "Home", "Office", "Mom"
   type                  AddressType @default(delivery)
-  recipient_name        String
-  recipient_phone       String?
+
+  // Recipient contact — required by the subscriber-hub address form
+  recipient_first_name  String
+  recipient_last_name   String
+  recipient_email       String
+  recipient_phone       String
+
   company               String?
   street                String
   street2               String? // apartment / unit
@@ -355,12 +369,14 @@ model CustomerOrder {
   updated_at              DateTime           @updatedAt
 
   // Relations
-  customer                Customer           @relation(fields: [customer_id], references: [id])
-  subscription            Subscription?      @relation(fields: [subscription_id], references: [id], onDelete: SetNull)
-  payment_method          PaymentMethod?     @relation("OrderPaymentMethod", fields: [payment_method_id], references: [id], onDelete: SetNull)
-  shipping_address        CustomerAddress?   @relation("OrderShippingAddress", fields: [shipping_address_id], references: [id], onDelete: SetNull)
-  pickup_location         PickupLocation?    @relation("OrderPickupLocation", fields: [pickup_location_id], references: [id], onDelete: SetNull)
-  weekly_cart_record      WeeklyCartRecord?
+  customer                  Customer                  @relation(fields: [customer_id], references: [id])
+  subscription              Subscription?             @relation(fields: [subscription_id], references: [id], onDelete: SetNull)
+  payment_method            PaymentMethod?            @relation("OrderPaymentMethod", fields: [payment_method_id], references: [id], onDelete: SetNull)
+  shipping_address          CustomerAddress?          @relation("OrderShippingAddress", fields: [shipping_address_id], references: [id], onDelete: SetNull)
+  pickup_location           PickupLocation?           @relation("OrderPickupLocation", fields: [pickup_location_id], references: [id], onDelete: SetNull)
+  weekly_cart_record        WeeklyCartRecord?
+  points_transactions       RewardPointsTransaction[] @relation("OrderPointsTransactions")
+  coupon_redemptions        CustomerCoupon[]          @relation("OrderCouponRedemptions")
 
   @@index([customer_id])
   @@index([subscription_id])
@@ -403,4 +419,126 @@ model WeeklyCartRecord {
   @@unique([subscription_id, delivery_week])
   @@index([delivery_week, delivery_status]) // Composite for cart report queries
   @@index([customer_id])
+}
+
+// ─── Rewards: Points Ledger ──────────────────────────────────────────────────
+// Immutable append-only ledger of every points event. Customer.points_balance
+// is the denormalized running sum, kept in sync by application code on every
+// write. The SUM(points) across all rows for a customer should equal that
+// customer's points_balance — a consistency invariant worth validating in
+// periodic audits.
+//
+// Entities.md "reward_points_transaction" is the source of truth for this
+// shape. Prototype reference: pointsHistory[] in subscriber-hub-2.0.html.
+
+enum PointsTxnType {
+  earned        // Points awarded from an order
+  spent         // Points redeemed at checkout
+  expired       // Points aged out (if we ever add expiry)
+  admin_adjust  // Manual CS adjustment (bonus, correction, goodwill)
+}
+
+model RewardPointsTransaction {
+  id           String         @id @default(uuid())
+  customer_id  String
+  type         PointsTxnType
+  points       Int            // Signed: positive for earned, negative for spent/expired
+  dollar_value Decimal        @db.Decimal(10, 2) // Cash equivalent at time of txn
+  order_id     String?        // Optional link to the order that triggered this
+  reason       String?        // Human-readable, shown in the UI
+  created_at   DateTime       @default(now())
+
+  customer     Customer       @relation(fields: [customer_id], references: [id], onDelete: Cascade)
+  order        CustomerOrder? @relation("OrderPointsTransactions", fields: [order_id], references: [id], onDelete: SetNull)
+
+  @@index([customer_id, created_at])
+  @@index([order_id])
+  @@index([type])
+}
+
+// ─── Rewards: Coupons ────────────────────────────────────────────────────────
+// Coupon definitions. A coupon can be:
+//   - Global: any customer can apply the code (is_personal = false)
+//   - Personal: granted to specific customers via CustomerCoupon rows
+//
+// The junction CustomerCoupon tracks per-customer state (available/applied/
+// redeemed/expired). This lets the subscriber hub Discounts tab render the
+// exact "applied" vs "available" states the prototype shows.
+
+enum CouponType {
+  percentage      // e.g. 10% off
+  dollar_amount   // e.g. $5 off
+  free_item       // e.g. free protein balls
+  free_delivery   // waives delivery fee
+}
+
+enum CouponAppliesTo {
+  order           // Applies to the whole order
+  category        // Applies to a meal category
+  specific_meal   // Applies to a specific meal
+}
+
+model Coupon {
+  id                    String            @id @default(uuid())
+  code                  String            @unique // "WELCOME10", "SEAFOOD2026"
+  name                  String            // "10% Off Seafood"
+  description           String?           // "Get 10% off any seafood entree this week."
+  type                  CouponType
+  value                 Decimal           @db.Decimal(10, 2) // Meaning depends on type
+  applies_to            CouponAppliesTo   @default(order)
+  target_category       String?           // When applies_to = category
+  target_meal_code      String?           // When applies_to = specific_meal
+  min_order_value       Decimal?          @db.Decimal(10, 2)
+  max_uses              Int?              // Global cap (null = unlimited)
+  max_uses_per_customer Int?              // Per-customer cap (null = unlimited)
+  uses_count            Int               @default(0) // Denormalized global counter
+  expires_at            DateTime?
+  is_active             Boolean           @default(true)
+  is_personal           Boolean           @default(false) // True = admin must grant via CustomerCoupon
+  created_at            DateTime          @default(now())
+  updated_at            DateTime          @updatedAt
+
+  customer_coupons      CustomerCoupon[]
+
+  @@index([code])
+  @@index([is_active, expires_at])
+  @@index([is_personal])
+}
+
+// ─── CustomerCoupon — per-customer coupon state ──────────────────────────────
+// Links customers to coupons with a state machine. Subscriber hub "Discounts"
+// tab reads this table to render the applied/available UI.
+//
+// For global coupons, rows are created lazily when a customer interacts with
+// the code (e.g., applies it to their cart). For personal coupons, rows are
+// created by the admin when granting the coupon.
+
+enum CouponStatus {
+  available   // Customer has the coupon but hasn't applied it to a cart yet
+  applied     // Attached to the customer's next cart, will consume at checkout
+  redeemed    // Used on an order — dollar amount captured
+  expired     // Passed its expiry date without being used
+  revoked     // Admin manually removed
+}
+
+model CustomerCoupon {
+  id                 String         @id @default(uuid())
+  customer_id        String
+  coupon_id          String
+  status             CouponStatus   @default(available)
+  applied_at         DateTime?      // When customer toggled "apply to next order"
+  redeemed_at        DateTime?      // When the order actually consumed it
+  redeemed_order_id  String?        // FK to CustomerOrder
+  amount_discounted  Decimal?       @db.Decimal(10, 2) // What it actually saved at redemption
+  created_at         DateTime       @default(now())
+  updated_at         DateTime       @updatedAt
+
+  customer           Customer       @relation(fields: [customer_id], references: [id], onDelete: Cascade)
+  coupon             Coupon         @relation(fields: [coupon_id], references: [id], onDelete: Cascade)
+  redeemed_order     CustomerOrder? @relation("OrderCouponRedemptions", fields: [redeemed_order_id], references: [id], onDelete: SetNull)
+
+  @@unique([customer_id, coupon_id])
+  @@index([customer_id])
+  @@index([coupon_id])
+  @@index([status])
 }
