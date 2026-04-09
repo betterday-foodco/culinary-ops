@@ -321,7 +321,7 @@
         </div>
         <div class="card-body">
           <h2 class="card-title">Omnivore</h2>
-          <p class="card-desc">Mixed protein options. Choose between meat and plant-based meals in whatever ratio fits your vibe. Perfect for mixed-diet households or flexitarians.</p>
+          <p class="card-desc">Mixed protein options. Choose between meat dishes and Plants Only meals in whatever ratio fits your vibe. Perfect for mixed-diet households or flexitarians.</p>
           <span class="card-cta">
             Select your meals
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
@@ -329,21 +329,21 @@
         </div>
       </button>
 
-      <!-- Vegan (SystemTag slug: vegan) -->
-      <button type="button" class="diet-card" onclick="selectDiet('vegan')" aria-label="Vegan diet">
+      <!-- Plants Only (SystemTag: name='Vegan', slug='vegan'; URL slug 'plants') -->
+      <button type="button" class="diet-card" onclick="selectDiet('plants')" aria-label="Plants Only diet">
         <div class="card-image">
-          <img src="/brand/photos/diet-vegan.jpg" alt="Vegan meals">
+          <img src="/brand/photos/diet-vegan.jpg" alt="Plants Only meals">
         </div>
         <div class="card-body">
-          <h2 class="card-title">Vegan</h2>
-          <p class="card-desc">100% plant-based. Wholesome, meat &amp; dairy-free meals powered by grains, legumes, veggies, and good vibes. Big on flavour, packed with protein.</p>
+          <h2 class="card-title">Plants Only</h2>
+          <p class="card-desc">Wholesome, meat &amp; dairy-free meals powered by grains, legumes, veggies, and good vibes. Big on flavour, packed with protein.</p>
           <span class="card-cta">
             Select your meals
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
           </span>
           <div class="card-safety">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
-            100% plant-based menu, always
+            Plants Only menu, always
           </div>
         </div>
       </button>
@@ -366,16 +366,19 @@
 
   <script>
     // Diet selection → redirect to the weekly menu with ?diet=<slug>.
-    // Slugs match SystemTag.slug rows where type='diets' (see /settings/tags):
-    //   omnivore  → SystemTag fc0a70f3… — shows Omnivore + Vegan tagged meals
-    //   vegan     → SystemTag 9c68ba40… — shows Vegan tagged meals only
-    // Target menu page doesn't exist yet; a 404 here during staged dev is expected.
+    // URL slugs (customer-facing, in the address bar):
+    //   omnivore  → SystemTag fc0a70f3… — shows all meals
+    //   plants    → SystemTag 9c68ba40… — shows only Vegan-tagged meals
+    //               (customer sees the label "Plants Only" everywhere;
+    //               the URL slug 'plants' matches that branding. The
+    //               backend SystemTag name is 'Vegan' — see DIET_LABELS
+    //               in menu/index.html for the translation map.)
     function selectDiet(slug) {
       const transition = document.getElementById('pageTransition');
       const text = document.getElementById('transitionText');
 
-      text.textContent = slug === 'vegan'
-        ? 'Loading vegan menu\u2026'
+      text.textContent = slug === 'plants'
+        ? 'Loading your Plants Only menu\u2026'
         : 'Loading your menu\u2026';
 
       transition.classList.add('active');

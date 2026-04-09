@@ -160,15 +160,21 @@ model Customer {
   // Preferences
   //
   // diet_plan_id picks exactly one diet plan for the customer — mirrors the
-  // MealRecipe.diet_plan_id rule (every meal belongs to Omnivore or
-  // Plant-Based) so catalog filtering can match plan→plan. Intentionally
-  // NOT a Prisma @relation because SystemTag lives in the CULINARY database
-  // and this schema generates a commerce-only Prisma client. Cross-database
-  // relations are impossible at both the Prisma and Postgres level. The
-  // commerce service layer validates this UUID against
+  // MealRecipe.diet_plan_id rule (every meal belongs to Omnivore or Vegan)
+  // so catalog filtering can match plan→plan. Intentionally NOT a Prisma
+  // @relation because SystemTag lives in the CULINARY database and this
+  // schema generates a commerce-only Prisma client. Cross-database relations
+  // are impossible at both the Prisma and Postgres level. The commerce
+  // service layer validates this UUID against
   // CulinaryPrismaService.systemTag.findUnique({ where: { id, type: 'diets' } })
   // before writing. Nullable because onboarding doesn't force a choice and
   // the default UI position is "No restriction (Omnivore)."
+  //
+  // TERMINOLOGY: backend uses the identifier 'Vegan' (short, matches
+  // BoH team speak, matches culinary SystemTag.name). The customer-facing
+  // label is "Plants Only" and lives in brand/site-info.seed.json under
+  // public.diet.labels.vegan. Never hardcode either label here — this
+  // column just stores the UUID.
   diet_plan_id   String?  // FK-by-convention to culinary.SystemTag.id where type='diets'
   allergens      String[] // e.g. ["Shellfish", "Gluten"]
   diet_tags      String[] // e.g. ["High Protein", "Keto"] — free-form preferences, NOT a plan

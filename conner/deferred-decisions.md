@@ -150,3 +150,17 @@ A running list of things that came up in chats but were consciously deferred —
 ## ✅ Resolved
 
 *(Move completed items here with a ✅ prefix and the resolution date.)*
+
+- [2026-04-09] **Plant-Based → Vegan sweep in Gurleen's culinary modules (NOT TOUCHED in this chat)**
+  When doing the Plant-Based → Vegan + customer-facing "Plants Only" label rename 2026-04-09, Conner's worktree only updated files Conner owns per CLAUDE.md §8: `conner/client-website/**`, `brand/site-info.seed.json`, `backend/src/modules/commerce-customers/**`, `backend/prisma/commerce/schema.prisma`. **Gurleen-owned culinary files still contain "Plant-Based" references** and need her review before any update:
+    - `backend/src/modules/meals/meals.service.ts` (5 occurrences: error message text + JSDoc on `linkVariant`/`unlinkVariant` methods)
+    - `backend/src/modules/meals/dto/meal.dto.ts` (1 occurrence: JSDoc on `diet_plan_id` field)
+    - `backend/src/modules/tags/tags.service.ts` (1 occurrence: **seed row `{ name: 'Plant-Based Plan', type: 'diets', subtype: 'Plan' }`** — this seeds a row that would CONFLICT with our renamed Vegan row if it runs on a fresh DB. Needs rename to match.)
+    - `backend/prisma/import-data.ts` (1 occurrence: comment about Vegan → Plant-Based import mapping)
+    - `backend/prisma/import-all-meals.js` (2 occurrences: category-string import logic)
+    - `backend/prisma/schema.prisma` (1 occurrence: JSDoc on `diet_plan_id` field — culinary schema, not commerce)
+    - Historical migration SQL files (`20260409025946_add_meal_diet_plan_id/migration.sql`, `20260409032836_diet_plan_id_not_null/migration.sql`, `backend/prisma/commerce/migrations/20260409153741_add_customer_diet_plan/migration.sql`) — **DO NOT edit these; migration files are immutable after commit (Prisma hash drift).**
+  Gurleen should sweep her culinary files in a separate commit, and the tags.service.ts seed row rename is urgent because it blocks fresh DB boots from matching production state. Flag for her next chat.
+
+- [2026-04-09] **6 meal descriptions contain "plant-based" as an ingredient descriptor (not diet category)**
+  `conner/client-website/menu/meals.seed.json` has 6 meal descriptions that use "plant-based" as a descriptor for specific INGREDIENTS (e.g., BD-469 "creamy plant-based pesto", BD-539 "plant-based yogurt drizzle", BD-468 "plant-based pesto cream sauce", BD-480 "plant-based yogurt drizzle", BD-486 "plant-based Mac n' Cheeze", BD-479 "plant-based feta"). These are kitchen-team-written ingredient text, not diet plan labels, and they describe what's actually in each dish. Leaving them untouched in the rename commit because: (a) changing them in the seed only would drift from the culinary DB source; (b) rewording "plant-based pesto" to "vegan pesto" or "cashew-based pesto" or similar is a marketing + kitchen-team call, not a developer fix. Gurleen + Darlene should decide whether these need rewording during the next kitchen-admin pass, and if so, update the descriptions in the culinary DB first, then re-export the seed.

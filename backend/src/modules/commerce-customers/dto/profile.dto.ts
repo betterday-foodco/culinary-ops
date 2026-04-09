@@ -56,11 +56,15 @@ export class UpdateProfileDto {
  * the build-a-cart "suggested meals" engine.
  *
  * diet_plan_id is a UUID referencing culinary.SystemTag.id where
- * type='diets' (the "Omnivore" or "Plant-Based" rows). It's a bare
- * UUID on the commerce side because the two schemas live in separate
- * databases — see the Customer.diet_plan_id block comment in the
- * commerce schema.prisma. The service validates the UUID against the
- * culinary DB before writing it. Explicit null clears the selection.
+ * type='diets' (the "Omnivore" or "Vegan" rows). It's a bare UUID on
+ * the commerce side because the two schemas live in separate databases
+ * — see the Customer.diet_plan_id block comment in the commerce
+ * schema.prisma. The service validates the UUID against the culinary
+ * DB before writing it. Explicit null clears the selection.
+ *
+ * Customer-facing label for the Vegan plan is "Plants Only" (via
+ * DIET_LABELS in the client; see brand/site-info.seed.json's
+ * public.diet.labels.vegan). Backend never emits or stores the label.
  */
 export class UpdatePreferencesDto {
   /**
