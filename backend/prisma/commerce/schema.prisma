@@ -112,6 +112,7 @@ enum OrderStatus {
   delivered
   cancelled
   refunded
+  partially_refunded // One or more OrderRefund rows sum to < original.total
 }
 
 // ─── Customer ────────────────────────────────────────────────────────────────
@@ -170,7 +171,7 @@ model Customer {
   // CulinaryPrismaService.systemTag.findUnique({ where: { id, type: 'diets' } })
   // before writing. Nullable because onboarding doesn't force a choice and
   // the default UI position is "No restriction (Omnivore)."
-  diet_plan_id   String?  // FK-by-convention to culinary.SystemTag.id where type='diets'
+  diet_plan_id   String? // FK-by-convention to culinary.SystemTag.id where type='diets'
   diet_tags      String[] // e.g. ["High Protein", "Keto"] — free-form preferences, NOT a plan
   disliked_meals String[] // manual "never swap TO this" list
   favorite_meals String[] // manual preferred list
@@ -191,6 +192,12 @@ model Customer {
   created_at    DateTime  @default(now())
   updated_at    DateTime  @updatedAt
   last_login_at DateTime?
+
+  // Helcim MIT charge fraud-detection IP fallback chain. The Purchase
+  // endpoint requires an `ipAddress` field on every call, including the
+  // Thursday cutoff cron where no customer is present. Populated by the
+  // auth middleware on every login. See helcim-integration.md §5.
+  last_login_ip String?
 
   // Relations
   addresses                  CustomerAddress[]
@@ -268,11 +275,31 @@ model PaymentMethod {
   is_default      Boolean          @default(false)
   created_at      DateTime         @default(now())
 
+  // Stored-credential framework compliance (Visa/MC stored credential rules).
+  // Proves the customer explicitly agreed to future merchant-initiated charges
+  // at the moment they saved this card. Dispute defense evidence. See
+  // helcim-integration.md §4 and §12.
+  cof_agreement_at           DateTime?
+  cof_agreement_text_version String? // e.g. "v1-2026-04-09" — the exact copy shown
+  saved_from_ip              String? // IP at tokenization, second-choice MIT ipAddress fallback
+
+  // Expiry warning throttling — prevents re-sending the "card expiring soon"
+  // email every day as expiry approaches. See helcim-integration.md §9.
+  last_expiry_warning_sent_at DateTime?
+
+  // Dispute freeze — set by the daily reconciliation cron when Helcim
+  // shows a dispute on a charge against this card. Prevents the Thursday
+  // cron from attempting another charge on a disputed card. See
+  // helcim-integration.md §7 and §8.
+  is_disputed Boolean   @default(false)
+  disputed_at DateTime?
+
   customer      Customer        @relation(fields: [customer_id], references: [id], onDelete: Cascade)
   orders        CustomerOrder[] @relation("OrderPaymentMethod")
   subscriptions Subscription[]  @relation("SubscriptionDefaultPayment")
 
   @@index([customer_id])
+  @@index([is_disputed]) // Fast scan for frozen cards during weekly charge cron
 }
 
 // ─── Subscription ────────────────────────────────────────────────────────────
@@ -397,6 +424,20 @@ model CustomerOrder {
   locked_at    DateTime?
   locked_by    String? // "cutoff_job" | "admin:conner"
 
+  // Helcim MIT charge retry state machine. Populated by the Thursday
+  // cutoff cron and the hourly retry sweep. See helcim-integration.md §6.
+  charge_attempts        Int       @default(0) // Increments per /v2/payment/purchase attempt
+  last_charge_attempt_at DateTime?
+  last_charge_error      String? // Last error string from Helcim — free-text, not a code
+  next_charge_retry_at   DateTime? // When to try again; null = no retry scheduled
+
+  // MIT audit trail for dispute defense. Records WHO initiated the
+  // charge and what ipAddress we sent to Helcim's Fraud Defender.
+  // See helcim-integration.md §12 (compliance checklist).
+  mit_indicator       Boolean @default(false) // true = merchant-initiated (cron), false = customer-present
+  charge_initiated_by String? // "customer" | "cutoff_cron" | "admin_manual"
+  charge_ip_address   String? // The exact value we passed in Helcim's ipAddress field
+
   created_at DateTime @default(now())
   updated_at DateTime @updatedAt
 
@@ -409,12 +450,15 @@ model CustomerOrder {
   weekly_cart_record  WeeklyCartRecord?
   points_transactions RewardPointsTransaction[] @relation("OrderPointsTransactions")
   coupon_redemptions  CustomerCoupon[]          @relation("OrderCouponRedemptions")
+  refunds             OrderRefund[]
 
   @@index([customer_id])
   @@index([subscription_id])
   @@index([status])
   @@index([placed_at])
   @@index([fulfillment_method])
+  @@index([processor_charge_id]) // Reconciliation cron looks up orders by Helcim txn id
+  @@index([next_charge_retry_at]) // Hourly retry sweep filters on this
 }
 
 // ─── WeeklyCartRecord ────────────────────────────────────────────────────────
@@ -873,4 +917,121 @@ model CustomerAuthToken {
   @@index([type, target_email]) // Rate limit: count recent tokens by email
   @@index([type, target_phone]) // Rate limit: count recent tokens by phone
   @@index([expires_at]) // Cleanup job for expired tokens
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// HELCIM INTEGRATION TABLES
+// ═══════════════════════════════════════════════════════════════════════════
+// Everything below this line exists to support the Helcim payment integration.
+// See conner/data-model/helcim-integration.md for the full design and
+// helcim-integration-plan.md for the implementation plan.
+
+// ─── HelcimCheckoutSession ───────────────────────────────────────────────────
+// Persistent store for in-flight HelcimPay.js checkout sessions. Replaces
+// betterday-app's in-memory dict pattern so we survive backend restarts and
+// work across multiple Render dynos. The `id` field is the checkoutToken
+// returned by POST /v2/helcim-pay/initialize, and `secret_token` is the
+// companion secretToken that stays server-side for future hash verification.
+// See helcim-integration.md §4 for the full flow.
+
+model HelcimCheckoutSession {
+  id           String @id // = the checkoutToken from Helcim
+  secret_token String // The secretToken — stays server-side, never sent to browser
+
+  customer_id  String? // Null for guest checkouts
+  payment_type String // "purchase" | "verify" | "preauth"
+
+  amount   Decimal @db.Decimal(10, 2)
+  currency String  @default("CAD")
+
+  created_at DateTime @default(now())
+  expires_at DateTime // Helcim tokens expire ~60 min after issue
+
+  confirmed_at       DateTime? // Null until the browser POSTs the confirm endpoint
+  confirmed_order_id String?   @unique // FK to CustomerOrder for purchase flow
+
+  @@index([customer_id])
+  @@index([expires_at]) // For the cleanup cron
+}
+
+// ─── WebhookEvent ────────────────────────────────────────────────────────────
+// Idempotent dedup table for inbound Helcim webhooks. Helcim retries webhook
+// delivery on non-2xx responses per a schedule: immediately, 5s, 5m, 30m, 2h,
+// 5h, 10h, 10h. Same event can arrive twice. The controller's first action
+// is upsert({ id: webhookId }); if processed_at is set, return 204 without
+// re-processing. See helcim-integration.md §7.
+//
+// NOTE: as of 2026-04-09, Helcim only publicly documents two event types
+// (cardTransaction and terminalCancel) and neither applies to our e-comm
+// flow. This table is built defensively for future events Helcim may add.
+// The daily reconciliation cron is the primary mechanism for dispute/refund
+// awareness today.
+
+model WebhookEvent {
+  id              String    @id // = webhook-id header value from Helcim
+  type            String // "cardTransaction" | "terminalCancel" | ... future
+  received_at     DateTime  @default(now())
+  processed_at    DateTime?
+  signature_valid Boolean
+  raw_body        String // Full JSON as received, for audit and replay
+  result          String? // "processed" | "skipped_duplicate" | "ignored_event_type" | "error"
+  error_detail    String?
+
+  @@index([type, received_at])
+  @@index([processed_at])
+}
+
+// ─── ReconciliationLog ───────────────────────────────────────────────────────
+// Audit trail for the daily reconciliation cron that diffs our CustomerOrder
+// table against Helcim's Transaction History API. Proves the cron ran every
+// day and surfaces any discrepancies to ops. See helcim-integration.md §7.
+
+model ReconciliationLog {
+  id                   String   @id @default(uuid())
+  run_at               DateTime @default(now())
+  period_start         DateTime // The date range we queried Helcim for
+  period_end           DateTime
+  transactions_fetched Int      @default(0)
+  matched_ok           Int      @default(0) // Helcim + our DB agree
+  discrepancies_found  Int      @default(0) // Diffs that required action
+  disputes_found       Int      @default(0)
+  refunds_found        Int      @default(0)
+  unknown_transactions Int      @default(0) // Helcim has a txn we don't know about
+  errors               String? // Any cron-level errors
+  duration_ms          Int?
+
+  @@index([run_at])
+}
+
+// ─── OrderRefund ─────────────────────────────────────────────────────────────
+// Ledger of refunds against a CustomerOrder. Supports partial refunds and
+// multiple refunds per order. Distinct from the order's own `status` field
+// because a partially-refunded order is still in the fulfillment pipeline.
+// See helcim-integration.md §8.
+
+enum RefundReason {
+  admin_goodwill // CS comped the order
+  admin_quality_issue // Order was wrong, customer complained, refunded
+  admin_cancelled_delivery // Delivery route failed, full refund
+  dispute // Dispute auto-refunded by Helcim (detected via reconciliation cron)
+  system_error // Something went wrong in fulfillment
+  other
+}
+
+model OrderRefund {
+  id                  String       @id @default(uuid())
+  order_id            String
+  processor_refund_id String // Helcim's new transactionId for the refund
+  amount              Decimal      @db.Decimal(10, 2)
+  reason              RefundReason @default(other)
+  reason_note         String? // Free-text admin note
+  initiated_by        String // "admin:conner" | "reconciliation_cron" | "system"
+  initiated_at        DateTime     @default(now())
+  completed_at        DateTime? // When Helcim returned success
+
+  order CustomerOrder @relation(fields: [order_id], references: [id])
+
+  @@index([order_id])
+  @@index([processor_refund_id])
+  @@index([reason])
 }

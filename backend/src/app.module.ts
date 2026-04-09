@@ -24,6 +24,7 @@ import { MealPrepSyncModule } from './modules/mealprep-sync/mealprep-sync.module
 import { CorporateSyncModule } from './modules/corporate-sync/corporate-sync.module';
 import { CorporateModule } from './modules/corporate/corporate.module';
 import { CommerceCustomersModule } from './modules/commerce-customers/commerce-customers.module';
+import { CommerceCheckoutModule } from './modules/commerce-checkout/commerce-checkout.module';
 import { HealthController } from './health.controller';
 import { ShopifyWebhookController } from './webhooks/shopify.controller';
 import { CostEngineService } from './services/cost-engine.service';
@@ -56,6 +57,7 @@ import { ProductionEngineService } from './services/production-engine.service';
     CorporateSyncModule,
     CorporateModule,
     CommerceCustomersModule,
+    CommerceCheckoutModule,
   ],
   controllers: [HealthController, ShopifyWebhookController],
   providers: [CostEngineService, ProductionEngineService],
