@@ -1,6 +1,10 @@
 import { Module } from '@nestjs/common';
 
+import { AuthModule } from '../auth/auth.module';
+
+import { AdminCommerceCheckoutController } from './admin/admin-commerce-checkout.controller';
 import { CommerceCheckoutController } from './commerce-checkout.controller';
+import { WeeklyChargeCron } from './crons/weekly-charge.cron';
 import { HelcimApiClient } from './helcim/helcim-api-client';
 import { HelcimService } from './helcim/helcim.service';
 import { HelcimCheckoutSessionRepository } from './helcim/helcim-checkout-session.repository';
@@ -38,13 +42,15 @@ import { HmacVerifier } from './helcim/hmac-verifier';
  * to anything in this module without an explicit import.
  */
 @Module({
-  controllers: [CommerceCheckoutController],
+  imports: [AuthModule], // For JwtAuthGuard on the admin controller
+  controllers: [CommerceCheckoutController, AdminCommerceCheckoutController],
   providers: [
     HelcimApiClient,
     HelcimService,
     HelcimCheckoutSessionRepository,
     DeclineClassifier,
     HmacVerifier,
+    WeeklyChargeCron,
   ],
   exports: [HelcimService],
 })

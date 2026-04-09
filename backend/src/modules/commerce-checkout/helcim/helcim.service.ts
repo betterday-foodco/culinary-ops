@@ -262,16 +262,27 @@ export class HelcimService {
 
   /**
    * Charge a saved card on behalf of a customer. Called by the Thursday
-   * cutoff cron for each active subscriber with a non-empty cart.
+   * cutoff cron for each active subscriber with a non-empty cart, and
+   * by the manual admin trigger endpoint for sandbox testing.
    *
-   * Constructs the idempotency key deterministically so cron restarts
-   * mid-run won't double-charge. Returns a discriminated result type
-   * so callers can branch on approved / declined / system_error without
-   * catching exceptions.
+   * Three outcomes:
+   *   1. HTTP 200 + status="APPROVED" → `kind: 'approved'`
+   *   2. HTTP 200 + status="DECLINED" → `kind: 'declined'` (bank said no)
+   *   3. Any other HTTP response → `kind: 'declined'` or `'system_error'`
+   *      via classifyApiError (HelcimApiError routed through the classifier)
    *
-   * 🚧 Phase 3.1 — body to be filled in alongside the weekly charge cron.
+   * Never throws — every failure mode has a representation in ChargeResult
+   * so the caller (cron) can pattern-match without try/catch wrappers.
+   *
+   * Idempotency: the key is constructed from `<orderDisplayId>-<attemptNumber>`,
+   * which is deterministic from DB state. Cron restarts mid-run will
+   * reconstruct the same key and either succeed (Helcim cached response)
+   * or fail with 409 Conflict (different payload with the same key —
+   * indicates a bug in key construction, not a legitimate retry).
+   *
+   * Research: conner/data-model/helcim-integration.md §5
    */
-  async chargeSavedCard(_args: {
+  async chargeSavedCard(args: {
     orderDisplayId: string;
     helcimCustomerCode: string;
     cardToken: string;
@@ -280,9 +291,84 @@ export class HelcimService {
     ipAddress: string;
     attemptNumber: number;
   }): Promise<ChargeResult> {
-    throw new Error(
-      'HelcimService.chargeSavedCard is not yet implemented. Scheduled for Phase 3.1 of helcim-integration-plan.md.',
+    const idempotencyKey = this.buildIdempotencyKey(args.orderDisplayId, args.attemptNumber);
+
+    this.logger.log(
+      `chargeSavedCard: ${args.orderDisplayId} attempt=${args.attemptNumber} ` +
+        `amount=${args.amount} ${args.currency} customer=${args.helcimCustomerCode} ` +
+        `key=${idempotencyKey}`,
     );
+
+    try {
+      const response = await this.apiClient.postPurchase(
+        {
+          ipAddress: args.ipAddress,
+          ecommerce: true, // Always true for us — routes through Fraud Defender
+          currency: args.currency,
+          amount: args.amount,
+          customerCode: args.helcimCustomerCode,
+          invoiceNumber: args.orderDisplayId,
+          cardData: { cardToken: args.cardToken },
+        },
+        idempotencyKey,
+      );
+
+      // HTTP 200 path — Helcim accepted the request. Check the response
+      // status to determine whether the CHARGE itself was approved or
+      // declined (as distinct from a 4xx/5xx error which would have
+      // been thrown as HelcimApiError).
+      if (response.status === 'APPROVED') {
+        this.logger.log(
+          `chargeSavedCard APPROVED: order=${args.orderDisplayId} ` +
+            `txn=${response.transactionId} approval=${response.approvalCode}`,
+        );
+        return {
+          kind: 'approved',
+          processorChargeId: String(response.transactionId),
+          idempotencyKey,
+          ipAddressUsed: args.ipAddress,
+          approvalCode: response.approvalCode,
+          avsResponse: response.avsResponse,
+          cvvResponse: response.cvvResponse,
+        };
+      }
+
+      // HTTP 200 + status=DECLINED — the bank rejected the charge. Helcim
+      // returns the bank's reason in the `warning` field (inconsistent
+      // across deployments — may also surface in avsResponse/cvvResponse).
+      // Classify from whatever signal we have.
+      const declineSource = response.warning ?? `DECLINED avs=${response.avsResponse} cvv=${response.cvvResponse}`;
+      const category = this.declineClassifier.classify(declineSource);
+      this.logger.warn(
+        `chargeSavedCard DECLINED: order=${args.orderDisplayId} ` +
+          `category=${category} signal="${declineSource}"`,
+      );
+      return {
+        kind: 'declined',
+        category,
+        rawError: declineSource,
+        idempotencyKey,
+      };
+    } catch (err) {
+      if (err instanceof HelcimApiError) {
+        this.logger.warn(
+          `chargeSavedCard API error: order=${args.orderDisplayId} ` +
+            `status=${err.status} error="${err.toErrorString().slice(0, 200)}"`,
+        );
+        return this.classifyApiError(err, idempotencyKey);
+      }
+      // Unknown error (network, timeout, JSON parse) — treat as transient
+      this.logger.error(
+        `chargeSavedCard unknown error: order=${args.orderDisplayId} ` +
+          `err=${err instanceof Error ? err.message : String(err)}`,
+      );
+      return {
+        kind: 'system_error',
+        rawError: err instanceof Error ? err.message : String(err),
+        idempotencyKey,
+        reason: 'unexpected',
+      };
+    }
   }
 
   // ─── Refunds ──────────────────────────────────────────────────────────────
