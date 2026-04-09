@@ -268,18 +268,37 @@ export default function MealDetailPage() {
   const [allSubRecipes, setAllSubRecipes] = useState<SubRecipe[]>([]);
 
   // Auto-detected allergens from ingredient components
+  // Auto-detected allergens: walks direct ingredients + sub-recipe ingredients recursively
   const autoAllergens = useMemo(() => {
     if (!meal?.components || !allIngredients.length) return [];
     const ingMap = new Map(allIngredients.map(i => [i.id, i]));
+    const srMap = new Map(allSubRecipes.map(s => [s.id, s]));
     const tags = new Set<string>();
+    const visited = new Set<string>();
+
+    function walkSubRecipe(srId: string) {
+      if (visited.has(srId)) return;
+      visited.add(srId);
+      const sr = srMap.get(srId);
+      if (!sr?.components) return;
+      for (const c of sr.components) {
+        if (c.ingredient_id) {
+          const ing = ingMap.get(c.ingredient_id);
+          ing?.allergen_tags?.forEach(t => tags.add(t));
+        }
+        if (c.child_sub_recipe_id) walkSubRecipe(c.child_sub_recipe_id);
+      }
+    }
+
     for (const comp of meal.components) {
       if (comp.ingredient_id) {
         const ing = ingMap.get(comp.ingredient_id);
         ing?.allergen_tags?.forEach(t => tags.add(t));
       }
+      if (comp.sub_recipe_id) walkSubRecipe(comp.sub_recipe_id);
     }
     return Array.from(tags).sort();
-  }, [meal?.components, allIngredients]);
+  }, [meal?.components, allIngredients, allSubRecipes]);
 
   const [addType, setAddType] = useState<'sub_recipe' | 'ingredient'>('sub_recipe');
   const [addRefId, setAddRefId] = useState('');
@@ -718,12 +737,23 @@ export default function MealDetailPage() {
 
           {/* Category */}
           <div>
-            <label className="block text-xs font-medium text-gray-500 mb-1">Category</label>
+            <div className="flex items-center justify-between mb-1">
+              <label className="block text-xs font-medium text-gray-500">Category</label>
+              <a href="/settings/tags" className="text-[9px] text-gray-400 hover:text-brand-600 font-medium">Manage</a>
+            </div>
             <select value={category} onChange={(e) => setCategory(e.target.value)}
               className="w-full px-2 py-1.5 border border-gray-200 rounded-lg text-xs bg-white focus:outline-none focus:ring-2 focus:ring-brand-400">
               <option value="">— none —</option>
               {categoryOpts.map((c) => <option key={c} value={c}>{c}</option>)}
+              {category && categoryOpts.length > 0 && !categoryOpts.includes(category) && (
+                <option value={category} disabled>⚠ {category} (legacy)</option>
+              )}
             </select>
+            {category && categoryOpts.length > 0 && !categoryOpts.includes(category) && (
+              <p className="mt-1 text-[10px] text-amber-600">
+                "{category}" isn't in <a href="/settings/tags" className="underline">menu-cats</a>. Pick a current one to fix.
+              </p>
+            )}
           </div>
 
           {/* Omnivore toggle moved to main content area (after description) */}
