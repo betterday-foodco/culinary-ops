@@ -5,6 +5,10 @@ import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { api, Ingredient, SubRecipe, PortionSpec, PortionSpecComponent } from '../../../lib/api';
 
+// ─── Diet Plan IDs (from SystemTag type='diets') ────────────────────────────
+const OMNI_ID  = 'fc0a70f3-644b-4248-b9c1-65882cc503de';
+const PLANT_ID = '9c68ba40-f59d-40a8-8210-bdc1f3cd3973';
+
 // ─── Fallback constants ─────────────────────────────────────────────────────
 const CONTAINER_OPTIONS = ['Meal Tray','Salad Container'];
 
@@ -12,6 +16,7 @@ interface MealVariant { id: string; name: string; display_name: string; category
 
 interface MealDetail {
   id: string; meal_code: string | null; name: string; display_name: string; category: string | null;
+  diet_plan_id: string | null;
   linked_meal_id: string | null; linked_meal: MealVariant | null; variant_meals: MealVariant[];
   final_yield_weight: number; pricing_override: number | null; computed_cost: number;
   allergen_tags: string[]; dislikes: string[]; dietary_tags: string[]; protein_types: string[];
@@ -211,6 +216,7 @@ export default function MealDetailPage() {
   const [displayName, setDisplayName] = useState('');
   const [internalName, setInternalName] = useState('');
   const [category, setCategory] = useState('');
+  const [dietPlanId, setDietPlanId] = useState<string | null>(null);
   const [isActive, setIsActive] = useState(true);
   const [pricingOverride, setPricingOverride] = useState('');
   const [finalYieldWeight, setFinalYieldWeight] = useState('');
@@ -260,6 +266,21 @@ export default function MealDetailPage() {
   // Component add state
   const [allIngredients, setAllIngredients] = useState<Ingredient[]>([]);
   const [allSubRecipes, setAllSubRecipes] = useState<SubRecipe[]>([]);
+
+  // Auto-detected allergens from ingredient components
+  const autoAllergens = useMemo(() => {
+    if (!meal?.components || !allIngredients.length) return [];
+    const ingMap = new Map(allIngredients.map(i => [i.id, i]));
+    const tags = new Set<string>();
+    for (const comp of meal.components) {
+      if (comp.ingredient_id) {
+        const ing = ingMap.get(comp.ingredient_id);
+        ing?.allergen_tags?.forEach(t => tags.add(t));
+      }
+    }
+    return Array.from(tags).sort();
+  }, [meal?.components, allIngredients]);
+
   const [addType, setAddType] = useState<'sub_recipe' | 'ingredient'>('sub_recipe');
   const [addRefId, setAddRefId] = useState('');
   const [addQty, setAddQty] = useState('1');
@@ -309,6 +330,7 @@ export default function MealDetailPage() {
       setDisplayName(data.display_name);
       setInternalName(data.name);
       setCategory(data.category ?? '');
+      setDietPlanId(data.diet_plan_id ?? null);
       setIsActive(data.is_active);
       setPricingOverride(data.pricing_override?.toString() ?? '');
       setFinalYieldWeight(data.final_yield_weight?.toString() ?? '0');
@@ -353,17 +375,24 @@ export default function MealDetailPage() {
     });
   }, [loadMeal]);
 
-  // Auto-enable omnivore toggle if we find a strong variant match
+  // Auto-detect diet plan and variant if not already set
   useEffect(() => {
-    if (!meal || !allMeals.length || linkedMealId) return; // already linked or no data yet
-    const best = allMeals
-      .filter(m => m.id !== id)
-      .map(m => ({ id: m.id, score: variantScore(meal.display_name, m.display_name) }))
-      .sort((a, b) => b.score - a.score)[0];
-    if (best && best.score >= 0.5) {
-      setLinkedMealId(best.id);
+    if (!meal || !allMeals.length) return;
+    // If diet_plan_id not set, auto-detect from category
+    if (!dietPlanId) {
+      const cat = (meal.category ?? '').toLowerCase();
+      if (cat.includes('vegan') || cat.includes('plant')) setDietPlanId(PLANT_ID);
+      else setDietPlanId(OMNI_ID);
     }
-  }, [meal, allMeals, id]); // eslint-disable-line react-hooks/exhaustive-deps
+    // If omnivore and no linked meal, auto-suggest best match
+    if (dietPlanId === OMNI_ID && !linkedMealId) {
+      const best = allMeals
+        .filter(m => m.id !== id)
+        .map(m => ({ id: m.id, score: variantScore(meal.display_name, m.display_name) }))
+        .sort((a, b) => b.score - a.score)[0];
+      if (best && best.score >= 0.5) setLinkedMealId(best.id);
+    }
+  }, [meal, allMeals, id, dietPlanId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Load suggested variants once meal id is known
   useEffect(() => {
@@ -510,6 +539,7 @@ export default function MealDetailPage() {
         cooking_instructions: cookingInstructions || undefined,
         allergen_tags: allergenTags,
         dislikes,
+        diet_plan_id: dietPlanId,
         linked_meal_id: linkedMealId || null,
         // New fields
         short_description: shortDescription || undefined,
@@ -823,14 +853,13 @@ export default function MealDetailPage() {
                   </div>
                 </div>
 
-                {/* Omnivore Toggle — matching betterday-kitchen-v4 layout */}
+                {/* Diet Plan + Variant Picker */}
                 {(() => {
-                  const isOmni = linkedMealId !== null;
-                  const hasVariant = !!(meal?.linked_meal_id) || !!(meal?.variant_meals?.length);
+                  const isOmni = dietPlanId === OMNI_ID;
+                  const isPlant = dietPlanId === PLANT_ID;
                   const linkedName = allMeals.find(m => m.id === linkedMealId)?.display_name
                     ?? meal?.linked_meal?.display_name ?? '';
 
-                  // Build scored list once
                   const scored = allMeals
                     .filter(m => m.id !== id)
                     .map(m => ({ ...m, score: variantScore(displayName, m.display_name) }))
@@ -840,24 +869,37 @@ export default function MealDetailPage() {
 
                   return (
                     <div className="bg-white rounded-xl border border-gray-200 p-5">
-                      <div className="flex items-center gap-3">
+                      <div className="flex items-center justify-between mb-3">
+                        <h2 className="text-sm font-semibold text-gray-700">Diet Plan</h2>
+                        {!dietPlanId && <span className="text-xs text-red-500 font-medium">Required</span>}
+                      </div>
+                      {/* Segmented control */}
+                      <div className="flex rounded-lg border border-gray-200 overflow-hidden mb-3">
                         <button type="button" onClick={() => {
-                          if (isOmni) { setLinkedMealId(null); }
-                          else {
-                            // Auto-select best match when turning on
+                          setDietPlanId(OMNI_ID);
+                          if (!linkedMealId) {
                             const best = suggestions[0];
-                            setLinkedMealId(best ? best.id : '');
+                            if (best) setLinkedMealId(best.id);
                           }
                         }}
-                          className={`relative w-9 h-5 rounded-full transition-colors flex-shrink-0 ${isOmni ? 'bg-green-500' : 'bg-gray-300'}`}>
-                          <span className={`absolute top-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform ${isOmni ? 'translate-x-4' : 'translate-x-0.5'}`} />
+                          className={`flex-1 py-2.5 text-xs font-bold transition-colors ${isOmni ? 'bg-brand-600 text-white' : 'bg-white text-gray-500 hover:bg-gray-50'}`}>
+                          🍖 Omnivore
                         </button>
-                        <span className="text-sm font-semibold text-gray-700">Omnivore Dish</span>
-                        <span className="text-xs text-gray-400">Has both a meat and plant-based version — links the two together</span>
+                        <button type="button" onClick={() => {
+                          if (isOmni && linkedMealId) {
+                            if (!confirm('Switching to Plant-Based will unlink the variant. Continue?')) return;
+                          }
+                          setDietPlanId(PLANT_ID);
+                          setLinkedMealId(null);
+                        }}
+                          className={`flex-1 py-2.5 text-xs font-bold transition-colors ${isPlant ? 'bg-green-600 text-white' : 'bg-white text-gray-500 hover:bg-gray-50'}`}>
+                          🌱 Plant-Based
+                        </button>
                       </div>
 
+                      {/* Variant picker — only for Omnivore */}
                       {isOmni && (
-                        <div className="mt-3 bg-gray-50 border border-gray-200 rounded-lg p-3 flex items-center gap-3 flex-wrap">
+                        <div className="bg-gray-50 border border-gray-200 rounded-lg p-3 flex items-center gap-3 flex-wrap">
                           <span className="text-xs text-gray-500 whitespace-nowrap flex-shrink-0">Plant-based version:</span>
                           <select value={linkedMealId || ''} onChange={e => setLinkedMealId(e.target.value || '')}
                             className="flex-1 min-w-[200px] px-2.5 py-1.5 border border-gray-200 rounded-lg text-xs bg-white focus:outline-none focus:ring-2 focus:ring-brand-400">
@@ -881,6 +923,21 @@ export default function MealDetailPage() {
                           )}
                         </div>
                       )}
+
+                      {/* Reverse link — for Plant-Based dishes that are referenced by omnivore dishes */}
+                      {isPlant && meal?.variant_meals && meal.variant_meals.length > 0 && (
+                        <div className="bg-green-50 border border-green-200 rounded-lg p-3">
+                          <p className="text-xs text-green-700 font-medium mb-1">Referenced from omnivore dishes:</p>
+                          <div className="flex flex-wrap gap-2">
+                            {meal.variant_meals.map(v => (
+                              <a key={v.id} href={`/meals/${v.id}`}
+                                className="bg-white border border-green-200 rounded px-2.5 py-1 text-xs text-green-800 hover:bg-green-100 no-underline">
+                                {v.display_name} →
+                              </a>
+                            ))}
+                          </div>
+                        </div>
+                      )}
                     </div>
                   );
                 })()}
@@ -891,6 +948,21 @@ export default function MealDetailPage() {
                     <h2 className="text-sm font-semibold text-gray-700">Allergens</h2>
                     <span className="text-xs text-gray-400">{allergenTags.length} selected</span>
                   </div>
+                  {/* Auto-detected from ingredients (read-only) */}
+                  {autoAllergens.length > 0 && (
+                    <div className="mb-3">
+                      <p className="text-[10px] font-medium text-gray-400 uppercase tracking-wide mb-1.5">Auto-detected from ingredients</p>
+                      <div className="flex flex-wrap gap-1.5">
+                        {autoAllergens.map(tag => (
+                          <span key={tag} className="px-2.5 py-1 rounded-lg text-xs font-medium bg-red-100 text-red-700 border border-red-200">
+                            {tag}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  {/* Manual allergen overrides */}
+                  <p className="text-[10px] font-medium text-gray-400 uppercase tracking-wide mb-1.5">Manual overrides</p>
                   <PillPicker options={allergenOpts} selected={allergenTags}
                     onToggle={(v) => toggleTag(allergenTags, setAllergenTags, v)} color="red" />
                 </div>
