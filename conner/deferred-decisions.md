@@ -36,6 +36,97 @@ A running list of things that came up in chats but were consciously deferred —
 
 ## 🛠️ Implementation TODOs
 
+- [2026-04-09] **Rename `MealRecipe.pricing_override` → `item_price`**
+  The customer-facing sell price on the culinary `MealRecipe` model is
+  named `pricing_override` (`backend/prisma/schema.prisma:116`), which is
+  misleading — there's nothing for it to override (no auto-pricing-from-cost
+  feature exists or is planned). Rename to `item_price` so the column name
+  matches the meaning. **Confirmed safe by testing the SQL on a throwaway
+  Neon child branch off `production` on 2026-04-09:** before/after counts
+  and price stats matched exactly (164 meals, 142 priced, range $15.99–
+  $16.99, avg $16.52). **Touches ~19 files:** the schema.prisma + auto-generated
+  Prisma migration, `backend/src/modules/meals/{meals.service.ts,dto/meal.dto.ts}`,
+  `backend/src/modules/mealprep-sync/mealprep-sync.service.ts`, 7 frontend
+  admin pages under `frontend/app/(dashboard)/{meals/*,reports/cooking,dashboard}/page.tsx`
+  + `frontend/app/lib/api.ts`, plus 5 backend scripts under `backend/scripts/`
+  and `backend/prisma/`. **Does NOT touch the corporate `/work` flow** —
+  verified by grep on `backend/src/modules/corporate/` and `frontend/app/(corporate)/`,
+  zero matches. The corporate B2B program uses its own tier price config
+  from `CorporateCompany.extra` JSONB and never reads `pricing_override`.
+  **Lane:** majority of consumers are in Gurleen's `frontend/(dashboard)/`
+  and `backend/src/modules/meals/` territory. Coordinate with her — text
+  message draft is in the calculator-fix commit body on
+  `conner/2026-04-09-checkout-page` (or just look at the chat transcript).
+  **Atomic execution:** schema rename + Prisma migration on `conner-local-dev`
+  + all 19 find/replace edits + `npx prisma generate` + restart dev server,
+  in one PR. Splitting the halves leaves the running NestJS server in a
+  state where queries return `column "pricing_override" does not exist`
+  errors.
+
+- [2026-04-09] **Update `entities.md` `meal` entity to single-price model**
+  `conner/data-model/entities.md:297-329` (the canonical spec) currently
+  defines the `meal` entity with TWO price fields: `price` (subscriber
+  price) and `retail_price` (one-time price ~8% higher). Both are wrong
+  per the corrected pricing model: there is ONE price (the regular full
+  retail price) and the subscriber discount is applied at order time as
+  a percentage from `PERK_TIERS` based on cart quantity. **Fix:** drop the
+  `retail_price` row entirely; rename `price` → `item_price` (matches the
+  rename above) and clarify it's the regular full retail price every
+  customer sees, with the subscriber discount applied at checkout. One-line
+  doc edit. Pair with the column rename PR or do separately — both are
+  small.
+
+- [2026-04-09] **Corporate `placeOrder()` over-fetches MealRecipe rows**
+  `backend/src/modules/corporate/portal/corp-portal.service.ts:137` does
+  `prisma.mealRecipe.findMany({ where: { id: { in: mealIds } } })` with no
+  `select` clause, which loads every column on every meal (including
+  `pricing_override`, `computed_cost`, `final_yield_weight`, `description`,
+  etc) when only `id`, `meal_code`, `display_name`, `name` are actually
+  used in the loop that builds the order line items. Add a `select`
+  clause naming just the fields the code reads. Tiny perf win, not urgent.
+  Same file's `getWeeklyMenu()` already does this correctly (lines 35-52).
+
+- [2026-04-09] **Move corporate tier config out of `CorporateCompany.extra` JSONB**
+  Today the corporate B2B tier pricing (free / tier1 / tier2 / tier3 ×
+  meals/employeePrice/bdSubsidy/companySubsidy) is stored as stringly-typed
+  keys inside `CorporateCompany.extra` JSONB (`'FreeMealsPerWeek'`,
+  `'Tier1_EmployeePrice'`, `'Tier1_BDSubsidy'`, etc — see
+  `backend/src/modules/corporate/portal/corp-portal.service.ts:96-125`).
+  No schema enforcement, no admin UI to edit it without poking JSON
+  directly. Same drawback as the subscription tier config drift the
+  calculator-fix commit just resolved with `subscription-config.js`.
+  **Direction:** when the subscription-plans admin page eventually ships
+  at `frontend/app/(dashboard)/settings/subscription-plans/`, build a
+  sibling page `(dashboard)/settings/corporate-tiers/` and back it with
+  proper schema columns on `CorporateCompany` (or a new
+  `CorporateTierConfig` model) instead of JSONB. Bonus: also gives the
+  corporate `getEmployeeTierConfig()` lookup a real type instead of the
+  current `(level?.tier_config as any)` cast. Defer until the subscription
+  admin page work is in flight — same lane (Gurleen's frontend dashboard).
+
+- [2026-04-09] **Subscription pricing settings — admin dashboard UI**
+  `conner/client-website/shared/subscription-config.js` is currently the
+  single source of truth for `PERK_TIERS`, `FREE_DELIVERY_MEALS`,
+  `DELIVERY_FEE`, `GST_RATE`, and `POINTS_PER_DOLLAR`. Both the menu page
+  and the checkout page consume it via `<script src>`. The values are
+  hardcoded JS constants — they should move into the existing
+  `SystemConfig` key-value table (`backend/prisma/schema.prisma:511`) and
+  be served via `/api/system-config/public` (the same endpoint that
+  already delivers `public.contact.email`, `public.delivery.areas`, etc).
+  Then `subscription-config.js` becomes a thin shim that fetches the live
+  config and falls back to the hardcoded defaults if the fetch fails.
+  **Where the admin UI lives:** `frontend/app/(dashboard)/settings/subscription-plans/page.tsx`
+  (new — sibling of `settings/integration`, `settings/staff`, `settings/tags`).
+  Schema for the seed: encode the tier table as a JSON-stringified value
+  on a single key (e.g. `public.subscription.tiers = "[{...},{...}]"`)
+  since `SystemConfig.value` is a `String` column. **Lane:** the admin UI
+  is in Gurleen's `frontend/` territory and needs to ship through her
+  worktree. Backend changes (seed file + endpoint passthrough) are
+  Conner's. See the calculator-fix commit on
+  `conner/2026-04-09-checkout-page` for the full context of why this
+  matters — the menu page and checkout page used to have drifted copies
+  of these constants, which produced math bugs.
+
 - [2026-04-08] **Cart line item snapshot fields** *(Migration #4 scope)*
   Add `menu_price_at_add`, `promised_price_at_add`, `promised_coupon_id` to the cart line item table. Implements the "price ceiling" rule — customers always get the best price they were ever shown. See `project_dotw_preorder_rules` memory for the full rule. NOT Migration #3 coupon scope.
 

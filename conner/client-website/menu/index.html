@@ -1600,6 +1600,13 @@ body.sheet-open #cartSidebar { visibility: hidden; pointer-events: none; }
   <div class="sheet-footer" id="sheetFooter"></div>
 </div>
 
+<!-- Subscription pricing config — single source of truth shared with
+     conner/client-website/checkout.html. Defines PERK_TIERS, FREE_DELIVERY_MEALS,
+     DELIVERY_FEE, GST_RATE, POINTS_PER_DOLLAR, lookupSubscriberDiscountPct().
+     Must load BEFORE the main <script> below so the consts exist when the
+     pricing helpers reference them. -->
+<script src="../shared/subscription-config.js"></script>
+
 <script>
 // ── DATA ──
 // Meals are snapshotted from culinary-ops.MealRecipe (conner-local-dev
@@ -1687,10 +1694,13 @@ function normalizeMeal(row) {
     id: row.id,
     code: row.meal_code,
     name: row.display_name || row.name,
+    // ONE price column. This is the regular / full retail price every
+    // customer sees on the card. One-time customers pay this exactly.
+    // Subscribers pay `price × (1 − tierPct/100)` where tierPct comes
+    // from PERK_TIERS based on cart quantity — that calc lives in
+    // getPrice() / getSavingsPercent() / getSubtotal() below, NOT
+    // baked into a separate column. See shared/subscription-config.js.
     price: price,
-    // Stub: one-time upcharge belongs in betterday-commerce once that DB
-    // has a retail_price column. Hardcoded +8% for now.
-    retail_price: +(price * 1.08).toFixed(2),
     cal: row.calories,
     protein: row.protein_g,
     carbs: row.carbs_g,
@@ -1744,11 +1754,17 @@ let subscribeMode = 'subscribe'; // 'subscribe' or 'onetime'
 let openModalMealId = null;
 
 // ── PRICING ──
-// Subscribe mode uses the base price; one-time mode uses the retail upcharge
-// (stubbed to +8% in normalizeMeal until betterday-commerce adds a
-// retail_price column).
+// One price per meal (`meal.price` = full retail). One-time customers
+// pay that exactly. Subscribers pay `price × (1 − tierPct/100)`, where
+// the percentage comes from PERK_TIERS based on the customer's TOTAL
+// cart quantity — so as the cart grows, every meal's per-card price
+// ticks down to reflect the higher tier the customer just unlocked.
+// PERK_TIERS, FREE_DELIVERY_MEALS, DELIVERY_FEE come from
+// shared/subscription-config.js (loaded before this script).
 function getPrice(meal) {
-  return subscribeMode === 'subscribe' ? meal.price : meal.retail_price;
+  if (subscribeMode !== 'subscribe') return meal.price;
+  const pct = getSavingsPercent();
+  return pct > 0 ? +(meal.price * (1 - pct / 100)).toFixed(2) : meal.price;
 }
 
 function fmtPrice(n) { return '$' + n.toFixed(2); }
@@ -1765,22 +1781,22 @@ function getSubtotal(mode) {
   return t;
 }
 
+// Returns the tier discount percentage for the current cart quantity,
+// only when subscribeMode is 'subscribe'. Mirrors lookupSubscriberDiscountPct
+// from subscription-config.js but gates on mode for menu-page convenience.
 function getSavingsPercent() {
   if (subscribeMode !== 'subscribe') return 0;
-  const n = getTotalItems();
-  for (let i = PERK_TIERS.length - 1; i >= 0; i--) {
-    if (n >= PERK_TIERS[i].meals) return PERK_TIERS[i].pct;
-  }
-  return 0;
+  return lookupSubscriberDiscountPct(getTotalItems());
 }
 
-const FREE_DELIVERY_MEALS = 8;   // weekly order: meal count
-const CHECKOUT_MIN        = 4;   // minimum meals required to proceed to checkout
-const DELIVERY_FEE        = 7.99; // standard delivery fee
-const PERK_TIERS = [
-  {meals:4,pct:5},{meals:5,pct:8},{meals:7,pct:11},
-  {meals:9,pct:14},{meals:11,pct:17},{meals:13,pct:20},
-];
+// Local-only constant — kept here because it's a UX rule for the menu
+// page (button stays disabled until the cart hits 4 meals), not a pricing
+// constant. The 4 happens to match PERK_TIERS[0].meals so they stay in sync.
+const CHECKOUT_MIN = 4;
+
+// MILESTONES is the rewards-bar UI label table — keep in sync with PERK_TIERS
+// in shared/subscription-config.js manually for now (the 4/5/7/9/11/13 thresholds
+// must match). The "Free Delivery" milestone uses FREE_DELIVERY_MEALS.
 const MILESTONES = [
   [4,'5% off',false],[5,'8% off',false],[7,'11% off',false],
   [8,'Free Delivery',true],[9,'14% off',false],[11,'17% off',false],[13,'20% off',false],
@@ -2302,7 +2318,35 @@ function scrollToMeal(id) {
 
 // ── UTILITY ──
 function handleDone() { /* Close overlay in real app */ }
-function handleCheckout() { /* Navigate to checkout in real app */ }
+function handleCheckout() {
+  // Serialize the cart into the handoff contract expected by checkout.html
+  // (see conner/client-website/checkout.html for the reader). Only meals
+  // with qty > 0 are persisted.
+  //
+  // SCHEMA NOTE: this is v2 of the contract. v1 (predecessor) included a
+  // synthesized `retail_price` field per item — that field has been dropped
+  // because there's only one price column now (the regular full price).
+  // The checkout side computes the subscriber discount on its own from
+  // PERK_TIERS in shared/subscription-config.js, so the menu page only
+  // has to ship the regular `price`. Old v1 carts in localStorage are
+  // invalidated by checkout.html's loadCart() version check.
+  const cart = {
+    version: 2,
+    mode: subscribeMode,
+    items: allMeals.filter(m => m.qty > 0).map(m => ({
+      id: m.id,
+      name: m.name,
+      qty: m.qty,
+      price: m.price,           // regular / full retail price; checkout
+                                // applies the subscriber tier discount.
+      img: m.img
+    })),
+    updatedAt: new Date().toISOString()
+  };
+  try { localStorage.setItem('betterday.cart.v1', JSON.stringify(cart)); }
+  catch (e) { console.warn('[menu] cart persist failed', e); }
+  window.location.href = '../checkout.html';
+}
 
 // ── RENDER ALL ──
 function renderAll() {
