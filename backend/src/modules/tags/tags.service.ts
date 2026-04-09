@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
+import { slugifyOr } from '../../lib/slugify';
 
 @Injectable()
 export class TagsService {
@@ -12,8 +13,23 @@ export class TagsService {
     });
   }
 
-  create(data: { name: string; type: string; subtype?: string; source?: string; visible?: boolean; label_bold?: boolean; rule?: string; emoji?: string }) {
-    return this.prisma.systemTag.create({ data });
+  async create(data: { name: string; type: string; subtype?: string; source?: string; visible?: boolean; label_bold?: boolean; rule?: string; emoji?: string }) {
+    // SystemTag.slug is scoped unique per (type, slug), so the same slug can exist
+    // across types (e.g. "shellfish" as both allergen and protein). We still want
+    // to disambiguate within a type by appending a counter if a collision occurs.
+    const baseSlug = slugifyOr(data.name, data.type);
+    const slug = await this.uniqueTagSlug(data.type, baseSlug);
+    return this.prisma.systemTag.create({ data: { ...data, slug } });
+  }
+
+  /** Find a slug that doesn't collide within this tag type. */
+  private async uniqueTagSlug(type: string, base: string): Promise<string> {
+    let candidate = base;
+    let n = 2;
+    while (await this.prisma.systemTag.findUnique({ where: { type_slug: { type, slug: candidate } } })) {
+      candidate = `${base}-${n++}`;
+    }
+    return candidate;
   }
 
   update(id: string, data: Partial<{ name: string; visible: boolean; label_bold: boolean; rule: string; subtype: string; source: string }>) {
@@ -101,7 +117,18 @@ export class TagsService {
       { name: 'Prep Station', type: 'storage', subtype: 'Location', source: 'ingredient', visible: false },
     ];
 
-    await this.prisma.systemTag.createMany({ data: tags });
-    return { message: 'Seeded', count: tags.length };
+    // Compute a slug per tag, disambiguating collisions within each `type`
+    // (since SystemTag.@@unique([type, slug]) is type-scoped).
+    const seen = new Map<string, number>();
+    const withSlugs = tags.map((t) => {
+      const base = slugifyOr(t.name, t.type);
+      const key = `${t.type}|${base}`;
+      const n = (seen.get(key) ?? 0) + 1;
+      seen.set(key, n);
+      return { ...t, slug: n === 1 ? base : `${base}-${n}` };
+    });
+
+    await this.prisma.systemTag.createMany({ data: withSlugs });
+    return { message: 'Seeded', count: withSlugs.length };
   }
 }

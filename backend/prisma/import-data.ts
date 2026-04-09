@@ -1,6 +1,7 @@
 import { PrismaClient } from '@prisma/client';
 import * as fs from 'fs';
 import * as path from 'path';
+import { slugifyOr } from '../src/lib/slugify';
 
 const prisma = new PrismaClient();
 
@@ -164,6 +165,7 @@ async function importData() {
             create: {
               internal_name: d.internal_name,
               display_name: d.internal_name,
+              slug: slugifyOr(d.internal_name, `ing-${oldId}`),
               sku: `ING-${oldId}`,
               category: d.category,
               base_weight: 1.0,
@@ -203,10 +205,12 @@ async function importData() {
       }));
 
     try {
+      const srName = header.srName || `Sub-Recipe ${srId}`;
       const sr = await prisma.subRecipe.upsert({
         where: { sub_recipe_code: `SR-${srId}` },
         create: {
-          name: header.srName || `Sub-Recipe ${srId}`,
+          name: srName,
+          slug: slugifyOr(srName, `sr-${srId}`),
           sub_recipe_code: `SR-${srId}`,
           station_tag: header.station || null,
           production_day: header.day || null,
@@ -246,12 +250,22 @@ async function importData() {
     const priceRaw = header.price.replace('$', '').replace(',', '');
     const price = parseFloat(priceRaw) || null;
 
+    // Every dish must have a diet_plan_id (ADR 2026-04-08). Infer from category:
+    // 'Vegan' → Plant-Based, everything else → Omnivore. Admin can fix later.
+    const OMNIVORE_ID    = 'fc0a70f3-644b-4248-b9c1-65882cc503de';
+    const PLANT_BASED_ID = '9c68ba40-f59d-40a8-8210-bdc1f3cd3973';
+    const dietPlanId = (header.category ?? '').toLowerCase() === 'vegan'
+      ? PLANT_BASED_ID
+      : OMNIVORE_ID;
+
     try {
       await prisma.mealRecipe.create({
         data: {
           name: header.dishName,
           display_name: header.dishName,
+          slug: slugifyOr(header.dishName, `meal-${dishId}`),
           category: header.category || null,
+          diet_plan_id: dietPlanId,
           final_yield_weight: 0,
           pricing_override: price,
           allergen_tags: [],

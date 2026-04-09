@@ -6,6 +6,7 @@ import {
 } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { CostEngineService } from '../../services/cost-engine.service';
+import { slugifyOr } from '../../lib/slugify';
 import {
   CreateSubRecipeDto,
   UpdateSubRecipeDto,
@@ -67,8 +68,12 @@ export class SubRecipesService {
 
     const { components, ...subRecipeData } = dto;
 
+    // Derive slug from the display name with the sub_recipe_code as fallback
+    const baseSlug = slugifyOr(subRecipeData.name, subRecipeData.sub_recipe_code.toLowerCase());
+    const slug = await this.uniqueSubRecipeSlug(baseSlug);
+
     const subRecipe = await this.prisma.$transaction(async (tx) => {
-      const created = await tx.subRecipe.create({ data: subRecipeData });
+      const created = await tx.subRecipe.create({ data: { ...subRecipeData, slug } });
 
       if (components?.length) {
         await tx.subRecipeComponent.createMany({
@@ -92,6 +97,16 @@ export class SubRecipesService {
     });
 
     return this.findOne(subRecipe.id);
+  }
+
+  /** Ensure the candidate slug doesn't collide with any existing SubRecipe.slug */
+  private async uniqueSubRecipeSlug(base: string): Promise<string> {
+    let candidate = base;
+    let n = 2;
+    while (await this.prisma.subRecipe.findUnique({ where: { slug: candidate } })) {
+      candidate = `${base}-${n++}`;
+    }
+    return candidate;
   }
 
   async update(id: string, dto: UpdateSubRecipeDto) {

@@ -6,6 +6,7 @@ import {
 } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { CostEngineService } from '../../services/cost-engine.service';
+import { slugifyOr } from '../../lib/slugify';
 import {
   CreateIngredientDto,
   UpdateIngredientDto,
@@ -48,7 +49,21 @@ export class IngredientsService {
     });
     if (existing) throw new ConflictException('SKU already exists');
 
-    return this.prisma.ingredient.create({ data: dto });
+    // Derive slug from the internal_name with sku as fallback to guarantee uniqueness
+    const baseSlug = slugifyOr(dto.internal_name, dto.sku.toLowerCase());
+    const slug = await this.uniqueIngredientSlug(baseSlug);
+
+    return this.prisma.ingredient.create({ data: { ...dto, slug } });
+  }
+
+  /** Ensure the candidate slug doesn't collide with any existing Ingredient.slug */
+  private async uniqueIngredientSlug(base: string): Promise<string> {
+    let candidate = base;
+    let n = 2;
+    while (await this.prisma.ingredient.findUnique({ where: { slug: candidate } })) {
+      candidate = `${base}-${n++}`;
+    }
+    return candidate;
   }
 
   async update(id: string, dto: UpdateIngredientDto) {

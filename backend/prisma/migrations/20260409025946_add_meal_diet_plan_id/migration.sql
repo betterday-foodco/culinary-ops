@@ -1,0 +1,12 @@
+-- Add nullable diet_plan_id FK column to MealRecipe.
+--
+-- Every dish must eventually belong to exactly one Diet Plan (Omnivore or
+-- Plant-Based). This column is nullable during the rollout phase; it will
+-- be marked NOT NULL once every existing dish is classified. The value is
+-- the uuid of a SystemTag row where type='diets'. The FK relation isn't
+-- formalized yet because SystemTag rows are cross-type and we'd need a
+-- check constraint or trigger — see the ADR for the open question.
+--
+-- See conner/data-model/decisions/2026-04-08-mandatory-diet-plan-on-dishes.md
+-- and conner/data-model/flows/meal-variants.md for full reasoning.
+ALTER TABLE "MealRecipe" ADD COLUMN IF NOT EXISTS "diet_plan_id" text;

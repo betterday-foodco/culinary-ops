@@ -5,6 +5,7 @@ import {
 } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { CostEngineService } from '../../services/cost-engine.service';
+import { slugifyOr } from '../../lib/slugify';
 import { CreateMealDto, UpdateMealDto, AddMealComponentDto, UpdateMealComponentDto } from './dto/meal.dto';
 
 @Injectable()
@@ -64,6 +65,16 @@ export class MealsService {
     return meal;
   }
 
+  /** Ensure the candidate slug doesn't collide with any existing MealRecipe.slug */
+  private async uniqueMealSlug(tx: any, base: string): Promise<string> {
+    let candidate = base;
+    let n = 2;
+    while (await tx.mealRecipe.findUnique({ where: { slug: candidate } })) {
+      candidate = `${base}-${n++}`;
+    }
+    return candidate;
+  }
+
   private async generateMealCode(tx: any): Promise<string> {
     // Fetch all BD-xxx codes and find the true numeric max (avoids string-sort bug)
     const rows = await tx.mealRecipe.findMany({
@@ -81,7 +92,18 @@ export class MealsService {
   async create(dto: CreateMealDto) {
     this.validateComponents(dto.components ?? []);
 
+    // diet_plan_id is mandatory — every dish must belong to a diet plan
+    // (Omnivore or Plant-Based). See ADR 2026-04-08. Enforced at the DB
+    // level with NOT NULL, but we validate here to give a clearer error.
+    if (!dto.diet_plan_id) {
+      throw new BadRequestException(
+        'diet_plan_id is required — every dish must be classified as Omnivore or Plant-Based',
+      );
+    }
+
     const { components, ...mealData } = dto;
+    // TypeScript narrows diet_plan_id to `string` after the guard above.
+    const mealDataWithDiet = { ...mealData, diet_plan_id: dto.diet_plan_id };
 
     // Retry up to 5 times on meal_code collision (race condition guard)
     let meal: any;
@@ -89,7 +111,12 @@ export class MealsService {
       try {
         meal = await this.prisma.$transaction(async (tx) => {
           const meal_code = await this.generateMealCode(tx);
-          const created = await tx.mealRecipe.create({ data: { ...mealData, meal_code } });
+          // Derive slug from display_name with meal_code as fallback
+          const slug = await this.uniqueMealSlug(
+            tx,
+            slugifyOr(mealData.display_name, meal_code.toLowerCase()),
+          );
+          const created = await tx.mealRecipe.create({ data: { ...mealDataWithDiet, meal_code, slug } });
 
           if (components?.length) {
             await tx.mealComponent.createMany({
@@ -335,7 +362,6 @@ export class MealsService {
         fat_g: true,
         fiber_g: true,
         final_yield_weight: true,
-        net_weight_kg: true,
         allergen_tags: true,
         dietary_tags: true,
         image_url: true,
@@ -412,33 +438,51 @@ export class MealsService {
       .slice(0, 5);
   }
 
-  /** Bidirectionally link two meals as variants */
+  /**
+   * Link a meal to its plant-based variant. ONE-DIRECTIONAL: the link is
+   * always stored on the omnivore (meat) side's `linked_meal_id` column only.
+   * The plant-based side is discovered at read time via the `variant_meals`
+   * reverse relation — this enables N-to-1 pairings (e.g. one Vegan Alfredo
+   * can be the counterpart for Shrimp Alfredo, Chicken Alfredo, and Beef
+   * Alfredo simultaneously) without the bidirectional write collision that
+   * would force each new link to overwrite the previous.
+   *
+   * See conner/data-model/decisions/2026-04-08-mandatory-diet-plan-on-dishes.md
+   * and conner/data-model/flows/meal-variants.md for the full reasoning.
+   *
+   * TODO (post-diet-plan-ADR): once `MealRecipe.diet_plan_id` exists, enforce
+   * that `id` is an omnivore dish and `linkedId` is a plant-based dish.
+   */
   async linkVariant(id: string, linkedId: string) {
-    await Promise.all([
-      this.prisma.mealRecipe.update({ where: { id }, data: { linked_meal_id: linkedId } }),
-      this.prisma.mealRecipe.update({ where: { id: linkedId }, data: { linked_meal_id: id } }),
+    if (id === linkedId) {
+      throw new BadRequestException('A meal cannot be its own variant');
+    }
+    const [meat, plant] = await Promise.all([
+      this.prisma.mealRecipe.findUnique({ where: { id }, select: { id: true } }),
+      this.prisma.mealRecipe.findUnique({ where: { id: linkedId }, select: { id: true } }),
     ]);
+    if (!meat) throw new NotFoundException('Meal not found');
+    if (!plant) throw new NotFoundException('Linked meal not found');
+
+    // Write only the omnivore (meat) side. Plant side's reverse relation
+    // handles the discovery path.
+    await this.prisma.mealRecipe.update({
+      where: { id },
+      data: { linked_meal_id: linkedId },
+    });
     return this.findOne(id);
   }
 
-  /** Bidirectionally unlink a meal variant */
+  /**
+   * Unlink a meal from its plant-based variant. Only clears the omnivore
+   * side's `linked_meal_id` — there is nothing to clear on the plant side
+   * because links are stored one-directionally.
+   */
   async unlinkVariant(id: string) {
-    const meal = await this.prisma.mealRecipe.findUnique({
+    await this.prisma.mealRecipe.update({
       where: { id },
-      select: { linked_meal_id: true },
+      data: { linked_meal_id: null },
     });
-    const updates: Promise<any>[] = [
-      this.prisma.mealRecipe.update({ where: { id }, data: { linked_meal_id: null } }),
-    ];
-    if (meal?.linked_meal_id) {
-      updates.push(
-        this.prisma.mealRecipe.update({
-          where: { id: meal.linked_meal_id },
-          data: { linked_meal_id: null },
-        }),
-      );
-    }
-    await Promise.all(updates);
     return this.findOne(id);
   }
 

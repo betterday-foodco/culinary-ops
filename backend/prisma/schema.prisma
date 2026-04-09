@@ -35,6 +35,7 @@ model Ingredient {
   id             String   @id @default(uuid())
   internal_name  String
   display_name   String
+  slug           String   @unique // URL-safe key for admin deep links
   sku            String   @unique
   category       String
   location       String?
@@ -61,6 +62,7 @@ model SubRecipe {
   id               String   @id @default(uuid())
   name             String
   display_name     String?
+  slug             String   @unique // URL-safe key for admin deep links
   sub_recipe_code  String   @unique
   instructions     String?
   production_day   String?
@@ -104,10 +106,12 @@ model SubRecipeComponent {
 model MealRecipe {
   id                    String   @id @default(uuid())
   meal_code             String?  @unique // e.g. "BD-001"
+  slug                  String   @unique // URL-safe key for customer-facing meal URLs (e.g. /menu/thai-basil-beef)
   name                  String
   display_name          String
   category              String?
-  linked_meal_id        String?  // points to the meat/vegan counterpart
+  diet_plan_id          String   // FK → SystemTag.id where type='diets' (Omnivore or Plant-Based). Backfilled 2026-04-08 from Dish Masterlist CSV; NOT NULL as of that day. Every dish MUST belong to exactly one plan. See conner/data-model/decisions/2026-04-08-mandatory-diet-plan-on-dishes.md
+  linked_meal_id        String?  // points to the meat/vegan counterpart (one-directional: only set on the omnivore side)
   final_yield_weight    Float    @default(0)
   pricing_override      Float?
   computed_cost         Float    @default(0)
@@ -119,7 +123,6 @@ model MealRecipe {
   description            String?
   short_description      String?
   image_url              String?
-  net_weight_kg          Float    @default(0)
   calories               Int?
   protein_g              Float?
   carbs_g                Float?
@@ -471,6 +474,7 @@ model DailyChecklistCompletion {
 model SystemTag {
   id          String   @id @default(uuid())
   name        String
+  slug        String   // URL-safe key. Scoped unique per (type, slug) — same slug may exist across types (e.g. "shellfish" as both allergen and protein).
   type        String   // allergens, proteins, badges, diets, menu-cats, ingredient-cats, suppliers, storage
   subtype     String?  // Allergen, Dislike, Protein, Filter, Badge, Plan, Category, Supplier, Location
   source      String   @default("dish") // ingredient, dish, computed
@@ -484,6 +488,9 @@ model SystemTag {
 
   connections_from TagConnection[] @relation("ConnectionFrom")
   connections_to   TagConnection[] @relation("ConnectionTo")
+
+  @@unique([type, slug])
+  @@index([type])
 }
 
 model TagConnection {
@@ -549,6 +556,7 @@ enum MealTier {
 // Meaningful string ID kept from legacy system for zero-friction migration.
 model CorporateCompany {
   id             String   @id               // e.g. "SHAG" — matches legacy CompanyID
+  slug           String   @unique            // lowercased URL-safe key (e.g. "shag") for corporate portal URLs
   name           String
   email          String?
   phone          String?

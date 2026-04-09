@@ -76,6 +76,10 @@ export class CreateMealDto {
   category?: string;
 
   @IsOptional()
+  @IsString()
+  diet_plan_id?: string | null; // uuid of a SystemTag row where type='diets' (Omnivore or Plant-Based). See ADR 2026-04-08.
+
+  @IsOptional()
   @IsNumber()
   @Min(0)
   final_yield_weight?: number;
@@ -114,11 +118,6 @@ export class CreateMealDto {
   @IsOptional()
   @IsString()
   image_url?: string;
-
-  @IsOptional()
-  @IsNumber()
-  @Min(0)
-  net_weight_kg?: number;
 
   @IsOptional()
   @IsUUID()
