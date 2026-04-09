@@ -135,6 +135,13 @@ model Customer {
   apple_id_sub        String? // Sign in with Apple subject identifier
   google_id_sub       String? // Google OAuth subject identifier
 
+  // Verification state — email+phone independently verified.
+  // Required before marketing emails (CASL) and SMS order updates respectively.
+  email_verified      Boolean        @default(false)
+  email_verified_at   DateTime?
+  phone_verified      Boolean        @default(false)
+  phone_verified_at   DateTime?
+
   // Payments — Helcim customer object reference
   helcim_customer_id  String?
 
@@ -173,12 +180,15 @@ model Customer {
   weekly_cart_records        WeeklyCartRecord[]
   reward_points_transactions RewardPointsTransaction[]
   customer_coupons           CustomerCoupon[]
+  sessions                   CustomerSession[]
+  auth_tokens                CustomerAuthToken[]
 
   @@index([phone])
   @@index([apple_id_sub])
   @@index([google_id_sub])
   @@index([status])
   @@index([flagged])
+  @@index([email_verified])
 }
 
 // ─── CustomerAddress ─────────────────────────────────────────────────────────
@@ -541,4 +551,118 @@ model CustomerCoupon {
   @@index([customer_id])
   @@index([coupon_id])
   @@index([status])
+}
+
+// ─── Auth: CustomerSession ───────────────────────────────────────────────────
+// One row per active login session. Access tokens are short-lived JWTs
+// (stateless, not stored). Refresh tokens are long-lived (~30 days) and
+// stored HASHED in this table so we can:
+//   - Revoke individual sessions (log out one device)
+//   - Revoke all sessions on password change / suspected compromise
+//   - Show customers a list of active devices ("Your Devices" UI)
+//   - Enforce absolute + idle timeouts
+//
+// NEVER store raw refresh tokens — only their SHA-256 hash. When verifying,
+// hash the incoming token and look up by the hash. Tokens are high-entropy
+// random strings (256 bits) so plain SHA-256 is sufficient — no bcrypt needed.
+
+enum SessionRevokeReason {
+  user_logout        // Customer clicked "log out"
+  user_logout_all    // Customer clicked "log out all devices"
+  password_change    // Password was changed, invalidate all sessions
+  email_change       // Email was changed, invalidate all sessions
+  admin_force        // Admin manually revoked (CS or security action)
+  expired            // Reached expires_at
+  security_anomaly   // Fraud/abuse detection revoked it
+}
+
+model CustomerSession {
+  id               String               @id @default(uuid())
+  customer_id      String
+
+  // The refresh token's SHA-256 hash. Raw token is returned to client once
+  // at creation and never stored server-side.
+  refresh_token_hash String             @unique
+
+  // Device metadata — shown in "Your Devices" UI
+  user_agent       String?              // Full User-Agent header
+  device_name      String?              // Friendly label ("Jose's iPhone")
+  ip_address       String?              // IP at login time (for audit)
+  ip_country       String?              // ISO country code (from geoip)
+
+  // Lifecycle
+  created_at       DateTime             @default(now())
+  last_active_at   DateTime             @default(now()) // Updated on each refresh
+  expires_at       DateTime             // Absolute timeout (~30 days from creation)
+  revoked_at       DateTime?            // Null = still active
+  revoked_reason   SessionRevokeReason?
+
+  customer         Customer             @relation(fields: [customer_id], references: [id], onDelete: Cascade)
+
+  @@index([customer_id])
+  @@index([customer_id, revoked_at]) // Fast "active sessions for this customer"
+  @@index([expires_at])              // Cleanup job for expired sessions
+}
+
+// ─── Auth: CustomerAuthToken ─────────────────────────────────────────────────
+// Short-lived one-time tokens for auth flows that aren't sessions:
+//   - Password reset links (1 hour TTL)
+//   - Email verification links (24 hour TTL)
+//   - Phone OTP codes (10 minute TTL)
+//   - Magic link login (15 minute TTL)
+//   - Email change confirmation (1 hour TTL, sent to NEW email)
+//   - Phone change confirmation (10 minute TTL, sent as SMS to NEW phone)
+//
+// Each token is single-use: once consumed_at is set, it's invalid. Rate
+// limiting happens at the API layer (N tokens per customer per hour max).
+//
+// SECURITY: token_hash stores SHA-256 of the raw token. The raw token is
+// emailed/SMSed to the customer exactly once. We never store or log the raw.
+//
+// customer_id is nullable because pre-signup email verification can issue
+// tokens BEFORE a customer row exists. In that case we carry the email on
+// the token row itself.
+
+enum AuthTokenType {
+  password_reset
+  email_verification
+  phone_otp
+  magic_link
+  email_change
+  phone_change
+}
+
+model CustomerAuthToken {
+  id             String        @id @default(uuid())
+  customer_id    String?       // Nullable: pre-signup verification has no customer yet
+  type           AuthTokenType
+
+  // For email_verification / email_change: the email being verified
+  // For phone_otp / phone_change: the phone being verified
+  // Denormalized so we can rate-limit by email/phone even without customer_id
+  target_email   String?
+  target_phone   String?
+
+  // SHA-256 hash of the raw token or OTP code. Never store raw.
+  token_hash     String        @unique
+
+  // Rate limiting for OTPs — max attempts before the token is burned
+  attempts       Int           @default(0)
+  max_attempts   Int           @default(5)
+
+  // Lifecycle
+  expires_at     DateTime      // Short TTL (10m – 24h depending on type)
+  consumed_at    DateTime?     // Null = still valid, not null = used
+  created_at     DateTime      @default(now())
+
+  // Audit context
+  ip_address     String?
+  user_agent     String?
+
+  customer       Customer?     @relation(fields: [customer_id], references: [id], onDelete: Cascade)
+
+  @@index([customer_id])
+  @@index([type, target_email]) // Rate limit: count recent tokens by email
+  @@index([type, target_phone]) // Rate limit: count recent tokens by phone
+  @@index([expires_at])         // Cleanup job for expired tokens
 }
