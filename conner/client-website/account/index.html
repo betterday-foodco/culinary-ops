@@ -4990,21 +4990,71 @@ function cancelEditProfile(){
   document.getElementById('editProfileBtn').textContent='Edit';
   document.getElementById('editProfileBtn').onclick=()=>toggleEditProfile();
 }
-function saveProfile(){
+// WIRED (commit 2): Personal Information save → PATCH /api/commerce/customers/me
+//
+// Reads the three editable fields from the card (firstName, lastName,
+// birthday), builds a DTO matching UpdateProfileDto on the backend,
+// and PATCHes /me. On success, re-renders from the server's response
+// (authoritative — catches any backend normalization) and calls
+// cancelEditProfile() to exit edit mode. On error, the card stays in
+// edit mode so the user can fix their input and retry.
+//
+// Email + phone do NOT belong in this save — email is in the Contact
+// Details card (and gated behind verification via saveContact), and
+// phone is also in the Contact card. This card is firstName/lastName/
+// birthday only.
+async function saveProfile(){
   const card = document.getElementById('editProfileBtn').closest('.acct-card');
+  const saveBtn = document.querySelector('#profileActions button.acct-btn-primary-sm');
+
+  // Collect the three editable values from the card's .field-edit inputs
+  const edits = {};
   card.querySelectorAll('.field-edit').forEach(el=>{
-    const f=el.getAttribute('data-field');
-    userData[f]=el.value;
-    const disp=card.querySelector('.field-display[data-field="'+f+'"]');
-    if(f==='birthday'){
-      const d=new Date(el.value+'T12:00:00');
-      disp.textContent=d.toLocaleDateString('en',{month:'long',day:'numeric',year:'numeric'});
-    } else disp.textContent=el.value;
+    edits[el.getAttribute('data-field')] = el.value;
   });
-  document.getElementById('profileFullName').textContent=userData.firstName+' '+userData.lastName;
-  document.getElementById('profileAvatar').textContent=userData.firstName[0]+userData.lastName[0];
-  cancelEditProfile();
-  showToast('Profile updated!','success');
+
+  // Build DTO matching backend UpdateProfileDto. Empty strings become
+  // null (backend expects string or null, not empty). Birthday is a
+  // date string the backend parses with new Date().
+  const dto = {};
+  if(edits.firstName !== undefined) dto.first_name = edits.firstName || null;
+  if(edits.lastName  !== undefined) dto.last_name  = edits.lastName  || null;
+  if(edits.birthday  !== undefined && edits.birthday !== '') dto.birthday = edits.birthday;
+
+  if(saveBtn) saveBtn.disabled = true;
+  try {
+    const saved = await api('/commerce/customers/me', {
+      method: 'PATCH',
+      body: JSON.stringify(dto),
+    });
+
+    // Re-render from the server's authoritative response
+    userData.firstName = saved.first_name || '';
+    userData.lastName  = saved.last_name  || '';
+    if(saved.birthday) userData.birthday = String(saved.birthday).slice(0, 10);
+
+    setField('firstName', userData.firstName);
+    setField('lastName',  userData.lastName);
+    if(userData.birthday){
+      const d = new Date(userData.birthday + 'T12:00:00');
+      setField('birthday', userData.birthday,
+        d.toLocaleDateString('en',{month:'long',day:'numeric',year:'numeric'}));
+    }
+
+    document.getElementById('profileFullName').textContent =
+      (userData.firstName + ' ' + userData.lastName).trim() || 'Your account';
+    document.getElementById('profileAvatar').textContent =
+      ((userData.firstName[0] || '') + (userData.lastName[0] || '')).toUpperCase() || '??';
+
+    cancelEditProfile();
+    showToast('Profile updated!','success');
+  } catch(err) {
+    console.error('[account] saveProfile failed', err);
+    showToast("Couldn't save: " + (err.message || 'unknown error'), 'warning');
+    // Leave the card in edit mode so the user can retry or cancel
+  } finally {
+    if(saveBtn) saveBtn.disabled = false;
+  }
 }
 
 // ======= CONTACT EDIT =======
@@ -5024,20 +5074,94 @@ function cancelEditContact(){
   document.getElementById('contactActions').style.display='none';
   document.getElementById('editContactBtn').textContent='Edit';
 }
-function saveContact(){
-  const card=document.getElementById('editContactBtn').closest('.acct-card');
+// WIRED (commit 2): Contact Details save → PATCH /api/commerce/customers/me
+//
+// Sends only `phone` in the PATCH body. Email is deliberately NOT sent
+// because the backend's UpdateProfileDto doesn't accept it — email
+// changes require a verification round-trip (magic link to the new
+// address) which is a separate flow, tracked in deferred-decisions
+// under "Phone + email change flows for the account hub."
+//
+// If the user edited the email field in place, we show a warning toast
+// explaining it's coming soon and revert the input to the original
+// value so the displayed state matches what's actually saved.
+async function saveContact(){
+  const card = document.getElementById('editContactBtn').closest('.acct-card');
+  const saveBtn = document.querySelector('#contactActions button.acct-btn-primary-sm');
+
+  // Collect the two editable values (email, phone)
+  const edits = {};
   card.querySelectorAll('.field-edit').forEach(el=>{
-    const f=el.getAttribute('data-field');
-    let v = el.value;
-    if(f === 'phone') v = formatPhoneNumber(v);
-    userData[f]=v;
-    el.value = v;
-    card.querySelector('.field-display[data-field="'+f+'"]').textContent=v;
+    edits[el.getAttribute('data-field')] = el.value;
   });
-  cancelEditContact();
-  showToast('Contact info updated!','success');
+
+  // Check whether the user actually tried to change their email.
+  // If yes, show a "coming soon" toast and revert the input.
+  const emailChanged = edits.email !== undefined
+    && edits.email !== userData.email
+    && edits.email.trim() !== '';
+  if(emailChanged){
+    showToast('Email changes need verification — coming soon','info');
+    const emailEdit = card.querySelector('.field-edit[data-field="email"]');
+    if(emailEdit) emailEdit.value = userData.email || '';
+  }
+
+  // Build DTO: phone only. Format it via the existing helper first so
+  // the server receives the canonical format, not whatever the user
+  // happened to type.
+  const dto = {};
+  if(edits.phone !== undefined){
+    const formattedPhone = (typeof formatPhoneNumber === 'function')
+      ? formatPhoneNumber(edits.phone)
+      : edits.phone;
+    dto.phone = formattedPhone || null;
+  }
+
+  if(saveBtn) saveBtn.disabled = true;
+  try {
+    const saved = await api('/commerce/customers/me', {
+      method: 'PATCH',
+      body: JSON.stringify(dto),
+    });
+
+    // Re-render from server response (authoritative)
+    userData.phone = saved.phone || '';
+    setField('phone', userData.phone);
+
+    cancelEditContact();
+    showToast('Contact info updated!','success');
+  } catch(err) {
+    console.error('[account] saveContact failed', err);
+    showToast("Couldn't save: " + (err.message || 'unknown error'), 'warning');
+  } finally {
+    if(saveBtn) saveBtn.disabled = false;
+  }
 }
-function toggleSms(el){el.classList.toggle('active');userData.smsOptIn=el.classList.contains('active');showToast(userData.smsOptIn?'SMS notifications enabled':'SMS notifications disabled','success')}
+// WIRED (commit 2): SMS Order Updates toggle → PATCH /me/notifications
+//
+// Optimistic update: flip the .active class on the toggle element
+// IMMEDIATELY so the customer sees instant feedback, then fire the
+// PATCH in the background. If the PATCH fails, revert the class and
+// show a warning toast. Keeping the optimistic flip feels much faster
+// than waiting for the request to round-trip before moving the toggle.
+async function toggleSms(el){
+  const newValue = !el.classList.contains('active');
+  // Optimistic UI flip
+  el.classList.toggle('active', newValue);
+  try {
+    await api('/commerce/customers/me/notifications', {
+      method: 'PATCH',
+      body: JSON.stringify({ sms_opt_in: newValue }),
+    });
+    userData.smsOptIn = newValue;
+    showToast(newValue ? 'SMS notifications enabled' : 'SMS notifications disabled','success');
+  } catch(err) {
+    // Revert the optimistic flip
+    el.classList.toggle('active', !newValue);
+    console.error('[account] toggleSms failed', err);
+    showToast("Couldn't update SMS preference",'warning');
+  }
+}
 function toggleChip(el,type){
   const isAllergen=type==='allergen';
   const activeClass=isAllergen?'active-red':el.getAttribute('data-val')==='High Protein'?'active-blue':el.getAttribute('data-val')==='Vegan'?'active-green':'active';
