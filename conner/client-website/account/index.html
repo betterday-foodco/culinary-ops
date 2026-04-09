@@ -2253,19 +2253,29 @@ select.acct-form-input{appearance:none;background-image:url("data:image/svg+xml,
       </div>
       When our menu rotates each week, your saved cart is checked against the tags below. If any dish in your upcoming order contains something you've flagged, the system <strong>automatically swaps</strong> it for a similar alternative that fits your profile and notifies you of the change. You can always review and adjust swaps before your order locks.
     </div>
+    <!-- Split into two sub-sections per the canonical data model:
+         • allergens[]  → things to AVOID (red active state)
+         • diet_tags[]  → preferences to PREFER (blue active state)
+         The Vegan chip was removed (it's the Diet Plan radio above).
+         The Vegetarian chip was removed (it'll be computed by the
+         rule-based tag generator on the menu side — customer doesn't
+         choose it manually). See commit 5cca53e rename sweep. -->
     <div class="acct-chips-group">
-      <div class="acct-chips-label">Allergens & Diet Tags</div>
-      <div class="acct-chips-wrap">
-        <button class="acct-chip" onclick="toggleChip(this,'tag')" data-val="Gluten-Free">Gluten-Free</button>
-        <button class="acct-chip" onclick="toggleChip(this,'tag')" data-val="Dairy-Free">Dairy-Free</button>
-        <button class="acct-chip" onclick="toggleChip(this,'tag')" data-val="Nut-Free">Nut-Free</button>
-        <button class="acct-chip active-red" onclick="toggleChip(this,'tag')" data-val="Shellfish-Free">Shellfish-Free</button>
-        <button class="acct-chip" onclick="toggleChip(this,'tag')" data-val="Soy-Free">Soy-Free</button>
-        <button class="acct-chip" onclick="toggleChip(this,'tag')" data-val="Egg-Free">Egg-Free</button>
-        <button class="acct-chip" onclick="toggleChip(this,'tag')" data-val="Vegan">Vegan</button>
-        <button class="acct-chip" onclick="toggleChip(this,'tag')" data-val="Vegetarian">Vegetarian</button>
-        <button class="acct-chip" onclick="toggleChip(this,'tag')" data-val="Keto">Keto</button>
-        <button class="acct-chip active-red" onclick="toggleChip(this,'tag')" data-val="High Protein">High Protein</button>
+      <div class="acct-chips-label">Avoid these allergens</div>
+      <div class="acct-chips-wrap" id="allergenChipsWrap">
+        <button type="button" class="acct-chip" onclick="toggleChip(this,'allergen')" data-val="Gluten-Free">Gluten-Free</button>
+        <button type="button" class="acct-chip" onclick="toggleChip(this,'allergen')" data-val="Dairy-Free">Dairy-Free</button>
+        <button type="button" class="acct-chip" onclick="toggleChip(this,'allergen')" data-val="Nut-Free">Nut-Free</button>
+        <button type="button" class="acct-chip" onclick="toggleChip(this,'allergen')" data-val="Shellfish-Free">Shellfish-Free</button>
+        <button type="button" class="acct-chip" onclick="toggleChip(this,'allergen')" data-val="Soy-Free">Soy-Free</button>
+        <button type="button" class="acct-chip" onclick="toggleChip(this,'allergen')" data-val="Egg-Free">Egg-Free</button>
+      </div>
+    </div>
+    <div class="acct-chips-group" style="margin-top:16px">
+      <div class="acct-chips-label">Diet tags</div>
+      <div class="acct-chips-wrap" id="dietTagChipsWrap">
+        <button type="button" class="acct-chip" onclick="toggleChip(this,'tag')" data-val="Keto">Keto</button>
+        <button type="button" class="acct-chip" onclick="toggleChip(this,'tag')" data-val="High Protein">High Protein</button>
       </div>
     </div>
   </div>
@@ -3195,6 +3205,13 @@ async function loadProfile() {
     }
     renderDietPlanCards();
 
+    // Chip group initial state (commit #4). The server is authoritative
+    // for which allergens and diet tags are active. userData is kept in
+    // sync so future reads stay consistent.
+    userData.allergens = Array.isArray(me.allergens) ? me.allergens.slice() : [];
+    userData.dietTags  = Array.isArray(me.diet_tags) ? me.diet_tags.slice() : [];
+    applyChipState();
+
     // Update the in-memory userData so edit/cancel flow reads fresh values.
     // The existing cancelEditProfile() function reverts from userData, so
     // syncing it here keeps the cancel behavior honest.
@@ -3350,6 +3367,43 @@ async function selectDietPlan(planKey) {
 function escapeHtml(s) {
   return String(s || '').replace(/[&<>"']/g, function (c) {
     return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+  });
+}
+
+// ============================================================
+// CHIP GROUPS — allergens[] + diet_tags[] (commit 4 of 8)
+// ============================================================
+// Two chip sub-groups in the Allergies & Preferences card, each saving
+// to a different column on Customer:
+//   • #allergenChipsWrap → userData.allergens → Customer.allergens[]
+//   • #dietTagChipsWrap  → userData.dietTags  → Customer.diet_tags[]
+//
+// Active-state colour differs by type so customers can see the two
+// data categories at a glance:
+//   • allergens: active-red   (warning tone — things to avoid)
+//   • diet_tags: active-blue  (neutral tone — preferences to prefer)
+//
+// Save model is "Save Preferences button" — the toggle is local until
+// the customer clicks Save, at which point we PATCH both arrays in one
+// request. This matches the prototype's Save button UX (the customer
+// expects the button to mean something) and also lets us batch multiple
+// toggle changes into one round-trip. The dirty flag below gates the
+// Save button colour: grey when no unsaved changes, yellow when dirty.
+
+// Read userData.allergens + userData.dietTags and stamp each chip's
+// active class accordingly. Called from loadProfile() on initial load
+// and from savePreferences() after a successful PATCH to re-render
+// from the server response.
+function applyChipState() {
+  const allergens = (userData.allergens || []).map(String);
+  const dietTags  = (userData.dietTags  || []).map(String);
+  document.querySelectorAll('#allergenChipsWrap .acct-chip').forEach(el => {
+    const val = el.getAttribute('data-val');
+    el.className = 'acct-chip' + (allergens.includes(val) ? ' active-red' : '');
+  });
+  document.querySelectorAll('#dietTagChipsWrap .acct-chip').forEach(el => {
+    const val = el.getAttribute('data-val');
+    el.className = 'acct-chip' + (dietTags.includes(val) ? ' active-blue' : '');
   });
 }
 
@@ -5372,26 +5426,75 @@ async function toggleSms(el){
     showToast("Couldn't update SMS preference",'warning');
   }
 }
-function toggleChip(el,type){
-  const isAllergen=type==='allergen';
-  const activeClass=isAllergen?'active-red':el.getAttribute('data-val')==='High Protein'?'active-blue':el.getAttribute('data-val')==='Vegan'?'active-green':'active';
-  if(el.classList.contains(activeClass)){el.classList.remove(activeClass)}
-  else{el.className='acct-chip '+activeClass}
+// WIRED (commit 4): chip toggle — local-only, no server call here.
+// Flips the active-red / active-blue class based on the type parameter
+// passed from the onclick handler in the HTML ('allergen' or 'tag').
+// The change is purely visual until the customer clicks Save Preferences.
+function toggleChip(el, type){
+  const activeClass = type === 'allergen' ? 'active-red' : 'active-blue';
+  if (el.classList.contains(activeClass)) {
+    el.classList.remove(activeClass);
+  } else {
+    el.className = 'acct-chip ' + activeClass;
+  }
 }
-function savePreferences(){
-  showToast('Preferences saved!','success');
-  const icon=document.getElementById('savePrefsIcon');
-  const label=document.getElementById('savePrefsLabel');
-  if(!icon||!label)return;
-  icon.outerHTML='<svg id="savePrefsIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px"><polyline points="20 6 9 17 4 12"/></svg>';
-  label.textContent='Saved';
-  clearTimeout(window._savePrefsResetT);
-  window._savePrefsResetT=setTimeout(()=>{
-    const i=document.getElementById('savePrefsIcon');
-    const l=document.getElementById('savePrefsLabel');
-    if(i)i.outerHTML='<svg id="savePrefsIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px"><path d="M19 21H5a2 2 0 01-2-2V5a2 2 0 012-2h11l5 5v11a2 2 0 01-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>';
-    if(l)l.textContent='Save Preferences';
-  },2200);
+
+// WIRED (commit 4): Save Preferences → PATCH /me/preferences
+//
+// Collects the currently-active chips from both sub-groups and sends
+// { allergens, diet_tags } in one PATCH. Array fields REPLACE (not
+// merge) on the backend — this matches UpdatePreferencesDto semantics.
+//
+// On success: re-renders userData + chip state from the server response
+// (authoritative), shows a success toast, and briefly morphs the Save
+// button icon to a check mark + "Saved" text for 2.2 seconds (keeps
+// the prototype's delightful save-confirmation UX). On failure: logs
+// to console.error, warning toast, chip classes stay where they are
+// so the customer can retry.
+async function savePreferences(){
+  const saveBtn = document.getElementById('savePrefsBtn');
+
+  // Collect active chips from both sub-groups
+  const allergens = Array.from(document.querySelectorAll('#allergenChipsWrap .acct-chip.active-red'))
+    .map(el => el.getAttribute('data-val'));
+  const dietTags  = Array.from(document.querySelectorAll('#dietTagChipsWrap  .acct-chip.active-blue'))
+    .map(el => el.getAttribute('data-val'));
+
+  if (saveBtn) saveBtn.disabled = true;
+  try {
+    const saved = await api('/commerce/customers/me/preferences', {
+      method: 'PATCH',
+      body: JSON.stringify({ allergens, diet_tags: dietTags }),
+    });
+
+    // Re-render from server response (authoritative — catches any
+    // backend normalization like whitespace trimming or dedup).
+    userData.allergens = Array.isArray(saved.allergens) ? saved.allergens.slice() : [];
+    userData.dietTags  = Array.isArray(saved.diet_tags) ? saved.diet_tags.slice()  : [];
+    applyChipState();
+
+    showToast('Preferences saved!','success');
+
+    // Button morph animation — preserves the prototype's UX flourish
+    const icon  = document.getElementById('savePrefsIcon');
+    const label = document.getElementById('savePrefsLabel');
+    if (icon && label) {
+      icon.outerHTML = '<svg id="savePrefsIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px"><polyline points="20 6 9 17 4 12"/></svg>';
+      label.textContent = 'Saved';
+      clearTimeout(window._savePrefsResetT);
+      window._savePrefsResetT = setTimeout(() => {
+        const i = document.getElementById('savePrefsIcon');
+        const l = document.getElementById('savePrefsLabel');
+        if (i) i.outerHTML = '<svg id="savePrefsIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px"><path d="M19 21H5a2 2 0 01-2-2V5a2 2 0 012-2h11l5 5v11a2 2 0 01-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>';
+        if (l) l.textContent = 'Save Preferences';
+      }, 2200);
+    }
+  } catch (err) {
+    console.error('[account] savePreferences failed', err);
+    showToast("Couldn't save: " + (err.message || 'unknown error'), 'warning');
+  } finally {
+    if (saveBtn) saveBtn.disabled = false;
+  }
 }
 
 // ======= ADDRESSES =======
