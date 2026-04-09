@@ -48,6 +48,7 @@ model Ingredient {
   is_active             Boolean              @default(true)
   created_at            DateTime             @default(now())
   updated_at            DateTime             @updatedAt
+  slug                  String               @unique
   meal_components       MealComponent[]
   sub_recipe_components SubRecipeComponent[]
 
@@ -71,6 +72,7 @@ model SubRecipe {
   created_at        DateTime                 @default(now())
   updated_at        DateTime                 @updatedAt
   sub_priority      Int?
+  slug              String                   @unique
   feedback          KitchenFeedback[]
   kitchen_logs      KitchenProductionLog[]
   meal_components   MealComponent[]
@@ -132,6 +134,7 @@ model MealRecipe {
   starch_type            String?
   meal_code              String?              @unique
   diet_plan_id           String?
+  slug                   String               @unique
   corporate_order_items  CorporateOrderItem[]
   components             MealComponent[]
   SystemTag              SystemTag?           @relation(fields: [diet_plan_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
@@ -460,9 +463,12 @@ model SystemTag {
   sort_order       Int             @default(0)
   created_at       DateTime        @default(now())
   updated_at       DateTime        @updatedAt
+  slug             String
   MealRecipe       MealRecipe[]
   connections_from TagConnection[] @relation("ConnectionFrom")
   connections_to   TagConnection[] @relation("ConnectionTo")
+
+  @@unique([type, slug])
 }
 
 model TagConnection {
@@ -558,6 +564,7 @@ model CorporateCompany {
   tier3_employee_price      Float                       @default(0)
   tier3_meals               Int                         @default(0)
   allowed_email_domain      String?
+  slug                      String                      @unique
   invoices                  CompanyInvoice[]
   benefit_levels            CorporateBenefitLevel[]
   company_pin               CorporateCompanyPIN?

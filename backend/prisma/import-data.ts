@@ -165,6 +165,7 @@ async function importData() {
               internal_name: d.internal_name,
               display_name: d.internal_name,
               sku: `ING-${oldId}`,
+              slug: d.internal_name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || `ing-${oldId}`,
               category: d.category,
               base_weight: 1.0,
               unit: 'Kgs',
@@ -207,6 +208,7 @@ async function importData() {
         where: { sub_recipe_code: `SR-${srId}` },
         create: {
           name: header.srName || `Sub-Recipe ${srId}`,
+          slug: (header.srName || `sub-recipe-${srId}`).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, ''),
           sub_recipe_code: `SR-${srId}`,
           station_tag: header.station || null,
           production_day: header.day || null,
@@ -251,6 +253,7 @@ async function importData() {
         data: {
           name: header.dishName,
           display_name: header.dishName,
+          slug: header.dishName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'meal',
           category: header.category || null,
           final_yield_weight: 0,
           pricing_override: price,
