@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 
+import { CommerceCheckoutController } from './commerce-checkout.controller';
 import { HelcimApiClient } from './helcim/helcim-api-client';
 import { HelcimService } from './helcim/helcim.service';
 import { HelcimCheckoutSessionRepository } from './helcim/helcim-checkout-session.repository';
@@ -37,6 +38,7 @@ import { HmacVerifier } from './helcim/hmac-verifier';
  * to anything in this module without an explicit import.
  */
 @Module({
+  controllers: [CommerceCheckoutController],
   providers: [
     HelcimApiClient,
     HelcimService,
