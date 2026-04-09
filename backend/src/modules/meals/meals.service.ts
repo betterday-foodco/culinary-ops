@@ -101,9 +101,21 @@ export class MealsService {
       );
     }
 
+    // display_name is the only customer-facing name that matters. The legacy
+    // `name` column (used in the old SPRWT system for sorting workarounds) is
+    // still NOT NULL at the DB level but no longer required in the UI — if the
+    // caller doesn't provide it, mirror display_name so the constraint is
+    // satisfied silently. Admins can override it via the "Advanced / Admin"
+    // disclosure on the edit page for fringe cases.
+    const internalName = (dto.name && dto.name.trim()) || dto.display_name;
+
     const { components, ...mealData } = dto;
     // TypeScript narrows diet_plan_id to `string` after the guard above.
-    const mealDataWithDiet = { ...mealData, diet_plan_id: dto.diet_plan_id };
+    const mealDataWithDiet = {
+      ...mealData,
+      name: internalName,
+      diet_plan_id: dto.diet_plan_id,
+    };
 
     // Retry up to 5 times on meal_code collision (race condition guard)
     let meal: any;
