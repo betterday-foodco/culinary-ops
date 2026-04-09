@@ -1753,14 +1753,15 @@ let dietLock = null;
 let dietLockResolved = false; // Gates renderAll() until lock is determined.
 
 // Customer-facing diet plan labels. Backend uses the canonical identifier
-// ('Omnivore' | 'Vegan'); customers see warmer copy ("Plants Only"). The
-// map is overwritten at load time from brand/site-info.seed.json if custom
-// labels are configured — the fallback below is the current brand values
-// so the page renders correctly even when the seed fetch fails. To change
-// what customers see, either edit this fallback OR edit the seed values
-// (public.diet.labels.omnivore / public.diet.labels.vegan).
+// ('Omnivore' | 'Vegan'); customers see warmer copy ("Meat & Plants" /
+// "Plants Only"). The map is overwritten at load time from
+// brand/site-info.seed.json if custom labels are configured — the fallback
+// below is the current brand values so the page renders correctly even
+// when the seed fetch fails. To change what customers see, either edit
+// this fallback OR edit the seed values (public.diet.labels.omnivore /
+// public.diet.labels.vegan).
 let DIET_LABELS = {
-  Omnivore: 'Omnivore',
+  Omnivore: 'Meat & Plants',
   Vegan: 'Plants Only',
 };
 

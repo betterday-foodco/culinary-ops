@@ -1539,6 +1539,56 @@ select.acct-form-input{appearance:none;background-image:url("data:image/svg+xml,
 .acct-chip.active-green{background:#16a34a;color:#fff;border-color:#16a34a}
 .acct-chip.active-blue{background:#4EA2FD;color:#fff;border-color:#4EA2FD}
 
+/* Diet Plan radio card (commit #3 wiring) — two big pill buttons for the
+   customer's diet plan choice (Meat & Plants vs Plants Only). Clicking
+   a pill writes Customer.diet_plan_id via PATCH /me/preferences — no
+   explicit Save button, matches the onboarding picker's click-to-commit
+   pattern. Customer-facing labels pull from DIET_LABELS so rebrands are
+   a one-line edit to brand/site-info.seed.json. */
+.diet-plan-row{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:4px}
+@media(max-width:640px){.diet-plan-row{grid-template-columns:1fr}}
+.diet-plan-pill{
+  position:relative;
+  display:flex;align-items:center;justify-content:center;gap:10px;
+  padding:18px 20px;
+  background:#fff;
+  border:2px solid #e0d0bc;border-radius:16px;
+  font-family:inherit;font-size:15px;font-weight:700;color:#003141;
+  cursor:pointer;
+  transition:all .18s;
+  text-align:left;
+}
+.diet-plan-pill:hover:not(.selected):not(:disabled){
+  border-color:#4EA2FD;
+  background:rgba(78,162,253,.04);
+  transform:translateY(-1px);
+}
+.diet-plan-pill.selected{
+  border-color:#003141;
+  background:linear-gradient(135deg,rgba(0,49,65,.04),rgba(78,162,253,.06));
+  box-shadow:0 0 0 3px rgba(0,49,65,.08),0 2px 8px rgba(0,49,65,.08);
+}
+.diet-plan-pill.selected.vegan{
+  border-color:#16a34a;
+  background:linear-gradient(135deg,rgba(22,163,74,.05),rgba(22,163,74,.1));
+  box-shadow:0 0 0 3px rgba(22,163,74,.12),0 2px 8px rgba(22,163,74,.1);
+}
+.diet-plan-pill:disabled{opacity:.55;cursor:wait}
+.diet-plan-emoji{font-size:28px;line-height:1;flex-shrink:0}
+.diet-plan-text{display:flex;flex-direction:column;gap:2px;flex:1}
+.diet-plan-label{font-size:15px;font-weight:800;color:#003141;line-height:1.2}
+.diet-plan-sub{font-size:11px;font-weight:500;color:#8a7a6a;line-height:1.3}
+.diet-plan-pill.selected .diet-plan-sub{color:#5a4a3a}
+.diet-plan-check{
+  position:absolute;top:10px;right:12px;
+  width:20px;height:20px;border-radius:50%;
+  background:#003141;color:#fff;
+  display:none;align-items:center;justify-content:center;
+}
+.diet-plan-pill.selected.vegan .diet-plan-check{background:#16a34a}
+.diet-plan-pill.selected .diet-plan-check{display:flex}
+.diet-plan-check svg{width:12px;height:12px}
+
 /* Address/payment cards grid */
 .acct-cards-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:16px;margin-top:16px}
 .acct-addr-card,.acct-pay-card{background:#fff;border-radius:14px;border:1.5px solid #e0d0bc;padding:18px;position:relative;transition:all .18s;cursor:default}
@@ -2150,6 +2200,34 @@ select.acct-form-input{appearance:none;background-image:url("data:image/svg+xml,
         <button class="acct-btn-primary-sm" onclick="saveContact()">Save Changes</button>
         <button class="acct-btn-outline" onclick="cancelEditContact()">Cancel</button>
       </div>
+    </div>
+  </div>
+
+  <!-- Diet Plan (commit #3 wiring) — writes Customer.diet_plan_id on click -->
+  <div class="acct-card">
+    <div class="acct-card-header acct-card-hero lightgreen">
+      <div>
+        <div class="acct-card-title">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v20M2 12h20"/></svg>
+          Diet Plan
+        </div>
+        <div class="acct-card-subtitle">Filters the whole menu — pick what you eat, we hide the rest</div>
+      </div>
+    </div>
+    <div class="diet-plan-row" id="dietPlanRow">
+      <!-- Populated by renderDietPlanCards() on load. Shape:
+           <button class="diet-plan-pill [selected] [vegan]" onclick="selectDietPlan('omnivore')">
+             <span class="diet-plan-emoji">🍽️</span>
+             <div class="diet-plan-text">
+               <span class="diet-plan-label">Meat &amp; Plants</span>
+               <span class="diet-plan-sub">All meals, no restrictions</span>
+             </div>
+             <span class="diet-plan-check">✓</span>
+           </button>
+      -->
+    </div>
+    <div style="margin-top:14px;padding:10px 14px;background:rgba(22,163,74,.06);border-radius:10px;font-size:12px;color:#5a4a3a;line-height:1.45">
+      <strong style="color:#003141">Plants Only</strong> hides every meat dish from your menu — we never show meat to a customer on this plan, and we never let a meat meal slip into your cart or checkout. Safety-locked.
     </div>
   </div>
 
@@ -3058,19 +3136,35 @@ async function api(path, opts = {}) {
   return res.json();
 }
 
+// Customer-facing diet plan labels + SystemTag UUIDs. Backend uses the
+// canonical identifiers 'Omnivore' and 'Vegan' internally; customers see
+// "Meat & Plants" and "Plants Only." Loaded from brand/site-info.seed.json
+// in loadProfile() with a fallback so the page renders correctly when
+// the seed fetch fails. Same pattern as DIET_LABELS in menu/index.html.
+const DIET_PLAN_STATE = {
+  omnivoreId: null,   // UUID of the Omnivore SystemTag row — set by loadProfile()
+  veganId:    null,   // UUID of the Vegan SystemTag row
+  labels: { Omnivore: 'Meat & Plants', Vegan: 'Plants Only' },
+  current:    null,   // 'omnivore' | 'vegan' | null — the customer's active choice
+};
+
 // Populate the Customer Info tab (Personal Information + Contact Details
-// cards) with real data from GET /api/commerce/customers/me. Called from
-// DOMContentLoaded — the hardcoded "Jose Ramirez" values in the HTML act
-// as a silent fallback if the fetch fails, so the page is still usable
-// offline during dev. Errors log to console but do NOT toast (it would
-// be noisy on every page load when the dev backend is down).
+// cards, plus the Diet Plan radio card) with real data from
+// GET /api/commerce/customers/me. Called from DOMContentLoaded — the
+// hardcoded "Jose Ramirez" values in the HTML act as a silent fallback
+// if the fetch fails, so the page is still usable offline during dev.
+// Errors log to console but do NOT toast (it would be noisy on every
+// page load when the dev backend is down).
 //
 // Fields updated:
-//   • Personal card: firstName, lastName, birthday, profileFullName, avatar
-//   • Contact card:  email, phone, SMS opt-in toggle state
-//   • userData:      all of the above (keeps the existing edit/cancel
-//                    flow functional — saveProfile reverts from userData
-//                    when the user clicks Cancel during edit)
+//   • Personal card:  firstName, lastName, birthday, profileFullName, avatar
+//   • Contact card:   email, phone, SMS opt-in toggle state
+//   • Diet Plan card: two pill-buttons with the current selection highlighted
+//   • userData:       all of the above (keeps the existing edit/cancel
+//                     flow functional — saveProfile reverts from userData
+//                     when the user clicks Cancel during edit)
+//   • DIET_PLAN_STATE: omnivoreId, veganId, labels, current (feeds the
+//                      Diet Plan radio card render + click handlers)
 //
 // Birthday handling: /me returns birthday as an ISO datetime string like
 // "1989-03-15T00:00:00.000Z". The .field-edit input is type="date" which
@@ -3078,8 +3172,28 @@ async function api(path, opts = {}) {
 // derived from the same ISO string via setField().
 async function loadProfile() {
   try {
-    const me = await api('/commerce/customers/me');
+    // Load /me and brand seed in parallel. The brand seed gives us the
+    // SystemTag UUIDs + customer-facing labels for the Diet Plan radio.
+    const [me, siteInfo] = await Promise.all([
+      api('/commerce/customers/me'),
+      fetch('../../../brand/site-info.seed.json').then(r => r.ok ? r.json() : {}).catch(() => ({})),
+    ]);
     if (!me) return;
+
+    // Populate DIET_PLAN_STATE from the brand seed (UUIDs + labels) and
+    // the /me response (customer's current selection).
+    DIET_PLAN_STATE.omnivoreId = siteInfo['public.diet.omnivoreId'] || null;
+    DIET_PLAN_STATE.veganId    = siteInfo['public.diet.veganId']    || null;
+    if (siteInfo['public.diet.labels.omnivore']) DIET_PLAN_STATE.labels.Omnivore = siteInfo['public.diet.labels.omnivore'];
+    if (siteInfo['public.diet.labels.vegan'])    DIET_PLAN_STATE.labels.Vegan    = siteInfo['public.diet.labels.vegan'];
+    if (me.diet_plan_id && me.diet_plan_id === DIET_PLAN_STATE.omnivoreId) {
+      DIET_PLAN_STATE.current = 'omnivore';
+    } else if (me.diet_plan_id && me.diet_plan_id === DIET_PLAN_STATE.veganId) {
+      DIET_PLAN_STATE.current = 'vegan';
+    } else {
+      DIET_PLAN_STATE.current = null;
+    }
+    renderDietPlanCards();
 
     // Update the in-memory userData so edit/cancel flow reads fresh values.
     // The existing cancelEditProfile() function reverts from userData, so
@@ -3141,6 +3255,102 @@ function setField(name, inputValue, displayValue) {
   const edit = document.querySelector('.field-edit[data-field="' + name + '"]');
   if (disp) disp.textContent = displayValue !== undefined ? displayValue : (inputValue || '—');
   if (edit) edit.value = inputValue || '';
+}
+
+// ============================================================
+// DIET PLAN RADIO (commit 3 of 8)
+// ============================================================
+// Two big pill-buttons in the Customer Info tab that let the customer
+// pick their diet plan. Saves on click (no explicit Save button) via
+// PATCH /me/preferences with { diet_plan_id: <uuid> }.
+//
+// Customer-facing labels pull from DIET_PLAN_STATE.labels, which is
+// seeded from brand/site-info.seed.json in loadProfile() above. Backend
+// identifiers stay as the canonical 'Omnivore' / 'Vegan' strings —
+// see the DIET_LABELS pattern in menu/index.html for the same split.
+
+// Render the Diet Plan radio pills into #dietPlanRow. Called from
+// loadProfile() after DIET_PLAN_STATE is populated. Re-renders on every
+// click (via selectDietPlan) so the selected state always matches state.
+function renderDietPlanCards() {
+  const row = document.getElementById('dietPlanRow');
+  if (!row) return;
+  const current = DIET_PLAN_STATE.current; // 'omnivore' | 'vegan' | null
+  const omniLabel = DIET_PLAN_STATE.labels.Omnivore;
+  const veganLabel = DIET_PLAN_STATE.labels.Vegan;
+  const checkSvg = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>';
+  row.innerHTML = `
+    <button type="button" class="diet-plan-pill${current === 'omnivore' ? ' selected' : ''}" onclick="selectDietPlan('omnivore')">
+      <span class="diet-plan-emoji">🍽️</span>
+      <div class="diet-plan-text">
+        <span class="diet-plan-label">${escapeHtml(omniLabel)}</span>
+        <span class="diet-plan-sub">Every meal — meat + plant options in your mix</span>
+      </div>
+      <span class="diet-plan-check">${checkSvg}</span>
+    </button>
+    <button type="button" class="diet-plan-pill${current === 'vegan' ? ' selected vegan' : ''}" onclick="selectDietPlan('vegan')">
+      <span class="diet-plan-emoji">🌱</span>
+      <div class="diet-plan-text">
+        <span class="diet-plan-label">${escapeHtml(veganLabel)}</span>
+        <span class="diet-plan-sub">Meat dishes are hidden from your menu</span>
+      </div>
+      <span class="diet-plan-check">${checkSvg}</span>
+    </button>
+  `;
+}
+
+// Handle a diet plan pill click. Optimistic update: re-render with the
+// new selection immediately, then PATCH /me/preferences. If the PATCH
+// fails, revert the selection and show a warning toast. Same pattern
+// as toggleSms() in commit #2.
+async function selectDietPlan(planKey) {
+  // Guard against clicking the pill for the already-active plan (no-op)
+  if (DIET_PLAN_STATE.current === planKey) return;
+
+  // Resolve the UUID for this plan from the brand seed state
+  const uuid = planKey === 'omnivore'
+    ? DIET_PLAN_STATE.omnivoreId
+    : planKey === 'vegan'
+      ? DIET_PLAN_STATE.veganId
+      : null;
+  if (!uuid) {
+    showToast("Couldn't find the diet plan ID — brand seed may be stale", 'warning');
+    return;
+  }
+
+  // Optimistic UI: update state + re-render + disable pills during PATCH
+  const previous = DIET_PLAN_STATE.current;
+  DIET_PLAN_STATE.current = planKey;
+  renderDietPlanCards();
+  document.querySelectorAll('#dietPlanRow .diet-plan-pill').forEach(p => p.disabled = true);
+
+  try {
+    await api('/commerce/customers/me/preferences', {
+      method: 'PATCH',
+      body: JSON.stringify({ diet_plan_id: uuid }),
+    });
+    const label = planKey === 'omnivore'
+      ? DIET_PLAN_STATE.labels.Omnivore
+      : DIET_PLAN_STATE.labels.Vegan;
+    showToast('Diet plan updated to ' + label, 'success');
+  } catch (err) {
+    // Revert on error
+    DIET_PLAN_STATE.current = previous;
+    renderDietPlanCards();
+    console.error('[account] selectDietPlan failed', err);
+    showToast("Couldn't update diet plan: " + (err.message || 'unknown error'), 'warning');
+  } finally {
+    document.querySelectorAll('#dietPlanRow .diet-plan-pill').forEach(p => p.disabled = false);
+  }
+}
+
+// Tiny HTML escaper — used only by renderDietPlanCards() above so the
+// DIET_PLAN_STATE.labels values can't inject arbitrary HTML if the
+// brand seed is ever edited by someone who puts < or " in a label.
+function escapeHtml(s) {
+  return String(s || '').replace(/[&<>"']/g, function (c) {
+    return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+  });
 }
 
 // ======= DATA =======
