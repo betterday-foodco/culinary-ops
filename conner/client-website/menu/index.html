@@ -1019,6 +1019,100 @@ body.sheet-open #cartSidebar { visibility: hidden; pointer-events: none; }
 .modal-btn-area .qty-minus, .modal-btn-area .qty-plus { width: 44px; font-size: 20px; }
 .modal-btn-area .qty-num { font-size: 16px; }
 
+/* ── PLAN-MISMATCH (read-only meal detail for plant-based + meat dish) ── */
+/* Replaces the Add-to-cart button when a plant-based customer deep-links
+   to a meat meal. The customer can still see the dish (image, name,
+   ingredients, macros — all rendered above) but the action area becomes
+   informational + two CTAs that lead them somewhere helpful. NEVER a 404. */
+.plan-mismatch {
+  background: rgba(107, 189, 82, 0.08); /* brand-green wash */
+  border: 1.5px solid rgba(107, 189, 82, 0.35);
+  border-radius: 16px;
+  padding: 16px 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.plan-mismatch-msg {
+  font-family: var(--font-body);
+  font-size: 14px;
+  font-weight: var(--fw-bold);
+  color: var(--brand-green-dark);
+  line-height: 1.4;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.plan-mismatch-msg .pm-leaf { font-size: 18px; line-height: 1; }
+.plan-mismatch-sub {
+  font-size: 12px;
+  color: var(--text-secondary);
+  font-weight: var(--fw-regular);
+  line-height: 1.45;
+}
+.plan-mismatch-ctas {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.plan-mismatch-btn {
+  flex: 1;
+  min-width: 140px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 11px 16px;
+  border-radius: 100px;
+  font-family: var(--font-body);
+  font-size: 13px;
+  font-weight: var(--fw-bold);
+  text-decoration: none;
+  cursor: pointer;
+  border: 1.5px solid transparent;
+  transition: transform .1s, box-shadow .15s, background .15s;
+}
+.plan-mismatch-btn.primary {
+  background: var(--brand-yellow);
+  color: var(--brand-navy-dark);
+}
+.plan-mismatch-btn.primary:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 14px rgba(255, 198, 0, .4);
+}
+.plan-mismatch-btn.ghost {
+  background: transparent;
+  color: var(--brand-navy-dark);
+  border-color: rgba(0, 49, 65, 0.25);
+}
+.plan-mismatch-btn.ghost:hover {
+  border-color: var(--brand-navy-dark);
+}
+
+/* Sibling-swap state (will activate once meals.seed.json includes
+   linked_meal_id — currently the data is missing so this branch never
+   fires; the read-only view above is the active fallback). Same warm
+   green wash as the read-only state for visual continuity. */
+.plan-swap {
+  background: rgba(78, 162, 253, 0.08); /* brand-primary wash */
+  border: 1.5px solid rgba(78, 162, 253, 0.35);
+  border-radius: 16px;
+  padding: 16px 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.plan-swap-msg {
+  font-family: var(--font-body);
+  font-size: 14px;
+  font-weight: var(--fw-bold);
+  color: var(--brand-navy-dark);
+  line-height: 1.4;
+}
+.plan-swap-msg em {
+  color: var(--brand-primary);
+  font-style: normal;
+}
+
 /* ── MOBILE BOTTOM BAR ── */
 .mobile-bottom-bar {
   display: none;
@@ -1608,6 +1702,11 @@ body.sheet-open #cartSidebar { visibility: hidden; pointer-events: none; }
 //   - dietary_tags normalized (Freezer Friendly → Freezable,
 //     Gluten Friendly → Gluten Free)
 //   - Bulk Prep / Bulk Sauce excluded
+//   - linked_meal_id added 2026-04-09 — pairs each Omnivore meal with its
+//     Plant-Based sibling (one-directional, set only on the omnivore side).
+//     44 of 88 omnivore meals have a sibling; the other 41 are unlinked
+//     and the openModal() diet-routing falls back to the read-only state
+//     for those. See conner/deferred-decisions.md for the backfill TODO.
 // When the commerce API is live, swap loadMealsFromSeed() for a fetch to
 // GET /api/meals. normalizeMeal() is the ONLY place that knows about the
 // raw DB field names — every other piece of JS below reads the prototype's
@@ -1807,6 +1906,7 @@ function normalizeMeal(row) {
     fiber: row.fiber_g,
     cat: row.menu_category,          // Entree / Breakfast / Snack / Sandwich & Wraps / Protein Pack
     diet_plan: row.diet_plan,        // Omnivore / Plant-Based
+    linked_meal_id: row.linked_meal_id || null, // Plant-based sibling UUID, set ONLY on the omnivore side (one-directional). 44 of 88 omnivore meals have a sibling — drives the gentle-swap UX in openModal() when a plant-based customer deep-links to a meat meal.
     qty: 0,
     img: row.image_url || null,
     allergens: row.allergen_tags || [],
@@ -2322,19 +2422,97 @@ function openModal(id) {
   }
   document.getElementById('modalInstructions').innerHTML = instrHtml;
 
+  // ─── DIET-PLAN ROUTING ─────────────────────────────────────────────
+  // Three states the action area can be in:
+  //   State 1 (normal):  meal matches the customer's diet plan -> render
+  //                      Add-to-cart / qty-ctrl as before.
+  //   State 2 (gentle swap): plant-based customer hit a meat meal AND that
+  //                      meal has a linked_meal_id pointing to its plant-
+  //                      based sibling -> show a "We swapped you to..."
+  //                      banner + a CTA that opens the sibling instead.
+  //                      Uses the existing 1:1 omnivore -> plant-based pair
+  //                      data on MealRecipe.linked_meal_id (44 of 88
+  //                      omnivore meals have a sibling as of 2026-04-09).
+  //   State 3 (read-only): plant-based customer hit a meat meal that has
+  //                      NO sibling -> show the meal in read-only mode
+  //                      (image, name, ingredients, macros all rendered
+  //                      above) with the Add-to-cart button replaced by
+  //                      "This dish isn't part of your Plant-Based plan"
+  //                      + buttons to (a) browse Plant-Based menu,
+  //                      (b) change diet. NEVER a 404 -- a real meal +
+  //                      a real customer with a plan mismatch is a
+  //                      product state, not an error.
+  //
+  // Most plant-based customers never reach states 2 or 3 because the grid
+  // filter hides meat meals before they can click. These states exist for
+  // direct deep-links (?meal=BD-XXX), bookmarks, and marketing emails.
+  const planMismatch = (dietLock === 'Plant-Based' && m.diet_plan !== 'Plant-Based');
+  const sibling = planMismatch && m.linked_meal_id
+    ? allMeals.find(x => x.id === m.linked_meal_id)
+    : null;
+
   const btnArea = document.getElementById('modalBtnArea');
-  if (m.qty > 0) {
+  if (planMismatch && sibling) {
+    // State 2 — gentle swap to the linked plant-based sibling.
+    btnArea.innerHTML = `
+      <div class="plan-swap">
+        <div class="plan-swap-msg">
+          🌱 We have a <em>Plant-Based</em> version of this dish:
+          <strong>${escapeAttr(sibling.name)}</strong>
+        </div>
+        <div class="plan-mismatch-ctas">
+          <button class="plan-mismatch-btn primary" onclick="openModal('${sibling.id}')">
+            Take me to ${escapeAttr(sibling.name)}
+          </button>
+          <a class="plan-mismatch-btn ghost" href="../onboarding/">Change diet</a>
+        </div>
+      </div>
+    `;
+  } else if (planMismatch) {
+    // State 3 — read-only fallback. The meal renders in full above; only
+    // the action area becomes informational.
+    btnArea.innerHTML = `
+      <div class="plan-mismatch">
+        <div class="plan-mismatch-msg">
+          <span class="pm-leaf">🌱</span>
+          This dish isn't part of your Plant-Based plan
+        </div>
+        <div class="plan-mismatch-sub">
+          We don't have a plant-based version of this one. Browse the rest
+          of the Plant-Based menu, or switch your diet if you've changed
+          your mind.
+        </div>
+        <div class="plan-mismatch-ctas">
+          <button class="plan-mismatch-btn primary" onclick="closeModal()">
+            Browse Plant-Based menu
+          </button>
+          <a class="plan-mismatch-btn ghost" href="../onboarding/">Change diet</a>
+        </div>
+      </div>
+    `;
+  } else if (m.qty > 0) {
+    // State 1a — already in cart, show qty controls.
     btnArea.innerHTML = `<div class="qty-ctrl">
       <button class="qty-minus" onclick="changeQty('${m.id}', -1); updateModalBtn('${m.id}')">&minus;</button>
       <div class="qty-num">${m.qty}</div>
       <button class="qty-plus" onclick="changeQty('${m.id}', 1); updateModalBtn('${m.id}')">+</button>
     </div>`;
   } else {
+    // State 1b — not in cart, show Add button.
     btnArea.innerHTML = `<button class="add-btn" onclick="addToCart('${m.id}'); updateModalBtn('${m.id}')"><span>ADD</span><span class="add-btn-divider"></span><span class="add-btn-price">${fmtPrice(price)}</span></button>`;
   }
 
   document.getElementById('modalOverlay').classList.add('open');
   document.body.style.overflow = 'hidden';
+}
+
+// Tiny attribute escaper for inline button labels — prevents XSS via meal
+// names containing quotes / angle brackets. Used by the diet-mismatch
+// branches in openModal() above.
+function escapeAttr(s) {
+  return String(s || '').replace(/[&<>"']/g, function (c) {
+    return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+  });
 }
 
 function updateModalBtn(id) {
@@ -2554,7 +2732,29 @@ document.getElementById('cartItems').addEventListener('scroll', function() {
     injectDietLockBanner();
   }
   renderAll();
-  loadMealsFromSeed();
+  await loadMealsFromSeed();
+  // ── DEEP-LINK AUTO-OPEN ──
+  // After meals load, honor a ?meal=<meal_code> URL param by auto-opening
+  // the meal detail modal. This is how marketing emails / shared links /
+  // bookmarks land on a specific dish. The modal itself enforces the
+  // diet-mismatch state machine (state 1 / 2 / 3), so deep-linking a meat
+  // meal as a plant-based customer triggers the gentle swap or read-only
+  // fallback automatically — no special handling needed here.
+  //
+  // Lookup uses meal_code (BD-369) because URLs are friendlier with the
+  // human-readable code than with a UUID. Falls back to id-by-meal-code
+  // search against the FULL allMeals (not the diet-filtered grid) so
+  // direct deep-links can resolve even when the meal would otherwise be
+  // hidden.
+  const targetCode = new URLSearchParams(location.search).get('meal');
+  if (targetCode && Array.isArray(allMeals) && allMeals.length) {
+    const target = allMeals.find(x => x.code === targetCode);
+    if (target) {
+      openModal(target.id);
+    } else {
+      console.warn('[menu] ?meal=' + targetCode + ' did not match any meal in the seed');
+    }
+  }
 })();
 
 // Inject a persistent banner at the top of the menu so a plant-based
