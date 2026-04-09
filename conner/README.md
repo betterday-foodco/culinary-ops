@@ -561,6 +561,63 @@ incident or discover a new one. When the multi-chat workflow stabilizes
 
 ---
 
+## 🧠 The deferred-decisions tracker — `conner/deferred-decisions.md`
+
+A **tracked, living file** listing edge cases, pending design calls,
+implementation TODOs, and future ideas that came up in prior chats but
+were consciously deferred. Unlike `MULTI-CHAT-STATUS.md`, this one IS
+committed to git — it survives across chats and sessions.
+
+**Every chat should scan it on startup** to see what's outstanding that
+might overlap with the work it's about to do. Sections are:
+
+- **🔮 Edge cases to handle later** — weird scenarios the current work
+  doesn't handle (e.g. "what if a customer has a removed meal in their
+  draft cart?")
+- **🎯 Design decisions pending** — product or UX calls that need a
+  decision before that feature ships
+- **🛠️ Implementation TODOs** — concrete code tasks scoped for later
+- **💡 Future ideas** — things not on the roadmap but worth remembering
+- **✅ Resolved** — move items here with a ✅ prefix when they're done
+
+**When you discover a new edge case or defer a decision**, append a new
+entry to the **top** of the relevant section in the same chat you
+discovered it. Don't let it vanish into chat history. Use this format:
+
+```markdown
+- [YYYY-MM-DD] **Short title in bold**
+  One or two lines of context. What triggered the deferral. What
+  needs to happen to resolve it. Cross-references if helpful.
+```
+
+This is the permanent log. The file lives on the integration branch and
+every chat inherits it when it branches off. Keeping it current is how
+future-you (or another chat, or Gurleen) avoids re-litigating decisions
+you already thought through.
+
+---
+
+## 📖 The auto-read operating manual — `/CLAUDE.md`
+
+At the repo root there's a file called `CLAUDE.md` that Claude Code
+**automatically loads into every session** in this repo, before the user's
+first message. It's the durable, short list of rules and pointers that
+every chat needs to know at startup — the golden rule, the never-do list,
+the files-never-to-commit list, and pointers to this README, to
+`PROJECT_SCOPE.md`, and to `conner/deferred-decisions.md`.
+
+**You don't need to tell a chat to read `CLAUDE.md`** — it's already in
+the chat's context by the time you type your first message. Just start
+giving instructions and the chat already knows the rules.
+
+**When to edit `CLAUDE.md`:** only for durable, repo-wide rules that every
+future chat needs. Situational or evolving content belongs in this README
+or in domain-specific docs. Keep `CLAUDE.md` short — the goal is "if a chat
+reads only this file, it knows enough to not break anything and to find
+the rest."
+
+---
+
 ## 🆘 If you're confused or something broke
 
 Paste this into any Claude chat:
