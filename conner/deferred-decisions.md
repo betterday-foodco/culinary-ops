@@ -36,6 +36,9 @@ A running list of things that came up in chats but were consciously deferred —
 
 ## 🛠️ Implementation TODOs
 
+- [2026-04-09] **Subscriber Hub "Deal of the Week" Add-to-Delivery button is a stub**
+  In `conner/app/subscriber-hub-2.0.html`, the Subscriber Perks card has a static "Deal of the Week" sub-card (currently hardcoded to "Protein Energy Bites"). The "Add to Delivery" button just toasts a success message — it doesn't actually add anything to the cart. Wire this for real once the DOTW data model + customer-side coupon resolver is wired up (see DOTW scheduler entry below). The whole `#perksDealSlot` is meant to be JS-rendered from real DOTW data; the static HTML is just a visual placeholder.
+
 - [2026-04-08] **Cart line item snapshot fields** *(Migration #4 scope)*
   Add `menu_price_at_add`, `promised_price_at_add`, `promised_coupon_id` to the cart line item table. Implements the "price ceiling" rule — customers always get the best price they were ever shown. See `project_dotw_preorder_rules` memory for the full rule. NOT Migration #3 coupon scope.
 
