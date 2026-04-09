@@ -1,0 +1,1147 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>BetterDay Kitchen — All Hail the Chicken Caesar</title>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --navy:#003141;--yellow:#FFC600;--sky:#4EA2FD;--green:#6BBD52;
+  --sw:200px;
+  --g50:#f9fafb;--g100:#f3f4f6;--g200:#e5e7eb;--g300:#d1d5db;--g400:#9ca3af;--g500:#6b7280;--g700:#374151;--g900:#111827;
+  --bd:1px solid #e5e7eb;--r:6px;--rlg:10px;
+}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;font-size:14px;color:var(--g900);background:var(--g50);display:flex;min-height:100vh}
+
+/* ── SIDEBAR ── */
+.sidebar{width:var(--sw);background:white;border-right:var(--bd);display:flex;flex-direction:column;position:fixed;top:0;left:0;height:100vh;z-index:100}
+.sl{display:flex;align-items:center;gap:10px;padding:16px;border-bottom:var(--bd)}
+.lb{width:32px;height:32px;background:var(--yellow);border-radius:8px;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:13px;color:var(--navy)}
+.sn{flex:1;padding:8px 0;overflow-y:auto}
+.ni{display:flex;align-items:center;gap:10px;padding:8px 16px;font-size:13px;color:var(--g500);cursor:pointer;text-decoration:none;transition:background .12s,color .12s}
+.ni:hover{background:var(--g50);color:var(--g900)}
+.ni.active{background:#f0fdf4;color:#166534;font-weight:500}
+.ni svg{width:16px;height:16px;flex-shrink:0;opacity:.7}
+.ni.active svg{opacity:1}
+.sf{padding:12px 16px;border-top:var(--bd)}
+
+/* ── MAIN ── */
+.main{margin-left:var(--sw);flex:1;display:flex;flex-direction:column;min-height:100vh}
+.topbar{background:white;border-bottom:var(--bd);padding:0 28px;height:56px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:50}
+.bc{font-size:13px;color:var(--g400)}
+.bc a{color:var(--g400);text-decoration:none}
+.content{padding:0 28px 80px}
+
+/* ── BUTTONS ── */
+.btn-save{background:var(--green);color:white;border:none;padding:8px 22px;border-radius:var(--r);font-size:13px;font-weight:600;cursor:pointer;letter-spacing:.01em}
+.btn-save:hover{background:#5aa843}
+.btn-cancel{background:white;border:var(--bd);padding:8px 20px;border-radius:var(--r);font-size:13px;color:var(--g700);cursor:pointer}
+.btn-cancel:hover{background:var(--g50)}
+.btn-sky{background:var(--sky);color:white;border:none;padding:7px 16px;border-radius:var(--r);font-size:13px;font-weight:600;cursor:pointer;white-space:nowrap}
+.btn-sky:hover{background:#3b8fe0}
+.btn-navy{background:var(--navy);color:white;border:none;padding:7px 16px;border-radius:var(--r);font-size:13px;font-weight:600;cursor:pointer;white-space:nowrap;display:flex;align-items:center;gap:6px}
+.btn-navy:hover{background:#004d66}
+.btn-ghost{background:white;border:var(--bd);padding:6px 12px;border-radius:var(--r);font-size:12px;color:var(--g500);cursor:pointer;display:flex;align-items:center;gap:5px}
+.btn-ghost:hover{background:var(--g50);color:var(--g900)}
+.btn-outline{background:white;border:var(--bd);padding:7px 14px;border-radius:var(--r);font-size:12px;color:var(--g700);cursor:pointer;white-space:nowrap;display:flex;align-items:center;gap:5px}
+.btn-outline:hover{background:var(--g50)}
+
+/* ── FORM ── */
+input[type="text"],input[type="number"],input[type="date"],select,textarea{width:100%;padding:7px 10px;border:var(--bd);border-radius:var(--r);font-size:13px;color:var(--g900);background:white;outline:none;font-family:inherit;transition:border-color .12s}
+input:focus,select:focus,textarea:focus{border-color:#9ca3af}
+textarea{resize:vertical;line-height:1.5}
+.fl{font-size:12px;color:var(--g500);font-weight:500;margin-bottom:4px}
+.fl span{font-weight:400;color:var(--g400)}
+.fg{display:flex;flex-direction:column}
+.fr{display:flex;gap:12px;align-items:flex-start;flex-wrap:wrap}
+
+/* ── BIG ACTIVE TOGGLE ── */
+.big-toggle-wrap{display:flex;align-items:center;gap:10px;flex-shrink:0}
+.big-toggle{width:52px;height:28px;background:var(--green);border-radius:14px;position:relative;cursor:pointer;flex-shrink:0;transition:background .2s}
+.big-toggle::after{content:'';position:absolute;width:22px;height:22px;background:white;border-radius:50%;top:3px;left:27px;transition:left .2s;box-shadow:0 1px 4px rgba(0,0,0,.25)}
+.big-toggle.off{background:var(--g300)}
+.big-toggle.off::after{left:3px}
+.big-toggle-label{font-size:13px;font-weight:600;color:var(--g700);line-height:1}
+.big-toggle-sub{font-size:11px;color:var(--g400);margin-top:2px}
+
+/* ── SMALL TOGGLE ── */
+.toggle-wrap{display:flex;align-items:center;gap:8px}
+.toggle{width:36px;height:20px;background:var(--green);border-radius:10px;position:relative;cursor:pointer;flex-shrink:0;transition:background .2s}
+.toggle::after{content:'';position:absolute;width:16px;height:16px;background:white;border-radius:50%;top:2px;left:18px;transition:left .2s;box-shadow:0 1px 3px rgba(0,0,0,.2)}
+.toggle.off{background:var(--g300)}
+.toggle.off::after{left:2px}
+.toggle-label{font-size:13px;color:var(--g700)}
+
+/* ── HEADER CARD ── */
+.hcard{background:white;border:var(--bd);border-radius:var(--rlg);padding:20px;display:grid;grid-template-columns:160px 1fr;gap:20px;margin-bottom:16px;align-items:start}
+.meal-img-wrap{display:flex;flex-direction:column;align-items:center;gap:6px}
+.meal-img{width:155px;height:125px;border-radius:var(--r);border:var(--bd);overflow:hidden}
+.meal-img img{width:100%;height:100%;object-fit:cover}
+.remove-img{font-size:11px;color:#ef4444;cursor:pointer}
+.remove-img:hover{text-decoration:underline}
+.dish-meta{display:flex;flex-direction:column;gap:10px}
+
+/* ── OMNI ── */
+.omni-box{background:var(--g50);border:var(--bd);border-radius:var(--r);padding:10px 14px;display:flex;gap:10px;align-items:center}
+.omni-sw{position:relative;flex:1}
+.omni-sw input{padding-right:28px}
+.omni-dd{position:absolute;top:100%;left:0;right:0;background:white;border:var(--bd);border-radius:var(--r);box-shadow:0 4px 12px rgba(0,0,0,.1);z-index:200;max-height:200px;overflow-y:auto;margin-top:2px}
+.omni-opt{padding:8px 12px;font-size:13px;cursor:pointer;display:flex;align-items:center;gap:8px}
+.omni-opt:hover{background:var(--g50)}
+.omni-opt .did{font-size:11px;color:var(--g400);font-family:monospace;flex-shrink:0}
+.omni-sel{background:#eff6ff;border:1px solid #bfdbfe;border-radius:var(--r);padding:6px 12px;font-size:13px;color:#1e40af;display:flex;align-items:center;gap:8px;flex:1}
+
+/* ── TABS ── */
+.tabs-wrap{background:white;border:var(--bd);border-radius:var(--rlg);overflow:hidden;margin-bottom:16px}
+.tabs{display:flex;background:var(--navy);padding:4px 6px;gap:2px}
+.tab{padding:9px 18px;font-size:13px;color:rgba(255,255,255,.6);cursor:pointer;border-radius:6px;white-space:nowrap;transition:all .15s;font-weight:500;letter-spacing:.01em}
+.tab:hover{color:rgba(255,255,255,.85);background:rgba(255,255,255,.08)}
+.tab.active{background:white;color:var(--navy);font-weight:600}
+.tab-body{padding:20px}
+.tab-panel{display:none}
+.tab-panel.active{display:block}
+
+/* ── SECTION CARD ── */
+.sc{background:white;border:var(--bd);border-radius:var(--rlg);padding:20px;margin-bottom:14px}
+.sc-title{font-size:14px;font-weight:600;color:var(--g900);margin-bottom:4px}
+.sc-sub{font-size:12px;color:var(--g400);margin-bottom:14px}
+
+/* ── PICKER GRID ── */
+.picker-grid{display:flex;flex-wrap:wrap;gap:7px;margin-top:6px}
+.pi{padding:5px 13px;border:var(--bd);border-radius:20px;font-size:12px;color:var(--g600);cursor:pointer;background:white;transition:all .12s;user-select:none;white-space:nowrap}
+.pi:hover{border-color:var(--g400)}
+.pi.on{background:#f0fdf4;border-color:#86efac;color:#166534;font-weight:500}
+.pi.on-warn{background:#fef9c3;border-color:#fde047;color:#713f12;font-weight:500}
+.pi.on-red{background:#fee2e2;border-color:#fca5a5;color:#991b1b;font-weight:500}
+
+/* ── CONTAINER TOGGLE ── */
+.ctog{display:flex;border:var(--bd);border-radius:var(--r);overflow:hidden;width:fit-content}
+.co{padding:7px 18px;font-size:13px;cursor:pointer;background:white;color:var(--g500);border-right:var(--bd);transition:all .12s;user-select:none}
+.co:last-child{border-right:none}
+.co.selected{background:var(--navy);color:white;font-weight:500}
+
+/* ── PORTION SCORE SLIDER ── */
+.score-wrap{display:flex;align-items:center;gap:10px}
+input[type="range"].score-slider{-webkit-appearance:none;width:100%;height:4px;background:var(--g200);border-radius:2px;outline:none;border:none!important;padding:0!important}
+input[type="range"].score-slider::-webkit-slider-thumb{-webkit-appearance:none;width:18px;height:18px;border-radius:50%;background:var(--navy);cursor:pointer;border:2px solid white;box-shadow:0 0 0 1px var(--navy)}
+.score-badge{background:var(--navy);color:white;font-size:13px;font-weight:700;width:30px;height:30px;border-radius:50%;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+
+/* ── INGREDIENT TABLE ── */
+.itable{width:100%;border-collapse:collapse;font-size:13px}
+.itable th{text-align:left;font-size:11px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;color:var(--g400);padding:8px 10px;border-bottom:var(--bd)}
+.itable td{padding:10px;border-bottom:1px solid var(--g100);vertical-align:middle}
+.itable tr:last-child td{border-bottom:none}
+.itable tr:hover td{background:var(--g50)}
+.tlink{color:var(--sky);cursor:pointer;font-size:12px}
+.cc{color:var(--g400);font-size:12px;font-family:monospace}
+.ac{display:flex;gap:8px}
+.be{color:var(--sky);cursor:pointer;font-size:12px}
+.be:hover{text-decoration:underline}
+.rr{color:#ef4444;cursor:pointer;font-size:12px}
+.rr:hover{text-decoration:underline}
+.tr-foot td{padding:12px 10px;font-weight:600;border-top:var(--bd)!important;border-bottom:none!important;background:var(--g50)}
+
+/* ── PORTIONING CARDS ── */
+.port-row-card{background:white;border:var(--bd);border-radius:var(--rlg);padding:0;margin-bottom:10px;display:grid;grid-template-columns:44px 36px 1fr 72px 72px 64px 1fr 32px;gap:0;align-items:stretch;cursor:default;transition:box-shadow .15s;overflow:hidden}
+.port-row-card.dragging{opacity:.4;box-shadow:0 4px 16px rgba(0,0,0,.12)}
+.port-row-card.drag-over{box-shadow:0 -3px 0 var(--sky)}
+.port-drag-col{display:flex;align-items:center;justify-content:center;background:var(--g50);border-right:var(--bd);cursor:grab;color:#555;font-size:18px;user-select:none;padding:0 4px}
+.port-drag-col:active{cursor:grabbing}
+.port-step-col{display:flex;align-items:center;justify-content:center;background:var(--navy);padding:0 2px}
+.port-step-num{color:white;font-size:12px;font-weight:700}
+.port-name-col{display:flex;flex-direction:column;justify-content:center;padding:10px 12px;border-right:var(--bd)}
+.port-name{font-size:13px;font-weight:500;color:var(--g900)}
+.port-meta{font-size:11px;color:var(--g400);margin-top:2px}
+.port-num-col{display:flex;flex-direction:column;align-items:center;justify-content:center;padding:8px 6px;border-right:var(--bd);gap:3px}
+.port-num-col input{width:100%;text-align:center;padding:5px 4px!important;font-size:14px;font-weight:600;border:var(--bd);border-radius:var(--r)}
+.port-num-unit{font-size:10px;color:var(--g400)}
+.port-pct-col{display:flex;flex-direction:column;align-items:center;justify-content:center;padding:8px 6px;border-right:var(--bd);background:var(--g50);gap:2px}
+.port-pct-val{font-size:15px;font-weight:700;color:var(--navy)}
+.port-pct-lbl{font-size:9px;color:var(--g400);text-transform:uppercase;letter-spacing:.04em}
+.port-notes-col{display:flex;align-items:stretch;padding:8px 10px;border-right:var(--bd)}
+.port-notes-col textarea{border:none!important;outline:none;background:transparent;font-size:12px;color:var(--g700);resize:none;width:100%;min-height:46px;line-height:1.5;padding:0}
+.port-del-col{display:flex;align-items:center;justify-content:center;padding:0 8px}
+.port-del-btn{color:var(--g300);cursor:pointer;font-size:18px;line-height:1}
+.port-del-btn:hover{color:#ef4444}
+.port-col-hdr{display:grid;grid-template-columns:44px 36px 1fr 72px 72px 64px 1fr 32px;gap:0;padding:0 0 6px;font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:var(--g400)}
+.port-col-hdr>div{padding:0 6px;display:flex;align-items:center}
+.port-col-hdr>div:first-child{justify-content:center}
+.port-col-hdr>div:nth-child(2){justify-content:center;background:var(--navy);color:white;border-radius:3px 3px 0 0;padding:4px 2px}
+
+/* ── MACROS ── */
+.macros-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:10px}
+.macro-card{background:var(--g50);border:var(--bd);border-radius:var(--r);padding:12px;text-align:center}
+.macro-label{font-size:11px;color:var(--g400);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px}
+.macro-input{width:68px!important;text-align:center;font-size:18px!important;font-weight:700!important;padding:4px 6px!important;border-color:transparent!important;background:transparent!important}
+.macro-input:focus{border-color:var(--g300)!important;background:white!important}
+.macro-unit{font-size:12px;color:var(--g400)}
+.macro-card.hl .macro-input{color:var(--green)}
+
+/* ── LABEL CANVAS ── */
+.label-canvas{width:100%;background:white;border:1px solid #bbb;border-radius:4px;padding:16px 20px;font-family:'Arial Black','Arial',sans-serif;display:flex;gap:0}
+.lm{flex:1;padding-right:12px;border-right:1px solid #ddd}
+.l-tagline{font-size:9.5px;font-style:italic;font-family:Georgia,serif;color:#333;margin-bottom:1px}
+.l-title{font-size:20px;font-weight:900;text-transform:uppercase;line-height:1.05;color:black;margin-bottom:4px}
+.l-icons{display:flex;gap:4px;margin:5px 0;flex-wrap:wrap;align-items:center}
+.l-icon{width:24px;height:24px;border:1.5px solid black;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:10px}
+.l-icon.bt{width:auto;border-radius:3px;padding:2px 4px;font-size:6.5px;font-weight:900;letter-spacing:.03em;white-space:nowrap}
+.l-desc{font-size:10px;font-weight:700;line-height:1.4;color:black;margin-bottom:8px;font-family:Arial,sans-serif}
+.l-bottom{display:flex;align-items:flex-end;gap:7px;flex-wrap:wrap;margin-top:6px}
+.l-bb{border:2px solid black;padding:3px 7px;text-align:center;border-radius:3px}
+.l-bb-lbl{font-size:6.5px;font-weight:700;letter-spacing:.05em}
+.l-bb-date{font-size:14px;font-weight:900;line-height:1.1}
+.l-macrow{display:flex;gap:5px;align-items:flex-end;flex-wrap:wrap}
+.l-mac{text-align:center}
+.l-mac-val{font-size:14px;font-weight:900;display:block;line-height:1;color:black}
+.l-mac-val.circ{border:2px solid black;border-radius:50%;width:30px;height:30px;display:flex;align-items:center;justify-content:center;font-size:10px;margin:0 auto}
+.l-mac-unit{font-size:6.5px;color:#444;display:block;margin-top:2px;text-align:center}
+.ls{width:110px;padding-left:10px;display:flex;flex-direction:column;gap:7px;font-size:8px;color:black;font-family:Arial,sans-serif}
+.ls-t{font-weight:700;font-size:7px;text-transform:uppercase;letter-spacing:.04em}
+.ls-body{font-size:7.5px;line-height:1.4}
+.ls-allergens{font-size:7.5px;line-height:1.4}
+.ls-allergens strong{font-weight:700}
+.l-pkg{border:1px solid black;border-radius:2px;padding:2px 4px;font-size:6.5px;font-weight:700;text-align:center;letter-spacing:.03em;text-transform:uppercase}
+
+/* ── INFO NOTE ── */
+.infonote{background:#eff6ff;border:1px solid #bfdbfe;border-radius:var(--r);padding:9px 13px;font-size:12px;color:#1e40af;display:flex;gap:8px;margin-bottom:12px}
+
+/* ── PHOTO UPLOAD ── */
+.photo-box{border:2px dashed var(--g200);border-radius:var(--r);padding:20px;text-align:center;cursor:pointer;color:var(--g400);font-size:13px;transition:border-color .12s}
+.photo-box:hover{border-color:var(--g400);color:var(--g700)}
+
+/* ── ADD COMP BOX ── */
+.add-comp-box{background:var(--g50);border:var(--bd);border-radius:var(--rlg);padding:16px;margin-top:14px}
+
+/* ── SHELF RESULT ── */
+.shelf-res{background:var(--g50);border:var(--bd);border-radius:var(--r);padding:9px 14px;display:flex;flex-direction:column;gap:2px}
+.shelf-res-main{font-size:15px;font-weight:700;color:var(--g900)}
+.shelf-res-sub{font-size:11px;color:var(--g400)}
+
+/* ── AI GEN BUTTON ── */
+.btn-ai{background:linear-gradient(135deg,#667eea,#764ba2);color:white;border:none;padding:7px 14px;border-radius:var(--r);font-size:12px;font-weight:600;cursor:pointer;display:flex;align-items:center;gap:5px;white-space:nowrap}
+.btn-ai:hover{opacity:.9}
+.ai-loading{display:none;font-size:12px;color:var(--g400);padding:4px 0}
+
+/* ── GRIDS ── */
+.two-col{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.three-col{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px}
+
+/* ── FOOTER ── */
+.footer-actions{position:fixed;bottom:0;left:var(--sw);right:0;background:white;border-top:var(--bd);padding:12px 28px;display:flex;align-items:center;justify-content:flex-end;gap:10px;z-index:40}
+</style>
+</head>
+<body>
+
+<!-- SIDEBAR -->
+<aside class="sidebar">
+  <div class="sl">
+    <div class="lb">BD</div>
+    <span style="font-weight:600;font-size:13px;">BetterDay Kitchen</span>
+  </div>
+  <nav class="sn">
+    <a class="ni" href="#">
+      <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1" stroke-width="2"/><rect x="14" y="3" width="7" height="7" rx="1" stroke-width="2"/><rect x="3" y="14" width="7" height="7" rx="1" stroke-width="2"/><rect x="14" y="14" width="7" height="7" rx="1" stroke-width="2"/></svg>
+      Dashboard
+    </a>
+    <a class="ni" href="#">
+      <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/></svg>
+      Production Plans
+    </a>
+    <a class="ni" href="#">
+      <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"/></svg>
+      Inventory
+    </a>
+    <a class="ni active" href="#">
+      <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"/><circle cx="12" cy="12" r="10" stroke-width="2"/></svg>
+      Meal Recipes
+    </a>
+    <a class="ni" href="#">
+      <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-width="2" d="M4 6h16M4 12h8m-8 6h16"/></svg>
+      Sub-Recipes
+    </a>
+    <a class="ni" href="#">
+      <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-width="2" d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z"/></svg>
+      Ingredients
+    </a>
+    <a class="ni" href="#" style="margin-top:8px;border-top:var(--bd);padding-top:12px;">
+      <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3" stroke-width="2"/><path stroke-width="2" d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg>
+      Settings
+    </a>
+    <a class="ni" href="#">
+      <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+      Kitchen Staff
+    </a>
+  </nav>
+  <div class="sf">
+    <a class="ni" href="#" style="padding:6px 0;">
+      <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/></svg>
+      Sign out
+    </a>
+  </div>
+</aside>
+
+<!-- MAIN -->
+<div class="main">
+  <div class="topbar">
+    <div class="bc"><a href="#">← Meal Recipes</a></div>
+    <button class="btn-save">SAVE</button>
+  </div>
+
+  <div style="padding:20px 28px 6px;display:flex;align-items:center;gap:14px;">
+    <h1 style="font-size:26px;font-weight:800;color:var(--g900);letter-spacing:-.01em;line-height:1.1;flex-shrink:0;">All Hail the Chicken Caesar</h1>
+    <span style="background:#ede9fe;color:#5b21b6;font-size:11px;font-weight:600;padding:3px 10px;border-radius:20px;flex-shrink:0;">Omni</span>
+    <span style="background:#dcfce7;color:#166534;font-size:11px;font-weight:600;padding:3px 10px;border-radius:20px;flex-shrink:0;" id="active-pill">Active</span>
+    <div style="margin-left:auto;display:flex;align-items:center;gap:10px;flex-shrink:0;">
+      <div style="text-align:right;">
+        <div style="font-size:13px;font-weight:600;color:var(--g700);" id="active-toggle-lbl">Active</div>
+        <div style="font-size:11px;color:var(--g400);">Visible on menu</div>
+      </div>
+      <div class="big-toggle" id="active-toggle" onclick="toggleActive(this)"></div>
+    </div>
+  </div>
+  <div style="padding:0 28px 0;font-size:12px;color:var(--g400);">Internal: All Hail the Chicken Caesar &nbsp;·&nbsp; ID #463</div>
+
+  <div class="content" style="padding-top:12px;">
+
+    <!-- ── HEADER CARD ── -->
+    <div class="hcard">
+      <!-- Image -->
+      <div class="meal-img-wrap">
+        <div class="meal-img">
+          <img src="https://images.unsplash.com/photo-1512621776951-a57141f2eefd?w=310&h=250&fit=crop" alt="Meal" />
+        </div>
+        <span class="remove-img">× Remove image</span>
+      </div>
+
+      <!-- Fields -->
+      <div class="dish-meta">
+        <!-- Row 1: Dish Name + Category + Weight + Price -->
+        <div style="display:flex;gap:14px;align-items:flex-end;">
+          <div style="flex:1;">
+            <div class="fl">Dish Name <span>(27/100)</span></div>
+            <input type="text" value="All Hail the Chicken Caesar" style="font-size:15px;font-weight:600;" />
+          </div>
+          <div style="flex:0 0 150px;">
+            <div class="fl">Category</div>
+            <select>
+              <option>Meat</option>
+              <option>Plant-Based</option>
+            </select>
+          </div>
+          <div style="flex:0 0 110px;">
+            <div class="fl">Dish Weight (g)</div>
+            <input type="number" value="480" />
+          </div>
+          <div style="flex:0 0 100px;">
+            <div class="fl">Sell Price ($)</div>
+            <input type="number" value="16.99" step="0.01" />
+          </div>
+        </div>
+
+        <!-- Row 2: Omni -->
+        <div>
+          <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;">
+            <div class="toggle-wrap">
+              <div class="toggle" id="omni-toggle" onclick="toggleOmni(this)"></div>
+              <span class="toggle-label" style="font-weight:600;">Omnivore Dish</span>
+            </div>
+            <span style="font-size:12px;color:var(--g400);">Has both a meat and plant-based version — links the two together</span>
+          </div>
+          <div id="omni-section">
+            <div class="omni-box">
+              <span style="font-size:12px;color:var(--g500);white-space:nowrap;">Plant-based version:</span>
+              <div class="omni-sw">
+                <input type="text" id="omni-search" placeholder="Search dishes..." oninput="filterOmni(this.value)" onfocus="showOmniDD()" value="Under the Tuscan Sun" autocomplete="off" />
+                <div class="omni-dd" id="omni-dd" style="display:none;"></div>
+              </div>
+              <div class="omni-sel" id="omni-sel">
+                <span style="font-size:11px;font-family:monospace;color:#3b82f6;">#54</span>
+                Under the Tuscan Sun
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Row 3: Description -->
+        <div>
+          <div class="fl">Description <span>(website-facing, sassy)</span></div>
+          <textarea style="min-height:68px;">Prepare to fall in love all over again with this glorious creation. Built on a romaine, kale + brown rice base, this salad bowl comes loaded up with grilled chicken, our house-made caper caesar dressing and topped with crunchy "crouton" granola and crumbled vegan feta.</textarea>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── TABS ── -->
+    <div class="tabs-wrap">
+      <div class="tabs" id="main-tabs">
+        <div class="tab active" onclick="switchTab('details',this)">Details &amp; Tags</div>
+        <div class="tab" onclick="switchTab('ingredients',this)">Ingredients / Sub-recipes</div>
+        <div class="tab" onclick="switchTab('portioning',this)">Portioning</div>
+        <div class="tab" onclick="switchTab('label',this)">Label &amp; Macros</div>
+        <div class="tab" onclick="switchTab('ecommerce',this)">E-commerce</div>
+      </div>
+
+      <!-- ══ DETAILS & TAGS ══ -->
+      <div class="tab-panel active tab-body" id="tab-details">
+
+        <!-- Allergens & Dislikes — merged, alphabetical -->
+        <div class="sc">
+          <div class="sc-title">Allergens &amp; Dislikes</div>
+          <div class="sc-sub">Click to toggle. Allergens sync to website menu filters. Dislikes are customer preference filters.</div>
+          <div style="font-size:12px;font-weight:500;color:var(--g500);margin-bottom:6px;">Allergens <span style="font-weight:400;color:var(--g400);">(Canada priority)</span></div>
+          <div class="picker-grid">
+            <div class="pi" onclick="this.classList.toggle('on-warn')">Coconut</div>
+            <div class="pi on-warn" onclick="this.classList.toggle('on-warn')">Dairy</div>
+            <div class="pi" onclick="this.classList.toggle('on-warn')">Eggs</div>
+            <div class="pi" onclick="this.classList.toggle('on-warn')">Fish</div>
+            <div class="pi on-warn" onclick="this.classList.toggle('on-warn')">Gluten</div>
+            <div class="pi" onclick="this.classList.toggle('on-warn')">Mustard</div>
+            <div class="pi" onclick="this.classList.toggle('on-warn')">Peanuts</div>
+            <div class="pi" onclick="this.classList.toggle('on-warn')">Sesame</div>
+            <div class="pi" onclick="this.classList.toggle('on-warn')">Shellfish</div>
+            <div class="pi" onclick="this.classList.toggle('on-warn')">Soy</div>
+            <div class="pi" onclick="this.classList.toggle('on-warn')">Sulphites</div>
+            <div class="pi on-warn" onclick="this.classList.toggle('on-warn')">Tree Nuts</div>
+            <div class="pi" onclick="this.classList.toggle('on-warn')">Wheat</div>
+          </div>
+          <div style="font-size:12px;font-weight:500;color:var(--g500);margin:14px 0 6px;">Dislikes <span style="font-weight:400;color:var(--g400);">(customer preference)</span></div>
+          <div class="picker-grid">
+            <div class="pi on-red" onclick="this.classList.toggle('on-red')">Beef</div>
+            <div class="pi" onclick="this.classList.toggle('on-red')">Kale</div>
+            <div class="pi" onclick="this.classList.toggle('on-red')">Mushrooms</div>
+            <div class="pi" onclick="this.classList.toggle('on-red')">Onion</div>
+            <div class="pi" onclick="this.classList.toggle('on-red')">Pork</div>
+            <div class="pi" onclick="this.classList.toggle('on-red')">Raw Veg</div>
+            <div class="pi" onclick="this.classList.toggle('on-red')">Seafood</div>
+            <div class="pi" onclick="this.classList.toggle('on-red')">Spicy</div>
+          </div>
+        </div>
+
+        <!-- Menu Attributes -->
+        <div class="sc">
+          <div class="sc-title">Menu Attributes <span style="font-size:11px;color:var(--g400);font-weight:400;">— internal, for Bre's weekly menu balancing</span></div>
+
+          <!-- Protein types: full width -->
+          <div style="margin-bottom:12px;">
+            <div class="fl">Protein Type(s)</div>
+            <div class="picker-grid">
+              <div class="pi on" onclick="this.classList.toggle('on')">Chicken</div>
+              <div class="pi" onclick="this.classList.toggle('on')">Turkey</div>
+              <div class="pi" onclick="this.classList.toggle('on')">Beef</div>
+              <div class="pi" onclick="this.classList.toggle('on')">Pork</div>
+              <div class="pi" onclick="this.classList.toggle('on')">Seafood</div>
+              <div class="pi" onclick="this.classList.toggle('on')">Plant Protein</div>
+            </div>
+          </div>
+
+          <!-- Starch | Portion Score side by side -->
+          <div class="two-col" style="margin-bottom:12px;">
+            <div>
+              <div class="fl">Starch</div>
+              <select>
+                <option>— Select —</option>
+                <option selected>Rice</option>
+                <option>Pasta</option>
+                <option>Potato</option>
+                <option>Quinoa</option>
+                <option>Other</option>
+                <option>None</option>
+              </select>
+            </div>
+            <div>
+              <div class="fl">Portion Score <span id="score-val-label">(4 / 4)</span></div>
+              <div class="score-wrap" style="margin-top:6px;">
+                <input type="range" class="score-slider" min="1" max="4" value="4" id="score-slider" oninput="updateScore(this.value)" style="flex:1;" />
+                <div class="score-badge" id="score-badge">4</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Container type: full width -->
+          <div>
+            <div class="fl">Container Type</div>
+            <div class="ctog" style="margin-top:4px;">
+              <div class="co selected" onclick="selectContainer(this)">🍱 Meal Tray</div>
+              <div class="co" onclick="selectContainer(this)">🥗 Salad Container</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Product Tags & Badges -->
+        <div class="sc">
+          <div class="sc-title">Product Tags &amp; Badges</div>
+          <div class="sc-sub">Appear on the website and feed through to the physical label.</div>
+          <div class="fl">Dietary</div>
+          <div class="picker-grid">
+            <div class="pi on" onclick="this.classList.toggle('on');updateLabelPreview()" data-badge="gluten-free">🌾 Gluten Friendly</div>
+            <div class="pi on" onclick="this.classList.toggle('on');updateLabelPreview()" data-badge="high-protein">💪 High Protein</div>
+            <div class="pi" onclick="this.classList.toggle('on');updateLabelPreview()" data-badge="dairy-free">🥛 Dairy Free</div>
+            <div class="pi" onclick="this.classList.toggle('on');updateLabelPreview()" data-badge="vegan">🌿 Vegan</div>
+            <div class="pi" onclick="this.classList.toggle('on');updateLabelPreview()" data-badge="family-friendly">👨‍👩‍👧 Family Friendly</div>
+            <div class="pi" onclick="this.classList.toggle('on');updateLabelPreview()" data-badge="freezable">❄️ Freezable</div>
+            <div class="pi" onclick="this.classList.toggle('on');updateLabelPreview()" data-badge="spicy">🌶️ Spicy</div>
+            <div class="pi" onclick="this.classList.toggle('on');updateLabelPreview()" data-badge="new">✨ New Dish</div>
+          </div>
+          <div class="fl" style="margin-top:12px;">Protein Icons <span>(auto-pulls from protein type above)</span></div>
+          <div class="picker-grid">
+            <div class="pi on" onclick="this.classList.toggle('on');updateLabelPreview()" data-badge="chicken">🐔 Chicken</div>
+            <div class="pi" onclick="this.classList.toggle('on');updateLabelPreview()" data-badge="turkey">🦃 Turkey</div>
+            <div class="pi" onclick="this.classList.toggle('on');updateLabelPreview()" data-badge="beef">🐄 Beef</div>
+            <div class="pi" onclick="this.classList.toggle('on');updateLabelPreview()" data-badge="pork">🐖 Pork</div>
+            <div class="pi" onclick="this.classList.toggle('on');updateLabelPreview()" data-badge="seafood">🦐 Seafood</div>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- ══ INGREDIENTS ══ -->
+      <div class="tab-panel tab-body" id="tab-ingredients">
+        <div class="sc">
+          <div class="sc-title">Components</div>
+          <div class="sc-sub">Production Cost: <strong>$0.00</strong></div>
+          <table class="itable">
+            <thead>
+              <tr><th>Type</th><th>Name</th><th>Code / SKU</th><th>Station</th><th>QTY</th><th>Unit</th><th>Prod. Cost</th><th></th></tr>
+            </thead>
+            <tbody id="comp-tbody">
+              <tr><td><span class="tlink">Sub-Recipe</span></td><td>Lemon Caesar Rice Base</td><td class="cc">SR-635</td><td>Batch Station</td><td>140</td><td style="color:var(--g500)">gr</td><td style="color:var(--g400)">—</td><td><div class="ac"><span class="be">Edit</span><span class="rr" onclick="this.closest('tr').remove()">Remove</span></div></td></tr>
+              <tr><td><span class="tlink">Sub-Recipe</span></td><td>Air Dried Shredded Kale</td><td class="cc">SR-1230</td><td>Veg Station</td><td>55</td><td style="color:var(--g500)">gr</td><td style="color:var(--g400)">—</td><td><div class="ac"><span class="be">Edit</span><span class="rr" onclick="this.closest('tr').remove()">Remove</span></div></td></tr>
+              <tr><td><span class="tlink">Sub-Recipe</span></td><td>Housemade Vegan Feta</td><td class="cc">SR-278</td><td>Oven Station</td><td>10</td><td style="color:var(--g500)">gr</td><td style="color:var(--g400)">—</td><td><div class="ac"><span class="be">Edit</span><span class="rr" onclick="this.closest('tr').remove()">Remove</span></div></td></tr>
+              <tr><td><span class="tlink">Sub-Recipe</span></td><td>2.5oz Caesar Dressing</td><td class="cc">SR-2590</td><td>Packaging Station</td><td>1</td><td style="color:var(--g500)">un</td><td style="color:var(--g400)">—</td><td><div class="ac"><span class="be">Edit</span><span class="rr" onclick="this.closest('tr').remove()">Remove</span></div></td></tr>
+              <tr><td><span class="tlink">Sub-Recipe</span></td><td>2 oz Savory Garlic Granola</td><td class="cc">SR-2591</td><td>Packaging Station</td><td>1</td><td style="color:var(--g500)">un</td><td style="color:var(--g400)">—</td><td><div class="ac"><span class="be">Edit</span><span class="rr" onclick="this.closest('tr').remove()">Remove</span></div></td></tr>
+              <tr><td><span class="tlink">Sub-Recipe</span></td><td>Dill Pickle Sliced Seasoned Chicken</td><td class="cc">SR-2952</td><td>Protein Station</td><td>1</td><td style="color:var(--g500)">un</td><td style="color:var(--g400)">—</td><td><div class="ac"><span class="be">Edit</span><span class="rr" onclick="this.closest('tr').remove()">Remove</span></div></td></tr>
+            </tbody>
+            <tfoot><tr class="tr-foot"><td colspan="6" style="text-align:right;color:var(--g500);font-weight:400;font-size:13px;">Total Production Cost</td><td><strong>$0.00</strong></td><td></td></tr></tfoot>
+          </table>
+        </div>
+        <div class="add-comp-box">
+          <div style="font-size:13px;font-weight:600;color:var(--g700);margin-bottom:12px;">Add Component</div>
+          <div class="fr" style="align-items:flex-end;">
+            <div class="fg" style="max-width:130px;"><div class="fl">Type</div><select><option>Sub-Recipe</option><option>Ingredient</option></select></div>
+            <div class="fg" style="flex:2;"><div class="fl">Sub-Recipe</div><input type="text" placeholder="Search sub-recipes..." /></div>
+            <div class="fg" style="max-width:80px;"><div class="fl">Qty</div><input type="number" value="1" /></div>
+            <div class="fg" style="max-width:70px;"><div class="fl">Unit</div><select><option>gr</option><option>un</option><option>ml</option><option>kg</option></select></div>
+            <button class="btn-sky">+ Add</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- ══ PORTIONING ══ -->
+      <div class="tab-panel tab-body" id="tab-portioning">
+
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
+          <div>
+            <div style="font-size:15px;font-weight:700;color:var(--g900);">Portioning Instructions</div>
+            <div style="font-size:12px;color:var(--g400);margin-top:2px;">Drag cards to reorder portioning steps. Set min/max ranges and notes per component.</div>
+          </div>
+          <div style="display:flex;gap:8px;">
+            <button class="btn-outline" onclick="exportPortSpec()">📄 Export Spec Sheet PDF</button>
+          </div>
+        </div>
+
+        <div class="two-col" style="align-items:flex-start;gap:16px;">
+          <div style="grid-column:1/-1;">
+
+            <!-- Portioning photo -->
+            <div style="margin-bottom:14px;">
+              <div class="sc" style="margin-bottom:0;max-width:220px;">
+                <div class="sc-title" style="margin-bottom:8px;">Reference Photo</div>
+                <div class="photo-box" onclick="alert('Upload plated meal photo')">
+                  <div style="font-size:22px;margin-bottom:6px;">📷</div>
+                  <div style="font-size:12px;">Upload plated meal photo</div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Column headers -->
+            <div class="port-col-hdr">
+              <div></div>
+              <div>Step</div>
+              <div style="padding-left:12px;">Sub-Recipe</div>
+              <div style="justify-content:center;">Min</div>
+              <div style="justify-content:center;">Max</div>
+              <div style="justify-content:center;">Range</div>
+              <div>Portioning Notes</div>
+              <div></div>
+            </div>
+            <div style="font-size:11px;color:var(--g400);margin-bottom:8px;display:flex;align-items:center;gap:5px;">
+              <span style="font-size:13px;">⠿</span> Drag cards to reorder steps
+            </div>
+
+            <!-- Portioning rows -->
+            <div id="port-container">
+              <div class="port-row-card" draggable="true">
+                <div class="port-drag-col">⠿</div>
+                <div class="port-step-col"><span class="port-step-num">1</span></div>
+                <div class="port-name-col"><div class="port-name">Lemon Caesar Rice Base</div><div class="port-meta">SR-635 · Batch Station</div></div>
+                <div class="port-num-col"><input type="number" value="130" oninput="calcRange(this)" /><div class="port-num-unit">gr / un</div></div>
+                <div class="port-num-col"><input type="number" value="140" oninput="calcRange(this)" /><div class="port-num-unit">gr / un</div></div>
+                <div class="port-pct-col"><div class="port-pct-val">7%</div><div class="port-pct-lbl">range</div></div>
+                <div class="port-notes-col"><textarea placeholder="e.g. Spread evenly across base, layer first"></textarea></div>
+                <div class="port-del-col"><span class="port-del-btn" onclick="this.closest('.port-row-card').remove();renumPort()">×</span></div>
+              </div>
+              <div class="port-row-card" draggable="true">
+                <div class="port-drag-col">⠿</div>
+                <div class="port-step-col"><span class="port-step-num">2</span></div>
+                <div class="port-name-col"><div class="port-name">Air Dried Shredded Kale</div><div class="port-meta">SR-1230 · Veg Station</div></div>
+                <div class="port-num-col"><input type="number" value="50" oninput="calcRange(this)" /><div class="port-num-unit">gr / un</div></div>
+                <div class="port-num-col"><input type="number" value="55" oninput="calcRange(this)" /><div class="port-num-unit">gr / un</div></div>
+                <div class="port-pct-col"><div class="port-pct-val">9%</div><div class="port-pct-lbl">range</div></div>
+                <div class="port-notes-col"><textarea placeholder="e.g. Scatter evenly on top of rice"></textarea></div>
+                <div class="port-del-col"><span class="port-del-btn" onclick="this.closest('.port-row-card').remove();renumPort()">×</span></div>
+              </div>
+              <div class="port-row-card" draggable="true">
+                <div class="port-drag-col">⠿</div>
+                <div class="port-step-col"><span class="port-step-num">3</span></div>
+                <div class="port-name-col"><div class="port-name">2.5oz Caesar Dressing</div><div class="port-meta">SR-2590 · Packaging Station</div></div>
+                <div class="port-num-col"><input type="number" value="1" oninput="calcRange(this)" /><div class="port-num-unit">gr / un</div></div>
+                <div class="port-num-col"><input type="number" value="1" oninput="calcRange(this)" /><div class="port-num-unit">gr / un</div></div>
+                <div class="port-pct-col"><div class="port-pct-val">0%</div><div class="port-pct-lbl">range</div></div>
+                <div class="port-notes-col"><textarea placeholder="e.g. 1 packet, place on the side of container"></textarea></div>
+                <div class="port-del-col"><span class="port-del-btn" onclick="this.closest('.port-row-card').remove();renumPort()">×</span></div>
+              </div>
+              <div class="port-row-card" draggable="true">
+                <div class="port-drag-col">⠿</div>
+                <div class="port-step-col"><span class="port-step-num">4</span></div>
+                <div class="port-name-col"><div class="port-name">Dill Pickle Sliced Seasoned Chicken</div><div class="port-meta">SR-2952 · Protein Station</div></div>
+                <div class="port-num-col"><input type="number" value="1" oninput="calcRange(this)" /><div class="port-num-unit">gr / un</div></div>
+                <div class="port-num-col"><input type="number" value="1" oninput="calcRange(this)" /><div class="port-num-unit">gr / un</div></div>
+                <div class="port-pct-col"><div class="port-pct-val">0%</div><div class="port-pct-lbl">range</div></div>
+                <div class="port-notes-col"><textarea placeholder="e.g. Fan slices across top of salad"></textarea></div>
+                <div class="port-del-col"><span class="port-del-btn" onclick="this.closest('.port-row-card').remove();renumPort()">×</span></div>
+              </div>
+              <div class="port-row-card" draggable="true">
+                <div class="port-drag-col">⠿</div>
+                <div class="port-step-col"><span class="port-step-num">5</span></div>
+                <div class="port-name-col"><div class="port-name">2 oz Savory Garlic Granola</div><div class="port-meta">SR-2591 · Packaging Station</div></div>
+                <div class="port-num-col"><input type="number" value="1" oninput="calcRange(this)" /><div class="port-num-unit">gr / un</div></div>
+                <div class="port-num-col"><input type="number" value="1" oninput="calcRange(this)" /><div class="port-num-unit">gr / un</div></div>
+                <div class="port-pct-col"><div class="port-pct-val">0%</div><div class="port-pct-lbl">range</div></div>
+                <div class="port-notes-col"><textarea placeholder="e.g. Sprinkle on top last before sealing"></textarea></div>
+                <div class="port-del-col"><span class="port-del-btn" onclick="this.closest('.port-row-card').remove();renumPort()">×</span></div>
+              </div>
+              <div class="port-row-card" draggable="true">
+                <div class="port-drag-col">⠿</div>
+                <div class="port-step-col"><span class="port-step-num">6</span></div>
+                <div class="port-name-col"><div class="port-name">Housemade Vegan Feta</div><div class="port-meta">SR-278 · Oven Station</div></div>
+                <div class="port-num-col"><input type="number" value="8" oninput="calcRange(this)" /><div class="port-num-unit">gr / un</div></div>
+                <div class="port-num-col"><input type="number" value="10" oninput="calcRange(this)" /><div class="port-num-unit">gr / un</div></div>
+                <div class="port-pct-col"><div class="port-pct-val">20%</div><div class="port-pct-lbl">range</div></div>
+                <div class="port-notes-col"><textarea placeholder="e.g. Crumble over the top, distribute evenly"></textarea></div>
+                <div class="port-del-col"><span class="port-del-btn" onclick="this.closest('.port-row-card').remove();renumPort()">×</span></div>
+              </div>
+            </div>
+
+          </div>
+        </div>
+
+      </div>
+
+      <!-- ══ LABEL & MACROS ══ -->
+      <div class="tab-panel tab-body" id="tab-label">
+        <div class="two-col" style="align-items:flex-start;gap:16px;">
+
+          <!-- LEFT COLUMN -->
+          <div style="display:flex;flex-direction:column;gap:14px;">
+
+            <!-- Heating Instructions -->
+            <div class="sc" style="margin-bottom:0;">
+              <div class="sc-title">Heating Instructions</div>
+              <div class="sc-sub">Printed on the physical label.</div>
+              <textarea id="heating-instructions" oninput="document.getElementById('lbl-heating').textContent=this.value" style="min-height:68px;">Remove plastic film. Microwave for 2–2.5 mins. Let stand 1 min before eating.</textarea>
+            </div>
+
+            <!-- Macros -->
+            <div class="sc" style="margin-bottom:0;">
+              <div class="sc-title">Nutrition Macros</div>
+              <div class="infonote">
+                <span>ℹ</span>
+                <span>Enter manually after running sub-recipe weights through macro calculation. Values should reflect actual portioning (typically 90–95% of max recipe weights).</span>
+              </div>
+              <div class="macros-grid">
+                <div class="macro-card"><div class="macro-label">Calories</div><div style="display:flex;align-items:center;justify-content:center;"><input class="macro-input" type="number" value="490" id="mc" oninput="updateLabelPreview()" /></div></div>
+                <div class="macro-card hl"><div class="macro-label">Protein</div><div style="display:flex;align-items:center;justify-content:center;"><input class="macro-input" type="number" value="38" id="mp" oninput="updateLabelPreview()" /><span class="macro-unit">g</span></div></div>
+                <div class="macro-card"><div class="macro-label">Carbs</div><div style="display:flex;align-items:center;justify-content:center;"><input class="macro-input" type="number" value="44" id="mcb" oninput="updateLabelPreview()" /><span class="macro-unit">g</span></div></div>
+                <div class="macro-card"><div class="macro-label">Fiber</div><div style="display:flex;align-items:center;justify-content:center;"><input class="macro-input" type="number" value="8" id="mf" oninput="updateLabelPreview()" /><span class="macro-unit">g</span></div></div>
+                <div class="macro-card"><div class="macro-label">Fats</div><div style="display:flex;align-items:center;justify-content:center;"><input class="macro-input" type="number" value="18" id="mft" oninput="updateLabelPreview()" /><span class="macro-unit">g</span></div></div>
+              </div>
+              <button class="btn-ghost" style="margin-top:10px;" onclick="copyIngredients()">📋 Copy ingredient list for macro calculation</button>
+            </div>
+
+            <!-- Shelf Life -->
+            <div class="sc" style="margin-bottom:0;">
+              <div class="sc-title">Shelf Life</div>
+              <div class="fr" style="align-items:flex-end;gap:12px;">
+                <div class="fg" style="max-width:150px;">
+                  <div class="fl">Days from Sunday delivery</div>
+                  <input type="number" value="5" id="shelf-days" min="1" max="30" oninput="updateBestBefore()" />
+                </div>
+                <div class="shelf-res" id="shelf-res">
+                  <div class="shelf-res-main" id="shelf-main">Lasts until Thursday</div>
+                  <div class="shelf-res-sub" id="shelf-sub">Based on Sunday delivery</div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Label Description -->
+            <div class="sc" style="margin-bottom:0;">
+              <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:4px;">
+                <div class="sc-title" style="margin-bottom:0;">Label Description</div>
+                <button class="btn-ai" onclick="generateLabelDesc()">✦ Generate with AI</button>
+              </div>
+              <div class="sc-sub">Short copy for the physical label. Plain language, no em-dashes.</div>
+              <div id="ai-loading" class="ai-loading">✦ Writing label description...</div>
+              <textarea id="label-desc-input" oninput="document.getElementById('lbl-desc').textContent=this.value" style="min-height:72px;">This caesar bowl comes loaded with grilled chicken, kale, brown rice, caper caesar dressing, savory garlic granola and vegan feta.</textarea>
+            </div>
+
+            <!-- Ingredient List -->
+            <div class="sc" style="margin-bottom:0;">
+              <div class="sc-title">Ingredient List</div>
+              <div class="sc-sub">Full flat ingredient list for the label. Edit freely after generating. Spice consolidation is managed at the ingredient level — ingredients flagged as "consolidate as Spices" will group here automatically in the live app.</div>
+              <div style="position:relative;margin-bottom:12px;">
+                <textarea id="ingredient-string" style="min-height:90px;padding-right:110px;">Brown Rice, Romaine Lettuce, Grilled Chicken Breast (Chicken, Water, Salt, Spices), Kale, Caesar Dressing (Sunflower Oil, Lemon Juice, Capers, Garlic, Salt), Granola (Oats, Olive Oil, Garlic), Cashew Feta (Cashews, Lemon Juice, Nutritional Yeast, Salt).</textarea>
+                <button class="btn-ghost" style="position:absolute;top:8px;right:8px;font-size:11px;" onclick="alert('Live app: flattens sub-recipe raw ingredients, sums shared weights, sorts descending, consolidates flagged ingredients.')">↺ Regenerate</button>
+              </div>
+
+              <!-- Canadian Allergens separate -->
+              <div style="background:var(--g50);border:var(--bd);border-radius:var(--r);padding:12px;">
+                <div class="fl" style="margin-bottom:6px;">Canadian Label Allergens <span>(auto-bolded at end of ingredient list on label)</span></div>
+                <div class="picker-grid" id="ca-allergen-picker">
+                  <div class="pi on-red" onclick="this.classList.toggle('on-red');updateLabelAllergens()" data-ca="Cashews">Cashews</div>
+                  <div class="pi" onclick="this.classList.toggle('on-red');updateLabelAllergens()" data-ca="Milk">Milk</div>
+                  <div class="pi" onclick="this.classList.toggle('on-red');updateLabelAllergens()" data-ca="Wheat">Wheat</div>
+                  <div class="pi" onclick="this.classList.toggle('on-red');updateLabelAllergens()" data-ca="Eggs">Eggs</div>
+                  <div class="pi" onclick="this.classList.toggle('on-red');updateLabelAllergens()" data-ca="Soy">Soy</div>
+                  <div class="pi" onclick="this.classList.toggle('on-red');updateLabelAllergens()" data-ca="Peanuts">Peanuts</div>
+                  <div class="pi" onclick="this.classList.toggle('on-red');updateLabelAllergens()" data-ca="Sesame">Sesame</div>
+                  <div class="pi" onclick="this.classList.toggle('on-red');updateLabelAllergens()" data-ca="Fish">Fish</div>
+                  <div class="pi" onclick="this.classList.toggle('on-red');updateLabelAllergens()" data-ca="Shellfish">Shellfish</div>
+                  <div class="pi" onclick="this.classList.toggle('on-red');updateLabelAllergens()" data-ca="Mustard">Mustard</div>
+                  <div class="pi" onclick="this.classList.toggle('on-red');updateLabelAllergens()" data-ca="Sulphites">Sulphites</div>
+                  <div class="pi" onclick="this.classList.toggle('on-red');updateLabelAllergens()" data-ca="Coconut">Coconut</div>
+                </div>
+                <div style="margin-top:10px;font-size:12px;color:var(--g500);">Or type custom: <input type="text" id="ca-custom" placeholder="e.g. Modified Corn Starch" style="display:inline-block;width:220px;margin-left:6px;padding:4px 8px;" onkeydown="if(event.key==='Enter'){addCustomAllergen(this.value);this.value=''}" /></div>
+              </div>
+            </div>
+
+          </div>
+
+          <!-- RIGHT COLUMN: Label Preview -->
+          <div>
+            <div class="sc" style="margin-bottom:0;position:sticky;top:68px;">
+              <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+                <div class="sc-title" style="margin-bottom:0;">Label Preview</div>
+                <div style="display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end;">
+                  <div class="fg" style="max-width:148px;">
+                    <div class="fl" style="margin-bottom:3px;">Override best before</div>
+                    <input type="date" id="label-bb-override" oninput="overrideBB(this.value)" />
+                  </div>
+                  <div style="display:flex;gap:6px;align-self:flex-end;">
+                    <button class="btn-outline" onclick="exportCSV()">⬇ CSV</button>
+                    <button class="btn-navy" onclick="alert('PDF export — coming soon!')">⬇ Export PDF</button>
+                  </div>
+                </div>
+              </div>
+
+              <div class="label-canvas" id="label-canvas">
+                <div class="lm">
+                  <div class="l-tagline">Always made fresh</div>
+                  <div class="l-title">ALL HAIL THE CHICKEN CAESAR</div>
+                  <div class="l-icons" id="lbl-icons">
+                    <div class="l-icon">🌾</div>
+                    <div class="l-icon bt">HIGH<br>PROTEIN</div>
+                    <div class="l-icon">🐔</div>
+                  </div>
+                  <div class="l-desc" id="lbl-desc">This caesar bowl comes loaded with grilled chicken, kale, brown rice, caper caesar dressing, savory garlic granola and vegan feta.</div>
+                  <div class="l-bottom">
+                    <div class="l-bb">
+                      <div class="l-bb-lbl">BEST BEFORE</div>
+                      <div class="l-bb-date" id="lbl-bb">—</div>
+                    </div>
+                    <div class="l-macrow">
+                      <div class="l-mac"><span class="l-mac-val" id="lbl-cal">490</span><span class="l-mac-unit">Calories</span></div>
+                      <div class="l-mac"><div class="l-mac-val circ" id="lbl-pro">38g</div><span class="l-mac-unit">Protein</span></div>
+                      <div class="l-mac"><span class="l-mac-val" id="lbl-carb">44g</span><span class="l-mac-unit">Carb</span></div>
+                      <div class="l-mac"><span class="l-mac-val" id="lbl-fib">8g</span><span class="l-mac-unit">Fiber</span></div>
+                      <div class="l-mac"><span class="l-mac-val" id="lbl-fat">18g</span><span class="l-mac-unit">Fats</span></div>
+                    </div>
+                  </div>
+                </div>
+                <div class="ls">
+                  <div>
+                    <div class="ls-t">Instructions</div>
+                    <div class="ls-body" id="lbl-heating">Remove plastic film. Microwave for 2–2.5 mins. Let stand 1 min before eating.</div>
+                  </div>
+                  <div id="lbl-freezer-block">
+                    <div class="ls-t">❄ Freezer Safe</div>
+                  </div>
+                  <div>
+                    <div class="ls-t">Ingredients</div>
+                    <div class="ls-allergens" id="lbl-ingredients-side">Brown Rice, Romaine Lettuce, Grilled Chicken Breast, Kale, Caesar Dressing, Granola, Cashew Feta. Contains: <strong>Cashews</strong>.</div>
+                  </div>
+                  <div class="l-pkg" id="lbl-pkg">♻ Compost Base<br>Recycle Film</div>
+                </div>
+              </div>
+
+            </div>
+          </div>
+
+        </div>
+      </div>
+
+      <!-- ══ E-COMMERCE ══ -->
+      <div class="tab-panel tab-body" id="tab-ecommerce">
+        <div class="two-col" style="align-items:flex-start;">
+          <div>
+            <div class="sc">
+              <div class="sc-title">Pricing</div>
+              <div class="two-col">
+                <div><div class="fl" style="margin-bottom:5px;">Regular Price ($)</div><input type="number" value="16.99" step="0.01" /></div>
+                <div><div class="fl" style="margin-bottom:5px;">Sale Price ($)</div><input type="number" placeholder="0.00" step="0.01" /></div>
+              </div>
+              <div class="two-col" style="margin-top:10px;">
+                <div><div class="fl" style="margin-bottom:5px;">Sale Start</div><input type="date" /></div>
+                <div><div class="fl" style="margin-bottom:5px;">Sale End</div><input type="date" /></div>
+              </div>
+            </div>
+            <div class="sc">
+              <div class="sc-title">Inventory Management</div>
+              <div class="two-col">
+                <div><div class="fl" style="margin-bottom:5px;">SKU / MU</div><input type="text" placeholder="Stock keeping unit" /></div>
+                <div><div class="fl" style="margin-bottom:5px;">Stock Status</div><select><option>In Stock</option><option>Out of Stock</option><option>On Backorder</option></select></div>
+              </div>
+              <div style="margin-top:10px;"><div class="toggle-wrap"><div class="toggle off" onclick="this.classList.toggle('off')"></div><span class="toggle-label">Enable stock management</span></div></div>
+              <div class="three-col" style="margin-top:10px;">
+                <div><div class="fl" style="margin-bottom:5px;">Quantity</div><input type="number" value="0" /></div>
+                <div><div class="fl" style="margin-bottom:5px;">Min Per Order</div><input type="number" value="1" /></div>
+                <div><div class="fl" style="margin-bottom:5px;">Low Stock Alert</div><input type="number" value="5" /></div>
+              </div>
+            </div>
+          </div>
+          <div>
+            <div class="sc">
+              <div class="sc-title">Product Settings</div>
+              <div style="display:flex;flex-direction:column;gap:10px;margin-bottom:14px;">
+                <div class="toggle-wrap"><div class="toggle off" onclick="this.classList.toggle('off')"></div><span class="toggle-label">Virtual product</span></div>
+                <div class="toggle-wrap"><div class="toggle off" onclick="this.classList.toggle('off')"></div><span class="toggle-label">Disable product label</span></div>
+                <div class="toggle-wrap"><div class="toggle" onclick="this.classList.toggle('off')"></div><span class="toggle-label">Frozen instead</span></div>
+              </div>
+              <div class="fl" style="margin-bottom:5px;">Tax Status</div>
+              <select><option>Taxable</option><option>Shipping only</option><option>None</option></select>
+              <div class="fl" style="margin-top:12px;margin-bottom:6px;">Menus</div>
+              <div class="picker-grid">
+                <div class="pi on" onclick="this.classList.toggle('on')">Main Menu</div>
+                <div class="pi" onclick="this.classList.toggle('on')">Meal Plan A</div>
+                <div class="pi" onclick="this.classList.toggle('on')">Meal Plan B</div>
+              </div>
+            </div>
+            <div class="sc">
+              <div class="sc-title">Meal Expiration Display</div>
+              <div class="sc-sub">Days shown on website product page ("expires in X days").</div>
+              <div class="fg" style="max-width:140px;"><div class="fl" style="margin-bottom:5px;">Days until expiry</div><input type="number" value="5" /></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div><!-- /tabs-wrap -->
+  </div><!-- /content -->
+
+  <div class="footer-actions">
+    <button class="btn-cancel">Cancel</button>
+    <button class="btn-save">Save Changes</button>
+  </div>
+</div>
+
+<script>
+// ── DISH DATA ──
+const dishes=[
+  {id:'#54',name:'Under the Tuscan Sun',type:'veg'},
+  {id:'#196',name:'California Roll Sushi Bowl',type:'veg'},
+  {id:'#234',name:'Cranberry Glazed Neatloaf',type:'veg'},
+  {id:'#275',name:'Dumpling Party Udon',type:'veg'},
+  {id:'#440',name:'Dragon Roll Sushi Bowl (Vegan)',type:'veg'},
+  {id:'#569',name:'Chicken Shawarma Crunch Salad (Vegan)',type:'veg'},
+  {id:'#463',name:'All Hail the Chicken Caesar',type:'meat'},
+  {id:'#556',name:'Mardi Gras Cajun Chicken Linguini',type:'meat'},
+  {id:'#561',name:'Athens Chicken Souvlaki',type:'meat'},
+  {id:'#537',name:'Backroads Honey Hot Glazed Chicken',type:'meat'},
+  {id:'#509',name:'Casanova Chicken Parm',type:'meat'},
+  {id:'#527',name:'Grand Bazaar Turkish Pasta',type:'meat'},
+  {id:'#562',name:"Sizzlin' Honey Ginger Shrimp",type:'meat'},
+  {id:'#396',name:'Prawn Dragon Roll Sushi Bowl',type:'meat'},
+  {id:'#302',name:'Gaucho Grill Chimichurri Sirloin',type:'meat'},
+  {id:'#507',name:'Kabayan Kaldereta Beef Stew',type:'meat'},
+  {id:'#508',name:'Mama Mia Meatball Orzo',type:'meat'},
+  {id:'#489',name:'Maple Menagerie Salmon Harvest',type:'meat'},
+  {id:'#515',name:'Flex Mex Taco Salad',type:'meat'},
+  {id:'#475',name:'Rockstar Reuben Hash',type:'meat'},
+  {id:'#429',name:'Roma Rollup Stuffed Cannelloni',type:'meat'},
+  {id:'#521',name:'Jade Curry Noodles with Turkey Meatballs',type:'meat'},
+];
+
+// ── ACTIVE TOGGLE ──
+function toggleActive(el){
+  el.classList.toggle('off');
+  const on=!el.classList.contains('off');
+  document.getElementById('active-toggle-lbl').textContent=on?'Active':'Inactive';
+  const pill=document.getElementById('active-pill');
+  pill.textContent=on?'Active':'Inactive';
+  pill.style.background=on?'#dcfce7':'#f3f4f6';
+  pill.style.color=on?'#166534':'#6b7280';
+}
+
+// ── OMNI ──
+function toggleOmni(el){
+  el.classList.toggle('off');
+  document.getElementById('omni-section').style.display=el.classList.contains('off')?'none':'block';
+}
+function filterOmni(v){showOmniDD();const filtered=dishes.filter(d=>d.id!=='#463'&&d.name.toLowerCase().includes(v.toLowerCase()));renderOmniDD(filtered.slice(0,12));}
+function showOmniDD(){
+  const dd=document.getElementById('omni-dd');dd.style.display='block';
+  const v=document.getElementById('omni-search').value;
+  const f=v?dishes.filter(d=>d.id!=='#463'&&d.name.toLowerCase().includes(v.toLowerCase())):dishes.filter(d=>d.id!=='#463');
+  renderOmniDD(f.slice(0,12));
+}
+function renderOmniDD(list){
+  const dd=document.getElementById('omni-dd');
+  dd.innerHTML=list.map(d=>`<div class="omni-opt" onclick="pickOmni('${d.id}','${d.name.replace(/'/g,"\\'")}')"><span class="did">${d.id}</span>${d.name}</div>`).join('')||'<div class="omni-opt" style="color:var(--g400)">No results</div>';
+}
+function pickOmni(id,name){
+  document.getElementById('omni-search').value=name;
+  document.getElementById('omni-sel').innerHTML=`<span style="font-size:11px;font-family:monospace;color:#3b82f6;">${id}</span>${name}`;
+  document.getElementById('omni-dd').style.display='none';
+}
+document.addEventListener('click',e=>{if(!e.target.closest('.omni-sw'))document.getElementById('omni-dd').style.display='none';});
+
+// ── TABS ──
+function switchTab(id,el){
+  document.querySelectorAll('#main-tabs .tab').forEach(t=>t.classList.remove('active'));
+  el.classList.add('active');
+  document.querySelectorAll('.tab-panel').forEach(p=>p.classList.remove('active'));
+  document.getElementById('tab-'+id).classList.add('active');
+}
+
+// ── CONTAINER ──
+function selectContainer(el){
+  el.parentElement.querySelectorAll('.co').forEach(o=>o.classList.remove('selected'));
+  el.classList.add('selected');
+  updateLabelPreview();
+}
+
+// ── SCORE ──
+function updateScore(v){
+  document.getElementById('score-badge').textContent=v;
+  document.getElementById('score-val-label').textContent=`(${v} / 4)`;
+}
+
+// ── RANGE % CALCULATOR ──
+function calcRange(input){
+  const card=input.closest('.port-row-card');
+  const inputs=card.querySelectorAll('.port-num-col input');
+  const min=parseFloat(inputs[0].value)||0;
+  const max=parseFloat(inputs[1].value)||0;
+  const pctEl=card.querySelector('.port-pct-val');
+  if(!pctEl)return;
+  if(max<=0){pctEl.textContent='—';return;}
+  const pct=Math.round(((max-min)/max)*100);
+  pctEl.textContent=pct+'%';
+  pctEl.style.color=pct===0?'var(--g400)':pct<=10?'var(--navy)':pct<=20?'#d97706':'#dc2626';
+}
+
+// ── DRAG & DROP PORTIONING ──
+let dragSrc=null;
+document.addEventListener('dragstart',e=>{const r=e.target.closest('.port-row-card');if(r){dragSrc=r;setTimeout(()=>r.classList.add('dragging'),0);}});
+document.addEventListener('dragend',e=>{const r=e.target.closest('.port-row-card');if(r){r.classList.remove('dragging');renumPort();}});
+document.addEventListener('dragover',e=>{const r=e.target.closest('.port-row-card');if(r&&r!==dragSrc){e.preventDefault();document.querySelectorAll('.port-row-card').forEach(x=>x.classList.remove('drag-over'));r.classList.add('drag-over');}});
+document.addEventListener('drop',e=>{const r=e.target.closest('.port-row-card');if(r&&r!==dragSrc){e.preventDefault();r.classList.remove('drag-over');document.getElementById('port-container').insertBefore(dragSrc,r);renumPort();}});
+function renumPort(){document.querySelectorAll('#port-container .port-step-num').forEach((el,i)=>el.textContent=i+1);}
+
+// ── BEST BEFORE ──
+const DAYS=['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+function getNextSunday(){const d=new Date();const diff=(7-d.getDay())%7||7;d.setDate(d.getDate()+diff);return d;}
+function updateBestBefore(){
+  const days=parseInt(document.getElementById('shelf-days').value)||0;
+  const sun=getNextSunday();
+  const bb=new Date(sun);bb.setDate(bb.getDate()+days);
+  const dayName=DAYS[bb.getDay()];
+  document.getElementById('shelf-main').textContent=`Lasts until ${dayName}`;
+  document.getElementById('shelf-sub').textContent=`Based on Sunday delivery (+${days} days)`;
+  const fmt=bb.toLocaleDateString('en-CA',{month:'short',day:'numeric'});
+  document.getElementById('lbl-bb').textContent=fmt;
+}
+function overrideBB(v){
+  if(!v)return;
+  const d=new Date(v+'T12:00:00');
+  document.getElementById('lbl-bb').textContent=d.toLocaleDateString('en-CA',{month:'short',day:'numeric'});
+}
+updateBestBefore();
+
+// ── LABEL PREVIEW ──
+const badgeMap={'gluten-free':{e:'🌾'},'high-protein':{t:'HIGH\nPROTEIN'},'dairy-free':{e:'🥛'},'vegan':{e:'🌿'},'family-friendly':{e:'👨‍👩‍👧'},'freezable':{e:'❄️'},'spicy':{e:'🌶️'},'chicken':{e:'🐔'},'turkey':{e:'🦃'},'beef':{e:'🐄'},'pork':{e:'🐖'},'seafood':{e:'🦐'}};
+function updateLabelPreview(){
+  document.getElementById('lbl-cal').textContent=document.getElementById('mc').value;
+  document.getElementById('lbl-pro').textContent=document.getElementById('mp').value+'g';
+  document.getElementById('lbl-carb').textContent=document.getElementById('mcb').value+'g';
+  document.getElementById('lbl-fib').textContent=document.getElementById('mf').value+'g';
+  document.getElementById('lbl-fat').textContent=document.getElementById('mft').value+'g';
+  const row=document.getElementById('lbl-icons');row.innerHTML='';
+  document.querySelectorAll('[data-badge].on').forEach(b=>{
+    const bd=badgeMap[b.dataset.badge];if(!bd)return;
+    const ic=document.createElement('div');
+    if(bd.t){ic.className='l-icon bt';ic.innerHTML=bd.t.replace('\n','<br>');}
+    else{ic.className='l-icon';ic.textContent=bd.e;}
+    row.appendChild(ic);
+  });
+  const freezerOn=true;
+  document.getElementById('lbl-freezer-block').style.display=freezerOn?'block':'none';
+  const isSalad=document.querySelector('.co.selected')?.textContent.includes('Salad');
+  document.getElementById('lbl-pkg').innerHTML=isSalad?'♻ Compost Base<br>Recycle Film':'♻ Compost Base<br>Recycle Film';
+  updateLabelAllergens();
+}
+
+// ── LABEL ALLERGENS ──
+function updateLabelAllergens(){
+  const active=[...document.querySelectorAll('#ca-allergen-picker .on-red')].map(el=>el.dataset.ca).filter(Boolean);
+  const ingr=document.getElementById('ingredient-string').value.replace(/\.$/, '');
+  const allergenStr=active.length?'. Contains: '+active.map(a=>`<strong>${a}</strong>`).join(', ')+'.':'.';
+  document.getElementById('lbl-ingredients-side').innerHTML=ingr.split('(')[0].trim()+'...' + allergenStr;
+}
+function addCustomAllergen(v){
+  if(!v.trim())return;
+  const grid=document.getElementById('ca-allergen-picker');
+  const el=document.createElement('div');
+  el.className='pi on-red';el.dataset.ca=v.trim();
+  el.textContent=v.trim();
+  el.onclick=function(){this.classList.toggle('on-red');updateLabelAllergens();};
+  grid.appendChild(el);
+  updateLabelAllergens();
+}
+
+// ── AI LABEL DESCRIPTION ──
+async function generateLabelDesc(){
+  const btn=document.querySelector('.btn-ai');
+  const loading=document.getElementById('ai-loading');
+  const textarea=document.getElementById('label-desc-input');
+  const websiteDesc=document.querySelector('.dish-meta textarea').value;
+  btn.disabled=true;btn.textContent='✦ Generating...';
+  loading.style.display='block';
+  try{
+    const resp=await fetch('https://api.anthropic.com/v1/messages',{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({
+        model:'claude-sonnet-4-20250514',
+        max_tokens:200,
+        messages:[{role:'user',content:`You write short label descriptions for BetterDay Food Co, a Calgary-based chef-made meal delivery company. Label descriptions are brief (1-2 sentences, max 30 words), plain, friendly, and describe what's in the dish. No em-dashes. No marketing fluff. No exclamation marks. Just a clean, appetizing summary.
+
+Website description: "${websiteDesc}"
+
+Write a short label description:`}]
+      })
+    });
+    const data=await resp.json();
+    const text=data.content?.[0]?.text||'';
+    textarea.value=text.trim();
+    document.getElementById('lbl-desc').textContent=text.trim();
+  }catch(e){
+    textarea.value='Could not generate — check connection.';
+  }
+  btn.disabled=false;btn.innerHTML='✦ Generate with AI';
+  loading.style.display='none';
+}
+
+// ── COPY INGREDIENTS ──
+function copyIngredients(){
+  const rows=document.querySelectorAll('#comp-tbody tr');
+  let text='BetterDay Macro Calculation — All Hail the Chicken Caesar\n\nIngredients (max portion weights):\n';
+  rows.forEach(r=>{
+    const c=r.querySelectorAll('td');
+    if(c.length>4)text+=`- ${c[1].textContent.trim()}: ${c[4].textContent.trim()} ${c[5].textContent.trim()}\n`;
+  });
+  text+='\nNote: Apply portioning rules (90-95% of max) before finalizing macros.';
+  navigator.clipboard.writeText(text).then(()=>{
+    const b=document.querySelector('[onclick="copyIngredients()"]');
+    const orig=b.innerHTML;b.innerHTML='✓ Copied!';
+    setTimeout(()=>b.innerHTML=orig,2000);
+  });
+}
+
+// ── CSV EXPORT ──
+function exportCSV(){
+  const dishName='All Hail the Chicken Caesar';
+  const labelDesc=document.getElementById('label-desc-input').value.replace(/"/g,'""');
+  const heating=document.getElementById('heating-instructions')?.value.replace(/"/g,'""')||'';
+  const freezerSafe=!document.getElementById('freezer-toggle').classList.contains('off')?'Yes':'';
+  const containerType=document.querySelector('.co.selected')?.textContent.trim().replace(/^[^\w]*/,'')||'';
+  const ingredients=document.getElementById('ingredient-string').value.replace(/"/g,'""');
+  const caAllergens=[...document.querySelectorAll('#ca-allergen-picker .on-red')].map(e=>e.dataset.ca).join(', ');
+  const gf=document.querySelector('[data-badge="gluten-free"].on')?'Gluten Friendly':'';
+  const hp=document.querySelector('[data-badge="high-protein"].on')?'High Protein':'';
+  const df=document.querySelector('[data-badge="dairy-free"].on')?'Dairy Free':'';
+  const veg=document.querySelector('[data-badge="vegan"].on')?'Vegan':'';
+  const bb=document.getElementById('lbl-bb').textContent;
+  const cal=document.getElementById('mc').value;
+  const pro=document.getElementById('mp').value;
+  const carb=document.getElementById('mcb').value;
+  const fib=document.getElementById('mf').value;
+  const fat=document.getElementById('mft').value;
+
+  const headers=['Dish Name','Label Description','Heating Instructions','Freezer Safe','Container Type','Ingredients','Canadian Allergens','Gluten Friendly','High Protein','Dairy Free','Vegan','Best Before','Calories','Protein (g)','Carbs (g)','Fiber (g)','Fats (g)'];
+  const row=[dishName,labelDesc,heating,freezerSafe,containerType,ingredients,caAllergens,gf,hp,df,veg,bb,cal,pro,carb,fib,fat];
+  const csv=headers.map(h=>`"${h}"`).join(',')+'\n'+row.map(v=>`"${v}"`).join(',');
+
+  const blob=new Blob([csv],{type:'text/csv'});
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(blob);
+  a.download=`label_${dishName.replace(/\s+/g,'_')}.csv`;
+  a.click();
+}
+
+// ── PORTIONING SPEC PDF ──
+function exportPortSpec(){
+  const rows=[...document.querySelectorAll('#port-container .port-row-card')];
+  let html=`<html><head><style>
+    body{font-family:Arial,sans-serif;padding:40px;color:#111;max-width:820px;margin:0 auto}
+    h1{font-size:22px;margin-bottom:4px}
+    .sub{font-size:13px;color:#666;margin-bottom:24px}
+    table{width:100%;border-collapse:collapse;font-size:13px}
+    th{background:#003141;color:white;padding:10px 12px;text-align:left;font-size:11px;letter-spacing:.05em;text-transform:uppercase}
+    td{padding:10px 12px;border-bottom:1px solid #e5e7eb;vertical-align:top}
+    tr:nth-child(even) td{background:#f9fafb}
+    .step{background:#003141;color:white;width:22px;height:22px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-size:11px;font-weight:700}
+    .footer{margin-top:40px;font-size:11px;color:#999;border-top:1px solid #e5e7eb;padding-top:12px}
+    @media print{body{padding:20px}}
+  </style></head><body>
+  <h1>Portioning Spec Sheet — All Hail the Chicken Caesar</h1>
+  <div class="sub">Printed: ${new Date().toLocaleDateString('en-CA',{weekday:'long',year:'numeric',month:'long',day:'numeric'})}</div>
+  <table>
+    <thead><tr><th>Step</th><th>Sub-Recipe</th><th>Min</th><th>Max</th><th>Range</th><th>Portioning Notes</th></tr></thead>
+    <tbody>`;
+
+  rows.forEach((r,i)=>{
+    const name=r.querySelector('.port-name').textContent;
+    const inputs=r.querySelectorAll('.port-num-col input');
+    const min=inputs[0]?.value||'—';
+    const max=inputs[1]?.value||'—';
+    const pct=r.querySelector('.port-pct-val')?.textContent||'—';
+    const notes=r.querySelector('.port-notes-col textarea')?.value||'';
+    html+=`<tr><td><span class="step">${i+1}</span></td><td>${name}</td><td>${min}</td><td>${max}</td><td>${pct}</td><td>${notes}</td></tr>`;
+  });
+
+  const heating=document.getElementById('heating-instructions')?.value||'';
+  html+=`</tbody></table>
+  <div style="margin-top:24px;background:#f0fdf4;border:1px solid #86efac;border-radius:6px;padding:14px;">
+    <strong style="font-size:12px;text-transform:uppercase;letter-spacing:.05em;color:#166534;">Heating Instructions</strong>
+    <p style="margin-top:6px;font-size:13px;">${heating}</p>
+  </div>
+  <div class="footer">BetterDay Kitchen · Portioning Spec Sheet · All Hail the Chicken Caesar</div>
+  </body></html>`;
+
+  const w=window.open('','_blank');
+  w.document.write(html);w.document.close();w.focus();
+  setTimeout(()=>w.print(),400);
+}
+</script>
+</body>
+</html>
