@@ -32,7 +32,12 @@
       "Bash(node -e \"require\\(''fs''\\).writeFileSync\\(''backend/src/modules/meals/dto/meal.dto.ts'', require\\(''fs''\\).readFileSync\\(''backend/src/modules/meals/dto/meal.dto.ts'', ''utf8''\\)\\)\")",
       "Bash(git add backend/prisma/schema.prisma backend/src/modules/meals/dto/meal.dto.ts backend/src/modules/meals/meals.service.ts backend/src/modules/meals/meals.controller.ts frontend/app/lib/api.ts \"frontend/app/\\(dashboard\\)/meals/page.tsx\" \"frontend/app/\\(dashboard\\)/meals/[id]/page.tsx\")",
       "Bash(git add backend/src/modules/meals/meals.service.ts \"frontend/app/\\(dashboard\\)/meals/[id]/page.tsx\")",
-      "Bash(git add backend/src/main.ts backend/src/modules/production-plans/production-plans.controller.ts backend/src/modules/production-plans/production-plans.service.ts frontend/app/\\\\\\(dashboard\\\\\\)/dashboard/page.tsx \"frontend/app/\\(dashboard\\)/meals/[id]/page.tsx\" \"frontend/app/\\(dashboard\\)/production/[id]/page.tsx\" frontend/app/lib/api.ts)"
+      "Bash(git add backend/src/main.ts backend/src/modules/production-plans/production-plans.controller.ts backend/src/modules/production-plans/production-plans.service.ts frontend/app/\\\\\\(dashboard\\\\\\)/dashboard/page.tsx \"frontend/app/\\(dashboard\\)/meals/[id]/page.tsx\" \"frontend/app/\\(dashboard\\)/production/[id]/page.tsx\" frontend/app/lib/api.ts)",
+      "mcp__Claude_Preview__preview_start",
+      "Read(//tmp/**)",
+      "Bash(npx -p typescript tsc --noEmit --pretty)",
+      "Bash(npx -p typescript tsc --noEmit)",
+      "Bash(node -e ':*)"
     ]
   }
 }

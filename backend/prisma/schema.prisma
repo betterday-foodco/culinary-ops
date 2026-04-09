@@ -131,8 +131,10 @@ model MealRecipe {
   shelf_life_days        Int?
   starch_type            String?
   meal_code              String?              @unique
+  diet_plan_id           String?
   corporate_order_items  CorporateOrderItem[]
   components             MealComponent[]
+  SystemTag              SystemTag?           @relation(fields: [diet_plan_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
   linked_meal            MealRecipe?          @relation("MealVariants", fields: [linked_meal_id], references: [id])
   variant_meals          MealRecipe[]         @relation("MealVariants")
   menu_queue_items       MenuQueueItem[]
@@ -144,6 +146,7 @@ model MealRecipe {
   @@index([name])
   @@index([category])
   @@index([linked_meal_id])
+  @@index([diet_plan_id])
 }
 
 model PortionSpec {
@@ -457,6 +460,7 @@ model SystemTag {
   sort_order       Int             @default(0)
   created_at       DateTime        @default(now())
   updated_at       DateTime        @updatedAt
+  MealRecipe       MealRecipe[]
   connections_from TagConnection[] @relation("ConnectionFrom")
   connections_to   TagConnection[] @relation("ConnectionTo")
 }
