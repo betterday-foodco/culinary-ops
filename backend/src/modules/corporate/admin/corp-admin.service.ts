@@ -122,21 +122,8 @@ export class CorpAdminService {
   async upsertEmployee(data: any) {
     const { id, employee_code, pin, role, is_manager, ...rest } = data;
 
-    // Domain validation: if company has allowed_email_domain, check email matches
-    if (rest.company_id && rest.email) {
-      const company = await this.prisma.corporateCompany.findUnique({
-        where: { id: rest.company_id },
-        select: { allowed_email_domain: true },
-      });
-      if (company?.allowed_email_domain) {
-        const domain = rest.email.split('@')[1]?.toLowerCase();
-        if (domain !== company.allowed_email_domain.toLowerCase()) {
-          throw new NotFoundException(
-            `Email must end with @${company.allowed_email_domain} for this company.`,
-          );
-        }
-      }
-    }
+    // TODO: Domain validation — add allowed_email_domain column to CorporateCompany
+    // schema when ready. For now, skip email domain enforcement.
 
     // Hash PIN if provided
     const updateData = { ...rest };
@@ -234,7 +221,7 @@ export class CorpAdminService {
         _count: true,
       }),
       this.prisma.companyInvoice.findMany({
-        select: { status: true, company_owed: true, paid_amount: true },
+        select: { status: true, amount_total: true, amount_paid: true },
       }),
     ]);
 
@@ -242,7 +229,7 @@ export class CorpAdminService {
     const totalMeals = await this.prisma.corporateOrderItem.count();
     const outstanding = invoices
       .filter(i => ['draft', 'sent', 'overdue'].includes(i.status))
-      .reduce((s, i) => s + ((i.company_owed ?? 0) - (i.paid_amount ?? 0)), 0);
+      .reduce((s, i) => s + ((i.amount_total ?? 0) - (i.amount_paid ?? 0)), 0);
     const avgOrder = orders._count > 0 ? totalRevenue / orders._count : 0;
 
     return {

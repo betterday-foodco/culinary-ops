@@ -14,8 +14,9 @@ RUN npm install --legacy-peer-deps
 # Copy the rest of the app
 COPY . .
 
-# Generate Prisma client for Linux
+# Generate Prisma clients for Linux (main + commerce)
 RUN npx prisma generate
+RUN npx prisma generate --schema=prisma/commerce/schema.prisma
 
 # Build NestJS
 RUN npm run build
