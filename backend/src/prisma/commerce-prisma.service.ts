@@ -39,11 +39,29 @@ export class CommercePrismaService
   extends PrismaClient
   implements OnModuleInit, OnModuleDestroy
 {
+  private connected = false;
+
   async onModuleInit() {
-    await this.$connect();
+    // Skip connection if COMMERCE_DATABASE_URL is not configured.
+    // This allows the culinary-ops backend to start on Railway (which only
+    // has DATABASE_URL for the culinary DB) without crashing. Commerce
+    // endpoints will return 500 if hit, but all culinary + corporate
+    // endpoints work fine.
+    if (!process.env.COMMERCE_DATABASE_URL) {
+      console.warn('[CommercePrismaService] COMMERCE_DATABASE_URL not set — commerce modules disabled');
+      return;
+    }
+    try {
+      await this.$connect();
+      this.connected = true;
+    } catch (e) {
+      console.warn('[CommercePrismaService] Failed to connect to commerce DB:', (e as Error).message);
+    }
   }
 
   async onModuleDestroy() {
-    await this.$disconnect();
+    if (this.connected) {
+      await this.$disconnect();
+    }
   }
 }
