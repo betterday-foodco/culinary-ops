@@ -4,7 +4,9 @@ import {
   IsArray,
   IsBoolean,
   IsDateString,
+  IsUUID,
   MaxLength,
+  ValidateIf,
 } from 'class-validator';
 
 /**
@@ -46,14 +48,35 @@ export class UpdateProfileDto {
 }
 
 /**
- * Update customer preferences (allergens, diet tags, meal preferences).
- * All fields are arrays of strings — the service replaces the whole
- * array on each update (not merge), so send the complete new list.
+ * Update customer preferences (diet plan, allergens, diet tags, meal
+ * preferences). All array fields are replaced (not merged) on each
+ * update — send the complete new list.
  *
  * These drive the auto-swap logic when the weekly menu rotates and
  * the build-a-cart "suggested meals" engine.
+ *
+ * diet_plan_id is a UUID referencing culinary.SystemTag.id where
+ * type='diets' (the "Omnivore" or "Vegan" rows). It's a bare UUID on
+ * the commerce side because the two schemas live in separate databases
+ * — see the Customer.diet_plan_id block comment in the commerce
+ * schema.prisma. The service validates the UUID against the culinary
+ * DB before writing it. Explicit null clears the selection.
+ *
+ * Customer-facing label for the Vegan plan is "Plants Only" (via
+ * DIET_LABELS in the client; see brand/site-info.seed.json's
+ * public.diet.labels.vegan). Backend never emits or stores the label.
  */
 export class UpdatePreferencesDto {
+  /**
+   * UUID of a SystemTag row in the culinary database with type='diets'.
+   * Pass null to clear the customer's diet plan. Omit the field to
+   * leave it unchanged.
+   */
+  @IsOptional()
+  @ValidateIf((_, value) => value !== null)
+  @IsUUID()
+  diet_plan_id?: string | null;
+
   @IsOptional()
   @IsArray()
   @IsString({ each: true })

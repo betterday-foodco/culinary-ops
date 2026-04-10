@@ -39,6 +39,43 @@ A running list of things that came up in chats but were consciously deferred —
 
 - [2026-04-09] **Helcim checkout session expires mid-entry**
   `checkoutToken` + `secretToken` are valid for ~60 minutes. If a customer opens the HelcimPay.js modal, walks away to make dinner, comes back 90 minutes later, the iframe will fail silently. UI needs to detect this (via a timestamp check on `HelcimCheckoutSession.expires_at`) and gracefully re-initialize a fresh session instead of showing a broken form.
+- [2026-04-10] **DOTW: admin edits delivery_week_sunday on a used coupon → data corruption**
+  If admin moves a DOTW from April 13 to May 4 after 50 people used it, all
+  historical CustomerCoupon records now link to "May 4" — April 13 history is
+  silently rewritten. **Lock `delivery_week_sunday` after first use.** Add to
+  `CouponAdminService.update()`: if `uses_count > 0` and field is changing,
+  throw `BadRequestException`. Admin must create a new coupon instead.
+
+- [2026-04-10] **DOTW targets a product removed from that week's menu**
+  Admin schedules "Chicken Bowl BOGO" for May 4, then kitchen pulls Chicken
+  Bowl. Coupon is valid but useless — nobody can add the product. No system
+  breakage, but confusing. Fix in admin UI: show a warning when DOTW product
+  targets don't overlap with the week's published menu.
+
+- [2026-04-10] **Cross-week deal confusion in pre-ordering**
+  Customer browsing April 13 + April 20 menus sees cookies on DOTW for
+  April 13. Adds cookies to both weeks, expects the deal on both. April 20
+  order has cookies at full price. Fix in UX: per-week deal badge on the
+  menu page + clear "this deal applies to April 13 delivery only" callout.
+
+- [2026-04-09] **Timezone issue in DOTW coupon week matching**
+  `CouponValidationService.sameDateDay()` (line 743) compares delivery
+  weeks using UTC. A Vancouver customer at 11pm Monday (Tuesday UTC) could
+  get rejected from a Monday deal. Fix before DOTW coupons go live: compare
+  in business timezone (Mountain Time) or the customer's timezone.
+
+- [2026-04-09] **Brute-force coupon code guessing — no rate limiting**
+  The validate endpoint can be called repeatedly with no throttle. Someone
+  could script through `AAAA`, `AAAB`, etc. to find valid codes. Add rate
+  limiting (max 5 attempts per customer per minute) and optionally log
+  failed attempts for fraud detection. Fix before public launch if coupon
+  codes are short or predictable.
+
+- [2026-04-09] **`diet_plan_id` cross-database referential integrity**
+  Commerce `Customer.diet_plan_id` is a bare UUID (not a Prisma `@relation`) pointing at culinary `SystemTag.id` where `type='diets'`. Write-time validation lives in `CommerceCustomersService.updatePreferences()`. Gaps: (1) if a SystemTag row is later DELETED on the culinary side, existing commerce Customer rows retain a stale UUID — no cascade fires. Need a periodic orphan check or a culinary-side admin guard that refuses to delete a diets tag while any Customer references it. (2) `diet_plan_id` is validated on PATCH but NOT on read; stale values flow through `getMe()` and may break the client if the UI can't find the id in its dietPlans list. The account page logs a console warning in that case — escalate to a schema-level repair if it ever happens in prod.
+
+- [2026-04-09] **Customer with `allergens` containing strings that don't map to any SystemTag slug**
+  The account page's allergen checkboxes use a fixed `ALLERGEN_OPTIONS` vocabulary. A legacy Customer row with an allergen that isn't in that list (e.g. "Mustard", "Sulfites") will not display and will be silently dropped on save. Either (a) fetch the full allergen list from culinary SystemTag on page load, or (b) keep the fixed vocabulary and run a one-time backfill that normalizes all existing Customer.allergens[] to the canonical slugs. Probably (a) once the catalog endpoint is live.
 
 - [2026-04-08] **Meal removed from menu after customer has it in a pre-order cart**
   Admin drops cookies from the April 20 menu but a subscriber already has cookies in their April 20 draft cart. Likely: show a warning in cart, silently drop at cutoff, optionally suggest an alternative. Needs UI + cart validation design. Not blocking Migration #3 coupon work.
@@ -64,6 +101,71 @@ A running list of things that came up in chats but were consciously deferred —
 
 - [2026-04-09] **Customer-facing charge-failure email copy (3 templates)**
   First-decline / retry / fatal. Draft copy in `conner/data-model/helcim-integration.md` §6. Needs the same marketing-voice review that coupon error messages need — track together.
+- [2026-04-10] **Subscription cart coupon lifecycle — validate at confirmation, best-effort at charge**
+  Decided architecture for coupons on subscription carts (Mon pick → Thu charge):
+  1. **Draft** — light validation when coupon is applied (is it real, active?)
+  2. **Confirmed** — full re-validation when customer confirms selections.
+     If coupon fails, customer sees why and can fix it while still on page.
+     This is the key checkpoint — customer is actively paying attention.
+  3. **Charged** — Thursday EOD auto-charge re-validates inside the payment
+     transaction (TOCTOU). If coupon fails here, order processes at full price.
+  **Three-lane validation model (decided 2026-04-10):**
+  Different coupon types validate on different axes:
+  1. **Time-window coupons** (starts_at / expires_at only, no delivery_week):
+     If *either* confirmation or charge timestamp falls in the valid window,
+     honor the coupon. Confirmation timestamp is primary source of truth.
+  2. **DOTW coupons** (delivery_week_sunday set): Subscriber-only
+     (`subscription_restriction: active_subscribers_only` enforced by
+     default). Validate on delivery week matching — does the order's
+     delivery week match the coupon's `delivery_week_sunday`? The existing
+     validator Rule 10 already works this way. DOTW visibility window is
+     auto-set by the scheduler: `starts_at` = Monday of delivery week,
+     `expires_at` = Thursday cutoff. One week at a time — never visible
+     in advance. This is a deliberate product decision: the weekly surprise
+     creates a reason to check in every Monday. Showing future weeks kills
+     the excitement (Costco monthly flyer problem). If a subscriber
+     pre-ordered meals before the DOTW was announced, they don't get the
+     deal retroactively — Option C, don't worry about it. Worst case they
+     paid full price for something they wanted anyway. Future enhancement:
+     Smart Hub nudge when DOTW matches items already in a confirmed cart
+     (Option A from 2026-04-10 discussion, not building now).
+  **Overrides that trump everything:**
+  - `is_active = false` (admin archive) kills a coupon regardless of
+    timestamps or delivery week — emergency brake.
+  - Cart-content rules (min_order_value, product targeting) validate against
+    the actual cart at charge time (cart may change after confirmation).
+  - Max-uses: honor if valid at confirmation (rare, not worth complexity).
+  **DOTW auto-generated codes (decided 2026-04-10):**
+  DOTW creation portal auto-builds codes from meal name + delivery date:
+  `DOTW-GREEN-THAI-CURRY-20260426`. Self-documenting, unique, no admin
+  guesswork. Implemented via slugify(meal_name) + date format in the DOTW
+  scheduler (not yet built).
+  **Failed coupon notification (decided 2026-04-10):**
+  When the Thursday charge cron drops a coupon, write a notification record.
+  Display in the customer's Rewards/account section as an unread alert:
+  "Coupon code ___ failed to apply to your weekly plan payment due to ___.
+  If you need assistance, please email hello@eatbetterday.ca." Message
+  content comes from the existing error-messages catalog (`error-messages.ts`).
+  Needs: `CustomerNotification` model, charge cron writes, account page reads.
+  **Personal coupon grants** — separate action from coupon creation. ~10 times
+  in 5 years. Simple `grantCoupon(couponId, customerId)` that creates a
+  `CustomerCoupon` row with status `available`. No need to bundle into create.
+  **Seam points:** `CouponApplyService.applyCoupon()` handles draft-time apply.
+  `CouponApplyService.validatePreview()` handles confirmation-time check.
+  Thursday charge cron (not yet built) calls the same validator one final time.
+
+- [2026-04-10] **Revisit: CustomerCoupon as the universal coupon interaction layer**
+  `CustomerCoupon` is the single table that tracks every coupon interaction
+  regardless of source (clip, auto-apply, admin grant, checkout entry, streak
+  reward). Confirmed 2026-04-10 that the status machine (available → applied
+  → redeemed / expired / revoked) handles all flows. Revisit this concept
+  after the coupon module is fully shipped to think through: (a) reporting
+  queries (clip-through rate, redemption rate by source), (b) the offers
+  feed query that powers the Discounts tab (clippable + personal + DOTW),
+  (c) how streak/reward milestones auto-generate CustomerCoupon rows, and
+  (d) whether `available` needs sub-states (e.g. `clipped` vs `granted` vs
+  `earned` for analytics). No schema change needed now — just a thinking
+  exercise once the dust settles.
 
 - [2026-04-08] **DOTW scheduler access control — separate role for head chef / ops manager?**
   Should the DOTW scheduler be accessible to a restricted role (e.g. "Operations" or "Culinary") that can only touch DOTWs + menu planning, without seeing customer PII or full coupon admin? Worth resolving before the admin UI ships. Not urgent for the schema.
@@ -96,6 +198,58 @@ A running list of things that came up in chats but were consciously deferred —
 - [2026-04-09] **Verify `customerCode` is Helcim-generated or merchant-supplied**
   Docs don't specify. Affects whether `Customer.helcim_customer_id` is written before or after the `POST /customers` call. Answer falls out of the first sandbox call — low-effort verification.
 
+- [2026-04-10] **Standardize skip/take pagination as a universal admin pattern**
+  Gurleen's `corp-admin.service.ts` has the only pagination in the codebase
+  (page/limit with parallel count query). Building the same pattern into
+  coupon admin list. Once proven here, extract a shared DTO + helper so all
+  future admin listing endpoints use the same shape:
+  `{ data, total, page, limit }`. Candidate for a `conner/README.md` convention.
+
+- [2026-04-09] **Customer order metrics — denormalized counters on Customer profile**
+  Add 8 columns to the commerce `Customer` model: `total_orders`,
+  `total_spend`, `last_order_at`, `consecutive_weeks`, `longest_streak`,
+  `streak_broken_at`, `orders_this_month`, `meals_tried`. Schema columns
+  are free to add; the work is wiring ~25-30 update triggers across
+  order placement, cancellation, refund, and edit paths.
+  **Business rules decided 2026-04-09:**
+    - Minimum $25 order value to count toward milestones
+    - Refunds over 80% of order value remove the count
+    - Comp/free orders don't count
+    - Gift orders count for the buyer (they paid)
+    - Gift card payments count normally (just currency)
+    - Gift recipients are NOT first-time customers (they've tasted the
+      product) but get no milestone credit
+  **Wire first (simple, needed now):** `total_orders`, `total_spend`,
+  `last_order_at` — update on order events already being built.
+  **Wire later (need cron infrastructure):** `consecutive_weeks`,
+  `longest_streak`, `streak_broken_at` (weekly cron), `orders_this_month`
+  (monthly reset cron), `meals_tried` (line item scanning).
+  **Seam point:** `CouponValidationService.countCompletedOrders()` (line
+  517) currently does a live DB query. When `Customer.total_orders` is
+  wired, swap that one function from a query to a column read. The rest
+  of the coupon module doesn't change.
+
+- [2026-04-09] **Auto-computed marketing tags on Customer profile**
+  Derived from the order metrics above. Tags to auto-compute:
+  `vip` (spend > $2,000 or orders > 80), `at_risk` (subscriber + no
+  order in 21+ days), `champion` (streak > 12 weeks), `new` (first
+  order within 30 days), `lapsed` (no order in 60+ days), `high_value`
+  (avg order > $100), `adventurous` (meals_tried > 50% of active menu),
+  `creature_of_habit` (same 3-5 meals weekly), `gift_giver` (2+ gift
+  orders), `referrer` (1+ referred customers who ordered). These update
+  the existing `Customer.tags` array. Need the denormalized counters
+  first + a scheduled job or event-driven recompute. Build when the
+  email/notification automation system exists to act on them.
+
+- [2026-04-09] **Missing Prisma migration for `menu_category` + `diet_plan` columns**
+  These two columns on `MealRecipe` (culinary DB) were added via direct
+  SQL on the `conner-local-dev` Neon branch during the diet-plan rename
+  work (commit `5cca53e`). No migration file exists. Production database
+  does NOT have these columns. Need to create a migration file before
+  deploying to production, or the deployed app will crash trying to read
+  columns that don't exist. Also: production still has `net_weight_kg`
+  which dev removed — that migration file exists but hasn't been run on
+  production.
 
 - [2026-04-09] **Rename `MealRecipe.pricing_override` → `item_price`**
   The customer-facing sell price on the culinary `MealRecipe` model is
@@ -165,28 +319,88 @@ A running list of things that came up in chats but were consciously deferred —
   current `(level?.tier_config as any)` cast. Defer until the subscription
   admin page work is in flight — same lane (Gurleen's frontend dashboard).
 
-- [2026-04-09] **Subscription pricing settings — admin dashboard UI**
-  `conner/client-website/shared/subscription-config.js` is currently the
-  single source of truth for `PERK_TIERS`, `FREE_DELIVERY_MEALS`,
-  `DELIVERY_FEE`, `GST_RATE`, and `POINTS_PER_DOLLAR`. Both the menu page
-  and the checkout page consume it via `<script src>`. The values are
-  hardcoded JS constants — they should move into the existing
-  `SystemConfig` key-value table (`backend/prisma/schema.prisma:511`) and
-  be served via `/api/system-config/public` (the same endpoint that
-  already delivers `public.contact.email`, `public.delivery.areas`, etc).
-  Then `subscription-config.js` becomes a thin shim that fetches the live
-  config and falls back to the hardcoded defaults if the fetch fails.
-  **Where the admin UI lives:** `frontend/app/(dashboard)/settings/subscription-plans/page.tsx`
-  (new — sibling of `settings/integration`, `settings/staff`, `settings/tags`).
-  Schema for the seed: encode the tier table as a JSON-stringified value
-  on a single key (e.g. `public.subscription.tiers = "[{...},{...}]"`)
-  since `SystemConfig.value` is a `String` column. **Lane:** the admin UI
-  is in Gurleen's `frontend/` territory and needs to ship through her
-  worktree. Backend changes (seed file + endpoint passthrough) are
-  Conner's. See the calculator-fix commit on
-  `conner/2026-04-09-checkout-page` for the full context of why this
-  matters — the menu page and checkout page used to have drifted copies
-  of these constants, which produced math bugs.
+- [2026-04-09] **Subscription pricing settings — admin dashboard UI** *(partially done)*
+  **Done (2026-04-09):** Seed keys added to `brand/site-info.seed.json`
+  (`public.pricing.perkTiers`, `public.pricing.freeDeliveryMeals`,
+  `public.pricing.deliveryFee`, `public.pricing.gstRate`,
+  `public.pricing.dollarsPerPoint`). `subscription-config.js` now fetches
+  from `/api/system-config/public` on load, with hardcoded fallbacks if
+  the API is unreachable. Constants changed from `const` to `let` so the
+  fetch can overwrite them. Exported `pricingReady` promise for pages
+  that need to `await` before computing totals (e.g. checkout).
+  **Still TODO:**
+  1. Run `npx prisma db seed` on the Neon dev branch to insert the new
+     keys into the SystemConfig table (or add them manually via the admin
+     PATCH endpoint).
+  2. Build admin UI at `frontend/app/(dashboard)/settings/subscription-plans/page.tsx`
+     — Gurleen's lane. Should display a form for editing tiers, delivery
+     fee, GST rate, points config. PATCH to `/api/system-config`.
+  3. Wire `subscription-config.js` into account/index.html and
+     index.html (homepage) — both currently re-declare their own copies
+     of PERK_TIERS and DELIVERY_FEE instead of loading the shared file.
+
+- [2026-04-09] **Remove DEV-CART-FILLER test code before production**
+  `conner/client-website/account/index.html` has a temporary cart-filling
+  function (`DEV_fillTestCart()`) that auto-loads 12 meat entrees, 8
+  plant-based entrees, and all snacks/breakfasts on page load. Search
+  `DEV-CART-FILLER` to find the block. Also includes 8 placeholder
+  plant-based meals (ids 150–157, search `PLANT-BASED-TEST-DATA`). Both
+  blocks need to be removed before the account page goes live — the real
+  data should come from the API. To disable without removing, set
+  `DEV_AUTO_FILL_CART = false`.
+
+- [2026-04-09] ✅ **Account page + homepage now use shared pricing constants**
+  Both `account/index.html` and `index.html` (homepage) now load
+  `shared/subscription-config.js` and use `lookupSubscriberDiscountPct()`.
+  Local re-declarations removed. Account page's hardcoded `gstRate = 0.05`
+  replaced with `GST_RATE` from shared config. Fake `*1.08+0.99` one-time
+  price formula removed (one-time price = `meal.price`, no markup).
+  Hardcoded `$7.99` replaced with `DELIVERY_FEE`. Homepage's `TIERS`
+  object (different structure) replaced with shared `lookupSubscriberDiscountPct()`.
+  **Still open:** category naming convention differs (`'Entrees'` in
+  account vs `'Entree'` in menu page) — reconcile when wiring to API.
+
+- [2026-04-09] **Free delivery rule divergence — quantity vs dollar threshold**
+  Three different rules exist:
+  - `subscription-config.js:74` → `FREE_DELIVERY_MEALS = 8` (qty-based, subscribers)
+  - `checkout.html:2774` → uses `FREE_DELIVERY_MEALS` from shared config (correct)
+  - `index.html:1612-1613` → `const free = _type==='plant' ? wt>=119.5 : wt>=120;` (dollar-based, everyone)
+  Business intent (Conner, 2026-04-09): $120 for everyone, 8 meals for
+  subscribers, undecided for one-time orders. Reconcile before launch.
+  The homepage's dollar-based rule should be a separate constant in
+  subscription-config.js (e.g. `FREE_DELIVERY_SPEND = 120`).
+
+- [2026-04-09] **Apply the diet lock to every other meal-listing surface**
+  The fail-closed diet filter landed on `conner/client-website/menu/index.html` but the same invariant needs to be enforced everywhere a meal card (or meal-code URL) can appear: the cart (`cart.html`), the meal detail page (`/menu/[meal-code]/`), the subscriber hub's weekly cart (`account/subscription.html`), and any build-a-cart / auto-swap flow. Pattern to copy: extract `resolveDietLock()` to `shared/diet-lock.js` first, then import it on every page.
+
+  **UX for deep-link access to a non-compliant meal (meal detail page):**
+  NOT a 404. A plant-based customer who follows a bookmark or a marketing link to a meat meal needs to land somewhere helpful, not an error page. The flow:
+  1. Resolve the diet lock on the meal detail page as usual.
+  2. If the meal's `diet_plan` matches the customer's plan → render normally.
+  3. If it doesn't AND the meal has a `linked_meal_id` → render a gentle redirect screen: "We're showing you the Plant-Based version of this dish" + a card linking to the sibling, with a one-click "Take me there" button. Use the existing `MealRecipe.linked_meal_id` pair.
+  4. If it doesn't AND there's no linked sibling → render the meal in read-only mode (image, name, description) with the Add-to-cart button replaced by "This dish isn't part of your Plant-Based plan" + links to (a) browse Plant-Based menu, (b) change diet.
+  5. Never throw a 404 at a real customer. A 404 is for URLs that don't match ANY meal, not for meals that don't match the customer.
+
+- [2026-04-09] **Sibling swap UX when a customer changes from Omnivore → Plant-Based**
+  `MealRecipe.linked_meal_id` already pairs every omnivore dish with its plant-based counterpart (one-directional, set only on the omnivore side). When a customer with meals already in their weekly cart switches to Plant-Based, the UI should walk the cart, find each meat meal, look up its `linked_meal_id`, and offer a one-click "swap all 4 to their plant-based equivalents" action instead of just silently dropping the non-compliant lines. Needs: (a) a cart-editing endpoint that accepts a meal-id swap list, (b) a modal surfacing the proposed swaps, (c) copy in the voice of the brand.
+
+- [2026-04-09] **Refactor onboarding picker's legacy `'vegan'` slug to `'plant-based'`**
+  `conner/client-website/onboarding/index.html:318–345` calls `selectDiet('vegan')` and redirects with `?diet=vegan`. The canonical SystemTag slug is `plant-based`. The menu filter currently accepts BOTH as an alias for the Plant-Based plan so nothing breaks, but long-term consistency: update the picker to use `'plant-based'` slug throughout, drop the alias from the menu filter, and leave a one-line comment on why `vegan` was the legacy term. Trivial change, just not in this chat's scope.
+
+- [2026-04-09] **Promote migration #6 `add_customer_diet_plan` from dev → main when client-profile PR merges**
+  The migration is already applied to `betterday-commerce/dev` (`br-icy-river-akvz3mg6`) as of 2026-04-09 — column + index + `_prisma_migrations` row all verified, end-to-end smoke-tested by writing the Omnivore UUID to Jose's seed customer. **Main is still untouched** (`br-wandering-paper-ak95715o`). When the client-profile PR is reviewed and merged into `conner/universal-brand-folder`, run the same ALTER + CREATE INDEX + INSERT-into-_prisma_migrations against `betterday-commerce/main` so production matches the code that's about to deploy. Use `mcp__neon__run_sql_transaction` with `branchId = br-wandering-paper-ak95715o` (mirroring the dev apply) — `prepare_database_migration` targets main automatically but creates a temp branch first, which is also fine.
+
+- [2026-04-09] **Wire the account hub into real auth (remove `x-dev-customer-id` header)**
+  `conner/client-website/account/index.html` sends `x-dev-customer-id: 00000000-0000-4000-a000-000000000001` (Jose seed row) on every request. Matches the `CurrentCustomer()` decorator's dev stub. When passwordless auth lands, swap to a refresh-token-backed fetch wrapper and drop the dev header. Same swap needed everywhere else in client-website/ that talks to the commerce API.
+
+- [2026-04-09] **Backfill `MealRecipe.linked_meal_id` for the 41 unlinked omnivore meals**
+  `meals.seed.json` was patched 2026-04-09 with `linked_meal_id` after `diet_plan` on every row. Coverage: 44 of 88 omnivore meals (50%) now have a sibling pointer; the other 41 omnivore meals have no plant-based counterpart in the data, so a plant-based customer who deep-links to one of those 41 meals will fall through to the read-only view (state 3) instead of the gentle swap (state 2). To get the swap UX firing for ALL meat meals, walk those 41 unlinked rows in the culinary admin and pair them with their plant-based equivalents (or mark them as "no equivalent exists" if they're meat-only by design — e.g. a steak with no plant counterpart). Plant-Based meals are deliberately not given a `linked_meal_id` (one-directional schema). Source query: `SELECT meal_code, name FROM "MealRecipe" WHERE diet_plan_id = (SELECT id FROM "SystemTag" WHERE slug='omnivore') AND linked_meal_id IS NULL ORDER BY name;`
+
+- [2026-04-09] **Phone + email change flows for the account hub**
+  The customer info form shows a "Change email" link that currently just flashes an info banner. Needs: (a) magic-link flow using `CustomerAuthToken.type='email_change'`, (b) phone OTP flow using `type='phone_change'`, (c) a UI prompt that asks for the new address/number, fires the token, and polls for confirmation. Both flows exist in the commerce schema but are unwired.
+
+- [2026-04-09] **`CustomerMarketingConsent` table for CASL compliance**
+  Account hub has a disabled "Marketing email (coming soon)" toggle. Current `email_opt_in` + `sms_opt_in` are transactional-only. Canadian anti-spam law requires separate, explicit marketing consent with a proof-of-consent trail (when, where, IP). Dedicate a table when we're ready to start sending campaigns.
 
 - [2026-04-09] **Build a wiring/inventory scanner + per-page inventory report**
   Conner asked for "an absolute inventory of every button, endpoint, tag, and connection" so any new feature can reference a database of what populates what (e.g., what fills the discount tiers, where macros come from, what the submit-order button does). Decided to defer building it. The plan when picked up:
@@ -242,6 +456,38 @@ A running list of things that came up in chats but were consciously deferred —
 
 - [2026-04-09] **Helcim Recurring API for fixed-price add-ons**
   If we ever sell something that IS a fixed-amount subscription (e.g., a $29/mo meal-planning coaching add-on separate from the weekly cart), that's where Helcim's Recurring API fits. Out of scope for the cart-based core product, but would be a clean use case.
+- [2026-04-10] **Subscriber Smart Hub — unified dashboard for alerts, actions, deals, news**
+  Replace the current flat subscriber dashboard with a two-zone layout:
+  **Zone 1 — Persistent quick-actions strip** (always visible, same for all):
+  Edit my meals, adjust plan slots, pause/skip week, view order history.
+  **Zone 2 — Dynamic cards feed** (personal + broadcast, dismissable):
+  Alerts (failed coupon, expiring card, cutoff approaching), deals (DOTW
+  spotlight, personal coupons, clippable offers), content (weekly menu
+  update, company announcements, newsletter-style messages from founders),
+  rewards (streak tracker, milestone badges, points balance).
+  **Foundation model — `CustomerHubCard`:**
+  `id, customer_id (nullable = broadcast), type (alert/deal/action/news),
+  category (coupon_failed/card_expiring/dotw/menu_update/etc), priority
+  (urgent/normal/low), title, body, action_label, action_url, image_url,
+  target_customer_tags[] (empty = everyone), dismissed_at, expires_at,
+  created_at`. Broadcast cards use `customer_id = NULL` — one row reaches
+  all subscribers. Tag-targeted broadcasts filter by `target_customer_tags`
+  against `Customer.tags` (same field the auto-computed marketing tags
+  will populate). Cards auto-expire via `WHERE expires_at IS NULL OR
+  expires_at > NOW()`. Priority drives sort order (urgent pins to top).
+  **Connects to:** failed coupon notifications (error-messages.ts copy),
+  auto-computed marketing tags (customer metrics), DOTW scheduler, and
+  any future email/push notification system (hub cards become the
+  canonical "what to tell this customer" source, channels just deliver).
+  **Build when:** client-profile account hub page is ready for dynamic
+  content. Foundation model can land anytime as a migration.
+
+- [2026-04-10] **Recurring DOTW template — generate N coupon rows from one form**
+  Admin wants "cookies 50% off" every week for 4 weeks. Currently must
+  create 4 separate coupons with different codes + delivery_week_sunday.
+  Convenience shortcut: one form generates N coupon rows with auto-suffixed
+  codes (e.g. COOKIES50-APR13, COOKIES50-APR20). Thin wrapper over the
+  existing `CouponAdminService.create()`. Build when DOTW scheduler UI ships.
 
 - [2026-04-08] **Welcome series / birthday / abandoned cart automation**
   All T3 in the coupon feature picker. Require a scheduled-job runner that doesn't exist yet. Layer in as a separate migration once execution infrastructure is in place.
@@ -288,5 +534,31 @@ A running list of things that came up in chats but were consciously deferred —
 
 - ✅ [2026-04-10] **Helcim Recurring API is NOT used — confirmed card-on-file is the correct model**
   Resolved: BetterDay's variable-amount weekly carts don't fit Helcim's Recurring API (which is designed for fixed-amount subscriptions like gym memberships). We use `/v2/payment/preauth` + `/v2/payment/capture` with saved `cardToken` via the Payment API instead. Helcim's Recurring API is only relevant if BetterDay ever sells a fixed-price add-on product. Full analysis in `helcim-integration.md` §1.
+- ✅ [2026-04-09] **Customer-facing coupon error message catalog**
+  Built as `backend/src/modules/commerce-coupons/error-messages.ts`.
+  Maps all 26 error codes to warm customer-facing copy with placeholder
+  interpolation ({shortfall}, {required}, {startsAt}, etc.). Resolves
+  the 2026-04-08 TODO entry below.
+
+- ✅ [2026-04-09] **Coupon apply/remove endpoints (Phase 1 leaves 3 + 4)**
+  Built as `coupon-apply.service.ts` + `commerce-coupons.controller.ts`.
+  Three endpoints: POST apply, POST remove, POST validate (preview).
+  Includes: last-one-wins stacking, manual beats auto, TOCTOU re-validation
+  inside serializable transaction, global limit race fix, order total
+  recalculation. 15 tests, all passing.
 
 *(Move completed items here with a ✅ prefix and the resolution date.)*
+
+- [2026-04-09] **Plant-Based → Vegan sweep in Gurleen's culinary modules (NOT TOUCHED in this chat)**
+  When doing the Plant-Based → Vegan + customer-facing "Plants Only" label rename 2026-04-09, Conner's worktree only updated files Conner owns per CLAUDE.md §8: `conner/client-website/**`, `brand/site-info.seed.json`, `backend/src/modules/commerce-customers/**`, `backend/prisma/commerce/schema.prisma`. **Gurleen-owned culinary files still contain "Plant-Based" references** and need her review before any update:
+    - `backend/src/modules/meals/meals.service.ts` (5 occurrences: error message text + JSDoc on `linkVariant`/`unlinkVariant` methods)
+    - `backend/src/modules/meals/dto/meal.dto.ts` (1 occurrence: JSDoc on `diet_plan_id` field)
+    - `backend/src/modules/tags/tags.service.ts` (1 occurrence: **seed row `{ name: 'Plant-Based Plan', type: 'diets', subtype: 'Plan' }`** — this seeds a row that would CONFLICT with our renamed Vegan row if it runs on a fresh DB. Needs rename to match.)
+    - `backend/prisma/import-data.ts` (1 occurrence: comment about Vegan → Plant-Based import mapping)
+    - `backend/prisma/import-all-meals.js` (2 occurrences: category-string import logic)
+    - `backend/prisma/schema.prisma` (1 occurrence: JSDoc on `diet_plan_id` field — culinary schema, not commerce)
+    - Historical migration SQL files (`20260409025946_add_meal_diet_plan_id/migration.sql`, `20260409032836_diet_plan_id_not_null/migration.sql`, `backend/prisma/commerce/migrations/20260409153741_add_customer_diet_plan/migration.sql`) — **DO NOT edit these; migration files are immutable after commit (Prisma hash drift).**
+  Gurleen should sweep her culinary files in a separate commit, and the tags.service.ts seed row rename is urgent because it blocks fresh DB boots from matching production state. Flag for her next chat.
+
+- [2026-04-09] **6 meal descriptions contain "plant-based" as an ingredient descriptor (not diet category)**
+  `conner/client-website/menu/meals.seed.json` has 6 meal descriptions that use "plant-based" as a descriptor for specific INGREDIENTS (e.g., BD-469 "creamy plant-based pesto", BD-539 "plant-based yogurt drizzle", BD-468 "plant-based pesto cream sauce", BD-480 "plant-based yogurt drizzle", BD-486 "plant-based Mac n' Cheeze", BD-479 "plant-based feta"). These are kitchen-team-written ingredient text, not diet plan labels, and they describe what's actually in each dish. Leaving them untouched in the rename commit because: (a) changing them in the seed only would drift from the culinary DB source; (b) rewording "plant-based pesto" to "vegan pesto" or "cashew-based pesto" or similar is a marketing + kitchen-team call, not a developer fix. Gurleen + Darlene should decide whether these need rewording during the next kitchen-admin pass, and if so, update the descriptions in the culinary DB first, then re-export the seed.

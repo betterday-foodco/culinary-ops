@@ -5,6 +5,7 @@ import {
   BadRequestException,
 } from '@nestjs/common';
 import { CommercePrismaService } from '../../prisma/commerce-prisma.service';
+import { PrismaService } from '../../prisma/prisma.service';
 import { UpdateProfileDto, UpdatePreferencesDto, UpdateNotificationsDto } from './dto/profile.dto';
 import { CreateAddressDto, UpdateAddressDto } from './dto/address.dto';
 
@@ -31,7 +32,13 @@ import { CreateAddressDto, UpdateAddressDto } from './dto/address.dto';
  */
 @Injectable()
 export class CommerceCustomersService {
-  constructor(private commerce: CommercePrismaService) {}
+  constructor(
+    private commerce: CommercePrismaService,
+    // Culinary client — injected solely to validate Customer.diet_plan_id
+    // against culinary.SystemTag before writing. See
+    // updatePreferences() for the cross-database validation rationale.
+    private culinary: PrismaService,
+  ) {}
 
   // ─── Profile ─────────────────────────────────────────────────────────────
 
@@ -96,10 +103,35 @@ export class CommerceCustomersService {
 
   /**
    * Update dietary preferences. Array fields REPLACE (not merge) — send
-   * the full new list. Omitted arrays are left unchanged.
+   * the full new list. Omitted fields are left unchanged.
+   *
+   * diet_plan_id is validated against the CULINARY database's SystemTag
+   * table before being written here. This is a cross-database read
+   * because SystemTag lives in the culinary project (rapid-lake) and
+   * Customer lives in the commerce project (spring-fire) — Postgres
+   * cannot enforce referential integrity between the two, so the
+   * service layer does it. Passing null clears the diet plan.
    */
   async updatePreferences(customerId: string, dto: UpdatePreferencesDto) {
     const data: Record<string, unknown> = {};
+
+    if (dto.diet_plan_id !== undefined) {
+      if (dto.diet_plan_id !== null) {
+        // Verify the UUID points at a real SystemTag with type='diets'.
+        // findFirst so we can match both id and type in one query.
+        const dietPlan = await this.culinary.systemTag.findFirst({
+          where: { id: dto.diet_plan_id, type: 'diets' },
+          select: { id: true },
+        });
+        if (!dietPlan) {
+          throw new BadRequestException(
+            `diet_plan_id ${dto.diet_plan_id} is not a valid diet plan SystemTag`,
+          );
+        }
+      }
+      data.diet_plan_id = dto.diet_plan_id;
+    }
+
     if (dto.allergens !== undefined) data.allergens = dto.allergens;
     if (dto.diet_tags !== undefined) data.diet_tags = dto.diet_tags;
     if (dto.disliked_meals !== undefined) data.disliked_meals = dto.disliked_meals;
@@ -110,6 +142,7 @@ export class CommerceCustomersService {
       data,
       select: {
         id: true,
+        diet_plan_id: true,
         allergens: true,
         diet_tags: true,
         disliked_meals: true,

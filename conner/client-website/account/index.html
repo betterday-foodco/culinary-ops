@@ -181,6 +181,11 @@ a{color:inherit;text-decoration:none}
 .nd-card-img-wrap{width:100%;aspect-ratio:1;background:#e8ddd0;overflow:hidden;position:relative;border-radius:12.5px 12.5px 0 0}
 .nd-card-img-wrap img{width:100%;height:100%;object-fit:cover;display:block}
 
+/* Meal image placeholder — gradient fallback for meals without photos */
+.meal-img-placeholder{display:flex;align-items:center;justify-content:center;width:100%;height:100%;font-size:2.2rem;color:#FAEBDA;line-height:1}
+.meal-img-placeholder--omni{background:linear-gradient(135deg,#00465e 0%,#006d6f 100%)}
+.meal-img-placeholder--plant{background:linear-gradient(135deg,#2d6a4f 0%,#52b788 100%)}
+
 /* Quick Swap button — pill badge with icon left + stacked "Quick / Swap" right
    Matches the look of swap buttons elsewhere in the app, just stacked to fit the small card */
 .nd-card-swap{position:absolute;top:8px;left:8px;display:inline-flex;flex-direction:row;align-items:center;gap:6px;padding:6px 11px 6px 9px;border-radius:100px;background:#c8a4f5;border:none;color:#faebda;cursor:pointer;box-shadow:0 3px 8px rgba(0,49,65,.28);z-index:3;transition:all .12s ease;font-family:'Sofia Pro','Inter',sans-serif;line-height:1}
@@ -1539,6 +1544,56 @@ select.acct-form-input{appearance:none;background-image:url("data:image/svg+xml,
 .acct-chip.active-green{background:#16a34a;color:#fff;border-color:#16a34a}
 .acct-chip.active-blue{background:#4EA2FD;color:#fff;border-color:#4EA2FD}
 
+/* Diet Plan radio card (commit #3 wiring) — two big pill buttons for the
+   customer's diet plan choice (Meat & Plants vs Plants Only). Clicking
+   a pill writes Customer.diet_plan_id via PATCH /me/preferences — no
+   explicit Save button, matches the onboarding picker's click-to-commit
+   pattern. Customer-facing labels pull from DIET_LABELS so rebrands are
+   a one-line edit to brand/site-info.seed.json. */
+.diet-plan-row{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:4px}
+@media(max-width:640px){.diet-plan-row{grid-template-columns:1fr}}
+.diet-plan-pill{
+  position:relative;
+  display:flex;align-items:center;justify-content:center;gap:10px;
+  padding:18px 20px;
+  background:#fff;
+  border:2px solid #e0d0bc;border-radius:16px;
+  font-family:inherit;font-size:15px;font-weight:700;color:#003141;
+  cursor:pointer;
+  transition:all .18s;
+  text-align:left;
+}
+.diet-plan-pill:hover:not(.selected):not(:disabled){
+  border-color:#4EA2FD;
+  background:rgba(78,162,253,.04);
+  transform:translateY(-1px);
+}
+.diet-plan-pill.selected{
+  border-color:#003141;
+  background:linear-gradient(135deg,rgba(0,49,65,.04),rgba(78,162,253,.06));
+  box-shadow:0 0 0 3px rgba(0,49,65,.08),0 2px 8px rgba(0,49,65,.08);
+}
+.diet-plan-pill.selected.vegan{
+  border-color:#16a34a;
+  background:linear-gradient(135deg,rgba(22,163,74,.05),rgba(22,163,74,.1));
+  box-shadow:0 0 0 3px rgba(22,163,74,.12),0 2px 8px rgba(22,163,74,.1);
+}
+.diet-plan-pill:disabled{opacity:.55;cursor:wait}
+.diet-plan-emoji{font-size:28px;line-height:1;flex-shrink:0}
+.diet-plan-text{display:flex;flex-direction:column;gap:2px;flex:1}
+.diet-plan-label{font-size:15px;font-weight:800;color:#003141;line-height:1.2}
+.diet-plan-sub{font-size:11px;font-weight:500;color:#8a7a6a;line-height:1.3}
+.diet-plan-pill.selected .diet-plan-sub{color:#5a4a3a}
+.diet-plan-check{
+  position:absolute;top:10px;right:12px;
+  width:20px;height:20px;border-radius:50%;
+  background:#003141;color:#fff;
+  display:none;align-items:center;justify-content:center;
+}
+.diet-plan-pill.selected.vegan .diet-plan-check{background:#16a34a}
+.diet-plan-pill.selected .diet-plan-check{display:flex}
+.diet-plan-check svg{width:12px;height:12px}
+
 /* Address/payment cards grid */
 .acct-cards-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:16px;margin-top:16px}
 .acct-addr-card,.acct-pay-card{background:#fff;border-radius:14px;border:1.5px solid #e0d0bc;padding:18px;position:relative;transition:all .18s;cursor:default}
@@ -2153,6 +2208,34 @@ select.acct-form-input{appearance:none;background-image:url("data:image/svg+xml,
     </div>
   </div>
 
+  <!-- Diet Plan (commit #3 wiring) — writes Customer.diet_plan_id on click -->
+  <div class="acct-card">
+    <div class="acct-card-header acct-card-hero lightgreen">
+      <div>
+        <div class="acct-card-title">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v20M2 12h20"/></svg>
+          Diet Plan
+        </div>
+        <div class="acct-card-subtitle">Filters the whole menu — pick what you eat, we hide the rest</div>
+      </div>
+    </div>
+    <div class="diet-plan-row" id="dietPlanRow">
+      <!-- Populated by renderDietPlanCards() on load. Shape:
+           <button class="diet-plan-pill [selected] [vegan]" onclick="selectDietPlan('omnivore')">
+             <span class="diet-plan-emoji">🍽️</span>
+             <div class="diet-plan-text">
+               <span class="diet-plan-label">Meat &amp; Plants</span>
+               <span class="diet-plan-sub">All meals, no restrictions</span>
+             </div>
+             <span class="diet-plan-check">✓</span>
+           </button>
+      -->
+    </div>
+    <div style="margin-top:14px;padding:10px 14px;background:rgba(22,163,74,.06);border-radius:10px;font-size:12px;color:#5a4a3a;line-height:1.45">
+      <strong style="color:#003141">Plants Only</strong> hides every meat dish from your menu — we never show meat to a customer on this plan, and we never let a meat meal slip into your cart or checkout. Safety-locked.
+    </div>
+  </div>
+
   <!-- Allergies & Preferences -->
   <div class="acct-card">
     <div class="acct-card-header acct-card-hero green">
@@ -2175,19 +2258,29 @@ select.acct-form-input{appearance:none;background-image:url("data:image/svg+xml,
       </div>
       When our menu rotates each week, your saved cart is checked against the tags below. If any dish in your upcoming order contains something you've flagged, the system <strong>automatically swaps</strong> it for a similar alternative that fits your profile and notifies you of the change. You can always review and adjust swaps before your order locks.
     </div>
+    <!-- Split into two sub-sections per the canonical data model:
+         • allergens[]  → things to AVOID (red active state)
+         • diet_tags[]  → preferences to PREFER (blue active state)
+         The Vegan chip was removed (it's the Diet Plan radio above).
+         The Vegetarian chip was removed (it'll be computed by the
+         rule-based tag generator on the menu side — customer doesn't
+         choose it manually). See commit 5cca53e rename sweep. -->
     <div class="acct-chips-group">
-      <div class="acct-chips-label">Allergens & Diet Tags</div>
-      <div class="acct-chips-wrap">
-        <button class="acct-chip" onclick="toggleChip(this,'tag')" data-val="Gluten-Free">Gluten-Free</button>
-        <button class="acct-chip" onclick="toggleChip(this,'tag')" data-val="Dairy-Free">Dairy-Free</button>
-        <button class="acct-chip" onclick="toggleChip(this,'tag')" data-val="Nut-Free">Nut-Free</button>
-        <button class="acct-chip active-red" onclick="toggleChip(this,'tag')" data-val="Shellfish-Free">Shellfish-Free</button>
-        <button class="acct-chip" onclick="toggleChip(this,'tag')" data-val="Soy-Free">Soy-Free</button>
-        <button class="acct-chip" onclick="toggleChip(this,'tag')" data-val="Egg-Free">Egg-Free</button>
-        <button class="acct-chip" onclick="toggleChip(this,'tag')" data-val="Vegan">Vegan</button>
-        <button class="acct-chip" onclick="toggleChip(this,'tag')" data-val="Vegetarian">Vegetarian</button>
-        <button class="acct-chip" onclick="toggleChip(this,'tag')" data-val="Keto">Keto</button>
-        <button class="acct-chip active-red" onclick="toggleChip(this,'tag')" data-val="High Protein">High Protein</button>
+      <div class="acct-chips-label">Avoid these allergens</div>
+      <div class="acct-chips-wrap" id="allergenChipsWrap">
+        <button type="button" class="acct-chip" onclick="toggleChip(this,'allergen')" data-val="Gluten-Free">Gluten-Free</button>
+        <button type="button" class="acct-chip" onclick="toggleChip(this,'allergen')" data-val="Dairy-Free">Dairy-Free</button>
+        <button type="button" class="acct-chip" onclick="toggleChip(this,'allergen')" data-val="Nut-Free">Nut-Free</button>
+        <button type="button" class="acct-chip" onclick="toggleChip(this,'allergen')" data-val="Shellfish-Free">Shellfish-Free</button>
+        <button type="button" class="acct-chip" onclick="toggleChip(this,'allergen')" data-val="Soy-Free">Soy-Free</button>
+        <button type="button" class="acct-chip" onclick="toggleChip(this,'allergen')" data-val="Egg-Free">Egg-Free</button>
+      </div>
+    </div>
+    <div class="acct-chips-group" style="margin-top:16px">
+      <div class="acct-chips-label">Diet tags</div>
+      <div class="acct-chips-wrap" id="dietTagChipsWrap">
+        <button type="button" class="acct-chip" onclick="toggleChip(this,'tag')" data-val="Keto">Keto</button>
+        <button type="button" class="acct-chip" onclick="toggleChip(this,'tag')" data-val="High Protein">High Protein</button>
       </div>
     </div>
   </div>
@@ -2971,6 +3064,8 @@ select.acct-form-input{appearance:none;background-image:url("data:image/svg+xml,
 <!-- Footer injected from shared/marketing-footer.html by site-shell.js -->
 <div data-shell="footer"></div>
 
+<!-- Shared pricing constants (PERK_TIERS, DELIVERY_FEE, GST_RATE, etc.) -->
+<script src="../shared/subscription-config.js"></script>
 <script>
 // ============================================================
 // AUTH GATE — bounce to login.html if no active session
@@ -3012,63 +3107,456 @@ function logoutAndRedirect(){
   setTimeout(() => window.location.replace(AUTH_LOGIN_URL + '?logout=1'), 450);
 }
 
-// ======= DATA =======
-const allMeals = [
-  // In cart
-  {id:1,name:'Mediterranean Chicken',price:15.99,cal:580,protein:'42g',fat:'22g',carb:'38g',cat:'Entrees',qty:1,img:'/conner/app/img/meal1.jpg',allergen:null,desc:'Herb-marinated chicken breast with roasted peppers, kalamata olives, and feta over herbed rice.',ingredients:'Chicken breast, jasmine rice, roasted red peppers, kalamata olives, feta cheese, fresh herbs, lemon, olive oil, garlic'},
-  {id:2,name:'Sesame Steak',price:16.99,cal:520,protein:'44g',fat:'18g',carb:'40g',cat:'Entrees',qty:1,img:'/conner/app/img/meal2.jpg',allergen:null,desc:'Sesame-crusted sirloin steak with stir-fried vegetables and jasmine rice.',ingredients:'Sirloin steak, jasmine rice, sesame seeds, broccoli, bell pepper, snap peas, soy sauce, ginger, garlic, sesame oil'},
-  {id:3,name:'Beef Bulgogi',price:16.99,cal:620,protein:'43g',fat:'30g',carb:'28g',cat:'Entrees',qty:2,img:'/conner/app/img/meal3.jpg',allergen:null,desc:'Korean-style marinated beef with pickled daikon, steamed broccoli, and sticky rice.',ingredients:'Beef sirloin, sticky rice, gochujang, soy sauce, pickled daikon, broccoli, sesame seeds, green onion, garlic, pear'},
-  {id:4,name:'Chicken Risotto',price:14.99,cal:620,protein:'35g',fat:'24g',carb:'52g',cat:'Entrees',qty:1,img:'/conner/app/img/meal4.jpg',allergen:'dairy',desc:'Creamy parmesan risotto with tender roasted chicken, peas, and fresh herbs.',ingredients:'Chicken thigh, arborio rice, parmesan, peas, chicken broth, white wine, butter, shallots, fresh thyme, garlic'},
-  {id:6,name:'Bang Bang Salmon',price:17.99,cal:670,protein:'40g',fat:'26g',carb:'66g',cat:'Entrees',qty:1,img:'/conner/app/img/meal6.jpg',allergen:null,desc:'Crispy salmon with bang bang sauce, coconut rice, and charred broccoli.',ingredients:'Atlantic salmon, coconut rice, broccoli, bang bang sauce, sriracha, mayo, sweet chili sauce, garlic, lime, sesame seeds'},
-  {id:8,name:'Teriyaki Chicken',price:14.99,cal:550,protein:'36g',fat:'16g',carb:'60g',cat:'Entrees',qty:1,img:'/conner/app/img/meal8.jpg',allergen:null,desc:'Glazed teriyaki chicken with edamame, shredded carrots, and steamed brown rice.',ingredients:'Chicken breast, brown rice, edamame, carrots, teriyaki sauce, soy sauce, mirin, ginger, garlic, green onion'},
-  {id:5,name:'Southwest Breakfast Burrito',price:12.99,cal:420,protein:'28g',fat:'24g',carb:'22g',cat:'Breakfasts',qty:1,img:'/conner/app/img/meal5.jpg',allergen:'dairy',desc:'Scrambled eggs, black beans, peppers, cheese, and salsa verde in a flour tortilla.',ingredients:'Flour tortilla, eggs, black beans, cheddar cheese, bell peppers, salsa verde, onion, cumin, cilantro, sour cream'},
-  {id:9,name:'Overnight Protein Oats',price:8.99,cal:380,protein:'22g',fat:'12g',carb:'44g',cat:'Breakfasts',qty:1,img:'/conner/app/img/meal8.jpg',allergen:null,desc:'Vanilla protein oats topped with banana, almond butter, and granola.',ingredients:'Rolled oats, vanilla protein powder, almond milk, banana, almond butter, granola, chia seeds, honey, cinnamon'},
-  // Available (not in cart)
-  {id:101,name:'Grilled Lemon Chicken',price:14.99,cal:490,protein:'40g',fat:'14g',carb:'36g',cat:'Entrees',qty:0,img:'/conner/app/img/meal1.jpg',allergen:null,desc:'Bright lemon-herb grilled chicken with roasted potatoes.',ingredients:'Chicken breast, baby potatoes, lemon, fresh oregano, garlic, olive oil, green beans, cherry tomatoes, capers'},
-  {id:102,name:'Herb Roasted Chicken',price:15.49,cal:510,protein:'42g',fat:'16g',carb:'34g',cat:'Entrees',qty:0,img:'/conner/app/img/meal4.jpg',allergen:null,desc:'Slow-roasted chicken with garlic mashed potatoes.',ingredients:'Chicken thigh, Yukon gold potatoes, garlic, butter, rosemary, thyme, green beans, chicken jus, black pepper'},
-  {id:104,name:'BBQ Pulled Chicken',price:14.49,cal:530,protein:'36g',fat:'18g',carb:'48g',cat:'Entrees',qty:0,img:'/conner/app/img/meal1.jpg',allergen:null,desc:'Smoky pulled chicken with coleslaw and cornbread.',ingredients:'Chicken breast, BBQ sauce, coleslaw mix, cornbread, apple cider vinegar, smoked paprika, garlic powder, brown sugar, mayo'},
-  {id:105,name:'NY Strip Steak',price:18.99,cal:580,protein:'48g',fat:'24g',carb:'30g',cat:'Entrees',qty:0,img:'/conner/app/img/meal2.jpg',allergen:null,desc:'Center-cut NY strip with garlic butter and asparagus.',ingredients:'NY strip steak, asparagus, garlic butter, baby potatoes, rosemary, olive oil, sea salt, black pepper, shallot'},
-  {id:106,name:'Korean Beef Bowl',price:17.49,cal:600,protein:'44g',fat:'26g',carb:'36g',cat:'Entrees',qty:0,img:'/conner/app/img/meal3.jpg',allergen:null,desc:'Marinated beef with kimchi, pickled vegetables, and jasmine rice.',ingredients:'Beef sirloin, jasmine rice, kimchi, pickled cucumber, gochujang, soy sauce, sesame oil, rice vinegar, green onion, sesame seeds'},
-  {id:107,name:'Chicken Caesar Wrap',price:13.99,cal:520,protein:'36g',fat:'22g',carb:'38g',cat:'Sandwich & Wraps',qty:0,img:'/conner/app/img/meal6.jpg',allergen:null,desc:'Grilled chicken, romaine, parmesan, and Caesar dressing in a flour wrap.',ingredients:'Flour tortilla, grilled chicken, romaine lettuce, parmesan, Caesar dressing, croutons, lemon, black pepper'},
-  {id:108,name:'Turkey Club Wrap',price:14.49,cal:480,protein:'34g',fat:'18g',carb:'40g',cat:'Sandwich & Wraps',qty:0,img:'/conner/app/img/meal6.jpg',allergen:null,desc:'Sliced turkey, bacon, avocado, and ranch in a spinach tortilla.',ingredients:'Spinach tortilla, sliced turkey, bacon, avocado, ranch dressing, tomato, mixed greens, red onion'},
-  {id:109,name:'Steak & Cheese Panini',price:16.49,cal:580,protein:'42g',fat:'26g',carb:'36g',cat:'Sandwich & Wraps',qty:0,img:'/conner/app/img/meal7.jpg',allergen:'dairy',desc:'Shaved steak with provolone, peppers, and onions on pressed ciabatta.',ingredients:'Ciabatta bread, shaved steak, provolone cheese, bell peppers, caramelized onions, garlic aioli, olive oil'},
-  {id:110,name:'Egg White Veggie Cups',price:9.49,cal:280,protein:'22g',fat:'10g',carb:'18g',cat:'Breakfasts',qty:0,img:'/conner/app/img/meal5.jpg',allergen:null,desc:'Baked egg white cups with spinach, tomato, and feta.',ingredients:'Egg whites, spinach, cherry tomatoes, feta cheese, bell pepper, onion, fresh basil, garlic, olive oil'},
-  {id:111,name:'Banana Protein Pancakes',price:10.99,cal:420,protein:'28g',fat:'12g',carb:'48g',cat:'Breakfasts',qty:0,img:'/conner/app/img/meal4.jpg',allergen:'dairy',desc:'Fluffy protein pancakes with fresh banana and maple drizzle.',ingredients:'Oat flour, vanilla protein powder, banana, eggs, milk, baking powder, maple syrup, butter, cinnamon'},
-  {id:112,name:'Protein Energy Bites',price:6.99,cal:220,protein:'14g',fat:'10g',carb:'22g',cat:'Snacks & Other',qty:0,img:'/conner/app/img/meal7.jpg',allergen:null,desc:'Peanut butter oat bites with dark chocolate chips and honey.',ingredients:'Rolled oats, peanut butter, dark chocolate chips, honey, vanilla extract, chia seeds, flax meal'},
-  {id:113,name:'Greek Yogurt Parfait',price:7.49,cal:310,protein:'20g',fat:'8g',carb:'38g',cat:'Snacks & Other',qty:0,img:'/conner/app/img/meal8.jpg',allergen:'dairy',desc:'Thick Greek yogurt layered with granola, berries, and honey.',ingredients:'Greek yogurt, granola, mixed berries, honey, chia seeds, vanilla extract, sliced almonds'},
-  {id:114,name:'Mango Chili Shrimp',price:17.49,cal:480,protein:'36g',fat:'16g',carb:'44g',cat:'Entrees',qty:0,img:'/conner/app/img/meal6.jpg',allergen:null,desc:'Spicy mango-chili glazed shrimp with cilantro lime rice.',ingredients:'Shrimp, cilantro lime rice, mango, chili flakes, lime, garlic, soy sauce, honey, cilantro, red onion'},
-];
+// ============================================================
+// COMMERCE API WIRING (commit 1 of 8: read profile)
+// ============================================================
+// This section bridges the ported subscriber-hub-2.0 prototype to the
+// real commerce-customers backend endpoints at /api/commerce/customers/me.
+//
+// Commit 1 (this one): loadProfile() populates Personal Information +
+// Contact Details cards from GET /me. No save wiring yet — the existing
+// saveProfile() / saveContact() / savePreferences() / saveAddress()
+// stubs are unchanged and still toast-and-forget. Subsequent commits
+// wire them one at a time.
+//
+// Auth: sends x-dev-customer-id header with a hardcoded dev UUID that
+// matches backend's @CurrentCustomer() decorator dev stub. Replaced by
+// real passwordless auth when that lands — see deferred-decisions.
+//
+// API base: window.BETTERDAY_API_BASE if set, else http://localhost:3001/api
+// for local dev. Set the window var in a <script> tag before this one
+// to point at staging/production.
+const API_BASE = window.BETTERDAY_API_BASE || 'http://localhost:3001/api';
+const DEV_CUSTOMER_ID = window.BETTERDAY_DEV_CUSTOMER_ID
+  || '00000000-0000-4000-a000-000000000001'; // Jose Ramirez seed row
 
-const suggestionItems = [
-  {id:301,name:'Protein Energy Bites',price:6.99,img:'/conner/app/img/meal7.jpg',badge:'best'},
-  {id:302,name:'Overnight Oats',price:7.49,img:'/conner/app/img/meal4.jpg',badge:'best'},
-  {id:303,name:'Greek Yogurt Parfait',price:5.99,img:'/conner/app/img/meal5.jpg',badge:'best'},
-  {id:304,name:'Avocado Toast Cup',price:8.49,img:'/conner/app/img/meal1.jpg',badge:'best'},
-  {id:201,name:'Mango Chili Shrimp',price:17.49,img:'/conner/app/img/meal6.jpg',badge:'new'},
-  {id:202,name:'Truffle Mushroom Bowl',price:15.99,img:'/conner/app/img/meal7.jpg',badge:'new'},
-  {id:203,name:'Spicy Korean Tofu',price:13.49,img:'/conner/app/img/meal5.jpg',badge:'new'},
-  {id:204,name:'Chimichurri Steak',price:18.99,img:'/conner/app/img/meal2.jpg',badge:'new'},
-  {id:205,name:'Coconut Curry Chicken',price:15.49,img:'/conner/app/img/meal1.jpg',badge:'new'},
-  {id:206,name:'Pesto Salmon',price:18.49,img:'/conner/app/img/meal6.jpg',badge:'new'},
-];
-// Add suggestion items to allMeals so openMealDetail and addToCart work
-suggestionItems.forEach(s=>{
-  if(!allMeals.find(m=>m.id===s.id)){
-    allMeals.push({id:s.id,name:s.name,price:s.price,cal:480,protein:'34g',fat:'18g',carb:'42g',cat:'Snacks & Other',qty:0,img:s.img,allergen:null,desc:`Delicious ${s.name.toLowerCase()} — a perfect addition to your weekly plan.`,tags:[]});
+async function api(path, opts = {}) {
+  const res = await fetch(API_BASE + path, {
+    ...opts,
+    headers: {
+      'Content-Type': 'application/json',
+      'x-dev-customer-id': DEV_CUSTOMER_ID,
+      ...(opts.headers || {}),
+    },
+  });
+  if (!res.ok) {
+    let msg = res.status + ' ' + res.statusText;
+    try {
+      const body = await res.json();
+      if (body && body.message) {
+        msg += ' — ' + (Array.isArray(body.message) ? body.message.join(', ') : body.message);
+      }
+    } catch (_) { /* ignore parse errors */ }
+    throw new Error(msg);
   }
-});
+  if (res.status === 204) return null;
+  return res.json();
+}
+
+// Customer-facing diet plan labels + SystemTag UUIDs. Backend uses the
+// canonical identifiers 'Omnivore' and 'Vegan' internally; customers see
+// "Meat & Plants" and "Plants Only." Loaded from brand/site-info.seed.json
+// in loadProfile() with a fallback so the page renders correctly when
+// the seed fetch fails. Same pattern as DIET_LABELS in menu/index.html.
+const DIET_PLAN_STATE = {
+  omnivoreId: null,   // UUID of the Omnivore SystemTag row — set by loadProfile()
+  veganId:    null,   // UUID of the Vegan SystemTag row
+  labels: { Omnivore: 'Meat & Plants', Vegan: 'Plants Only' },
+  current:    null,   // 'omnivore' | 'vegan' | null — the customer's active choice
+};
+
+// Populate the Customer Info tab (Personal Information + Contact Details
+// cards, plus the Diet Plan radio card) with real data from
+// GET /api/commerce/customers/me. Called from DOMContentLoaded — the
+// hardcoded "Jose Ramirez" values in the HTML act as a silent fallback
+// if the fetch fails, so the page is still usable offline during dev.
+// Errors log to console but do NOT toast (it would be noisy on every
+// page load when the dev backend is down).
+//
+// Fields updated:
+//   • Personal card:  firstName, lastName, birthday, profileFullName, avatar
+//   • Contact card:   email, phone, SMS opt-in toggle state
+//   • Diet Plan card: two pill-buttons with the current selection highlighted
+//   • userData:       all of the above (keeps the existing edit/cancel
+//                     flow functional — saveProfile reverts from userData
+//                     when the user clicks Cancel during edit)
+//   • DIET_PLAN_STATE: omnivoreId, veganId, labels, current (feeds the
+//                      Diet Plan radio card render + click handlers)
+//
+// Birthday handling: /me returns birthday as an ISO datetime string like
+// "1989-03-15T00:00:00.000Z". The .field-edit input is type="date" which
+// wants "YYYY-MM-DD". The .field-display shows "March 15, 1989". Both are
+// derived from the same ISO string via setField().
+async function loadProfile() {
+  try {
+    // Load /me and brand seed in parallel. The brand seed gives us the
+    // SystemTag UUIDs + customer-facing labels for the Diet Plan radio.
+    const [me, siteInfo] = await Promise.all([
+      api('/commerce/customers/me'),
+      fetch('../../../brand/site-info.seed.json').then(r => r.ok ? r.json() : {}).catch(() => ({})),
+    ]);
+    if (!me) return;
+
+    // Populate DIET_PLAN_STATE from the brand seed (UUIDs + labels) and
+    // the /me response (customer's current selection).
+    DIET_PLAN_STATE.omnivoreId = siteInfo['public.diet.omnivoreId'] || null;
+    DIET_PLAN_STATE.veganId    = siteInfo['public.diet.veganId']    || null;
+    if (siteInfo['public.diet.labels.omnivore']) DIET_PLAN_STATE.labels.Omnivore = siteInfo['public.diet.labels.omnivore'];
+    if (siteInfo['public.diet.labels.vegan'])    DIET_PLAN_STATE.labels.Vegan    = siteInfo['public.diet.labels.vegan'];
+    if (me.diet_plan_id && me.diet_plan_id === DIET_PLAN_STATE.omnivoreId) {
+      DIET_PLAN_STATE.current = 'omnivore';
+    } else if (me.diet_plan_id && me.diet_plan_id === DIET_PLAN_STATE.veganId) {
+      DIET_PLAN_STATE.current = 'vegan';
+    } else {
+      DIET_PLAN_STATE.current = null;
+    }
+    renderDietPlanCards();
+
+    // Chip group initial state (commit #4). The server is authoritative
+    // for which allergens and diet tags are active. userData is kept in
+    // sync so future reads stay consistent.
+    userData.allergens = Array.isArray(me.allergens) ? me.allergens.slice() : [];
+    userData.dietTags  = Array.isArray(me.diet_tags) ? me.diet_tags.slice() : [];
+    applyChipState();
+
+    // Update the in-memory userData so edit/cancel flow reads fresh values.
+    // The existing cancelEditProfile() function reverts from userData, so
+    // syncing it here keeps the cancel behavior honest.
+    userData.firstName = me.first_name || '';
+    userData.lastName  = me.last_name  || '';
+    userData.email     = me.email      || '';
+    userData.phone     = me.phone      || '';
+    userData.smsOptIn  = Boolean(me.sms_opt_in);
+    if (me.birthday) {
+      userData.birthday = String(me.birthday).slice(0, 10); // YYYY-MM-DD
+    }
+
+    // Personal Information header (full name + avatar initials)
+    const fullName = (userData.firstName + ' ' + userData.lastName).trim();
+    document.getElementById('profileFullName').textContent = fullName || 'Your account';
+    const initials = ((userData.firstName[0] || '') + (userData.lastName[0] || '')).toUpperCase() || '??';
+    document.getElementById('profileAvatar').textContent = initials;
+
+    // Field display + edit value pairs. The prototype stores both a text
+    // display element and a hidden input for each field, keyed by
+    // data-field. Update both so Edit mode and Display mode both show
+    // the real values.
+    setField('firstName', userData.firstName);
+    setField('lastName',  userData.lastName);
+    setField('email',     userData.email);
+    setField('phone',     userData.phone);
+
+    // Birthday needs a formatted display ("March 15, 1989") separate from
+    // the raw YYYY-MM-DD value used by the date input.
+    if (userData.birthday) {
+      const d = new Date(userData.birthday + 'T12:00:00');
+      const display = d.toLocaleDateString('en', { month: 'long', day: 'numeric', year: 'numeric' });
+      setField('birthday', userData.birthday, display);
+    } else {
+      setField('birthday', '', '—');
+    }
+
+    // SMS toggle — the prototype uses a classList-based toggle switch
+    // (not a native checkbox). Set .active based on userData.smsOptIn.
+    // The toggle is identified by its onclick handler calling toggleSms.
+    const smsToggle = document.querySelector('.acct-toggle-switch[onclick*="toggleSms"]');
+    if (smsToggle) {
+      smsToggle.classList.toggle('active', userData.smsOptIn);
+    }
+  } catch (err) {
+    console.warn('[account] loadProfile failed; keeping hardcoded fallback values.', err);
+    // Intentionally silent in the UI — the hardcoded DOM values remain
+    // visible so the page stays functional during dev when the backend
+    // is down. A toast on every page load would be noisy.
+  }
+}
+
+// Helper: update both the display text and the edit input value for a
+// named field. `displayValue` overrides the text content if provided
+// (used by birthday which has a different display format than input format).
+function setField(name, inputValue, displayValue) {
+  const disp = document.querySelector('.field-display[data-field="' + name + '"]');
+  const edit = document.querySelector('.field-edit[data-field="' + name + '"]');
+  if (disp) disp.textContent = displayValue !== undefined ? displayValue : (inputValue || '—');
+  if (edit) edit.value = inputValue || '';
+}
+
+// ============================================================
+// DIET PLAN RADIO (commit 3 of 8)
+// ============================================================
+// Two big pill-buttons in the Customer Info tab that let the customer
+// pick their diet plan. Saves on click (no explicit Save button) via
+// PATCH /me/preferences with { diet_plan_id: <uuid> }.
+//
+// Customer-facing labels pull from DIET_PLAN_STATE.labels, which is
+// seeded from brand/site-info.seed.json in loadProfile() above. Backend
+// identifiers stay as the canonical 'Omnivore' / 'Vegan' strings —
+// see the DIET_LABELS pattern in menu/index.html for the same split.
+
+// Render the Diet Plan radio pills into #dietPlanRow. Called from
+// loadProfile() after DIET_PLAN_STATE is populated. Re-renders on every
+// click (via selectDietPlan) so the selected state always matches state.
+function renderDietPlanCards() {
+  const row = document.getElementById('dietPlanRow');
+  if (!row) return;
+  const current = DIET_PLAN_STATE.current; // 'omnivore' | 'vegan' | null
+  const omniLabel = DIET_PLAN_STATE.labels.Omnivore;
+  const veganLabel = DIET_PLAN_STATE.labels.Vegan;
+  const checkSvg = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>';
+  row.innerHTML = `
+    <button type="button" class="diet-plan-pill${current === 'omnivore' ? ' selected' : ''}" onclick="selectDietPlan('omnivore')">
+      <span class="diet-plan-emoji">🍽️</span>
+      <div class="diet-plan-text">
+        <span class="diet-plan-label">${escapeHtml(omniLabel)}</span>
+        <span class="diet-plan-sub">Every meal — meat + plant options in your mix</span>
+      </div>
+      <span class="diet-plan-check">${checkSvg}</span>
+    </button>
+    <button type="button" class="diet-plan-pill${current === 'vegan' ? ' selected vegan' : ''}" onclick="selectDietPlan('vegan')">
+      <span class="diet-plan-emoji">🌱</span>
+      <div class="diet-plan-text">
+        <span class="diet-plan-label">${escapeHtml(veganLabel)}</span>
+        <span class="diet-plan-sub">Meat dishes are hidden from your menu</span>
+      </div>
+      <span class="diet-plan-check">${checkSvg}</span>
+    </button>
+  `;
+}
+
+// Handle a diet plan pill click. Optimistic update: re-render with the
+// new selection immediately, then PATCH /me/preferences. If the PATCH
+// fails, revert the selection and show a warning toast. Same pattern
+// as toggleSms() in commit #2.
+async function selectDietPlan(planKey) {
+  // Guard against clicking the pill for the already-active plan (no-op)
+  if (DIET_PLAN_STATE.current === planKey) return;
+
+  // Resolve the UUID for this plan from the brand seed state
+  const uuid = planKey === 'omnivore'
+    ? DIET_PLAN_STATE.omnivoreId
+    : planKey === 'vegan'
+      ? DIET_PLAN_STATE.veganId
+      : null;
+  if (!uuid) {
+    showToast("Couldn't find the diet plan ID — brand seed may be stale", 'warning');
+    return;
+  }
+
+  // Optimistic UI: update state + re-render + disable pills during PATCH
+  const previous = DIET_PLAN_STATE.current;
+  DIET_PLAN_STATE.current = planKey;
+  renderDietPlanCards();
+  document.querySelectorAll('#dietPlanRow .diet-plan-pill').forEach(p => p.disabled = true);
+
+  try {
+    await api('/commerce/customers/me/preferences', {
+      method: 'PATCH',
+      body: JSON.stringify({ diet_plan_id: uuid }),
+    });
+    const label = planKey === 'omnivore'
+      ? DIET_PLAN_STATE.labels.Omnivore
+      : DIET_PLAN_STATE.labels.Vegan;
+    showToast('Diet plan updated to ' + label, 'success');
+  } catch (err) {
+    // Revert on error
+    DIET_PLAN_STATE.current = previous;
+    renderDietPlanCards();
+    console.error('[account] selectDietPlan failed', err);
+    showToast("Couldn't update diet plan: " + (err.message || 'unknown error'), 'warning');
+  } finally {
+    document.querySelectorAll('#dietPlanRow .diet-plan-pill').forEach(p => p.disabled = false);
+  }
+}
+
+// Tiny HTML escaper — used only by renderDietPlanCards() above so the
+// DIET_PLAN_STATE.labels values can't inject arbitrary HTML if the
+// brand seed is ever edited by someone who puts < or " in a label.
+function escapeHtml(s) {
+  return String(s || '').replace(/[&<>"']/g, function (c) {
+    return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+  });
+}
+
+// ============================================================
+// CHIP GROUPS — allergens[] + diet_tags[] (commit 4 of 8)
+// ============================================================
+// Two chip sub-groups in the Allergies & Preferences card, each saving
+// to a different column on Customer:
+//   • #allergenChipsWrap → userData.allergens → Customer.allergens[]
+//   • #dietTagChipsWrap  → userData.dietTags  → Customer.diet_tags[]
+//
+// Active-state colour differs by type so customers can see the two
+// data categories at a glance:
+//   • allergens: active-red   (warning tone — things to avoid)
+//   • diet_tags: active-blue  (neutral tone — preferences to prefer)
+//
+// Save model is "Save Preferences button" — the toggle is local until
+// the customer clicks Save, at which point we PATCH both arrays in one
+// request. This matches the prototype's Save button UX (the customer
+// expects the button to mean something) and also lets us batch multiple
+// toggle changes into one round-trip. The dirty flag below gates the
+// Save button colour: grey when no unsaved changes, yellow when dirty.
+
+// Read userData.allergens + userData.dietTags and stamp each chip's
+// active class accordingly. Called from loadProfile() on initial load
+// and from savePreferences() after a successful PATCH to re-render
+// from the server response.
+function applyChipState() {
+  const allergens = (userData.allergens || []).map(String);
+  const dietTags  = (userData.dietTags  || []).map(String);
+  document.querySelectorAll('#allergenChipsWrap .acct-chip').forEach(el => {
+    const val = el.getAttribute('data-val');
+    el.className = 'acct-chip' + (allergens.includes(val) ? ' active-red' : '');
+  });
+  document.querySelectorAll('#dietTagChipsWrap .acct-chip').forEach(el => {
+    const val = el.getAttribute('data-val');
+    el.className = 'acct-chip' + (dietTags.includes(val) ? ' active-blue' : '');
+  });
+}
+
+// ======= DATA =======
+// Meals are loaded from meals.seed.json (152 real meals from the database).
+// normalizeForAccount() maps DB field names to the format account templates expect.
+let allMeals = [];
+let suggestionItems = [];
+
+// ─── Category mapping ────────────────────────────────────────────────
+// Seed data uses singular names (Entree, Breakfast, Snack). Account page
+// templates use plural names (Entrees, Breakfasts, Snacks & Other).
+const CAT_MAP = {'Entree':'Entrees','Breakfast':'Breakfasts','Snack':'Snacks & Other'};
+function mapCategory(c) { return CAT_MAP[c] || c; }
+
+// ─── Badge derivation (ported from menu/index.html) ──────────────────
+function deriveBadges(row) {
+  const out = [];
+  const tags = row.dietary_tags || [];
+  const allergens = row.allergen_tags || [];
+  const proteins = row.protein_types || [];
+  const isPlantBased = row.diet_plan === 'Plant-Based';
+  if (tags.includes('Freezable')) out.push('Freezable');
+  if (tags.includes('Family Friendly')) out.push('Family Friendly');
+  if (tags.includes('Gluten Free')) out.push('Gluten Free');
+  if (tags.includes('Dairy Free')) out.push('Dairy Free');
+  if ((row.protein_g ?? 0) >= 35) out.push('High Protein');
+  if (isPlantBased && !allergens.includes('Dairy')) out.push('Vegetarian');
+  const landMeat = ['Chicken', 'Beef', 'Turkey', 'Pork'];
+  if (!isPlantBased && proteins.length > 0 && !proteins.some(p => landMeat.includes(p))) out.push('Pescatarian');
+  return out;
+}
+
+// ─── Image placeholder (ported from menu/index.html) ─────────────────
+function swapToPlaceholder(img) {
+  const plan = img.dataset.plan || 'omni';
+  const placeholder = document.createElement('div');
+  placeholder.className = img.className + ' meal-img-placeholder meal-img-placeholder--' + plan;
+  placeholder.setAttribute('aria-label', img.alt || '');
+  placeholder.innerHTML = '<span>🍽️</span>';
+  img.replaceWith(placeholder);
+}
+
+// ─── Normalize one raw DB row → account page format ──────────────────
+function normalizeForAccount(row) {
+  const allergenArr = row.allergen_tags || [];
+  const plan = row.diet_plan === 'Plant-Based' ? 'plant' : 'omni';
+  const initial = ((row.display_name || row.name || '?').charAt(0)).toUpperCase();
+  return {
+    id:          row.id,
+    name:        row.display_name || row.name,
+    price:       row.price ?? 0,
+    cal:         row.calories ?? null,
+    protein:     row.protein_g != null ? row.protein_g + 'g' : null,
+    fat:         row.fat_g != null ? row.fat_g + 'g' : null,
+    carb:        row.carbs_g != null ? row.carbs_g + 'g' : null,
+    cat:         mapCategory(row.menu_category),
+    diet:        (row.diet_plan || '').toLowerCase().replace('-','_'),  // "plant_based" / "omnivore"
+    diet_plan:   row.diet_plan,                                        // original for badge derivation
+    qty:         0,
+    img:         row.image_url || null,
+    _imgPlan:    plan,
+    _imgInitial: initial,
+    allergen:    allergenArr.length ? allergenArr.map(a => a.toLowerCase()).join(', ') : null,
+    desc:        row.description || row.short_description || '',
+    ingredients: row.label_ingredients || '',
+    tags:        deriveBadges(row),
+  };
+}
+
+// ─── Render img with placeholder fallback ─────────────────────────────
+function renderAccountImg(m, className) {
+  const plan = m._imgPlan || 'omni';
+  if (!m.img) {
+    return `<div class="${className} meal-img-placeholder meal-img-placeholder--${plan}" aria-label="${m.name}"><span>🍽️</span></div>`;
+  }
+  return `<img class="${className}" src="${m.img}" alt="${m.name}" loading="lazy" data-plan="${plan}" onerror="swapToPlaceholder(this)">`;
+}
+
+// ─── Load meals from seed JSON ───────────────────────────────────────
+async function loadAccountMeals() {
+  try {
+    const res = await fetch('../menu/meals.seed.json');
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const rows = await res.json();
+    allMeals = rows.map(normalizeForAccount);
+    console.log(`%c[account]%c Loaded ${allMeals.length} meals from meals.seed.json`, 'color:#4EA2FD;font-weight:bold', 'color:inherit');
+  } catch (e) {
+    console.warn('[account] Could not fetch meals.seed.json, using sample data:', e.message);
+    // Fallback sample data so page still works via file://
+    allMeals = [
+      {id:'s1',name:'Mediterranean Chicken',price:16.99,cal:580,protein:'42g',fat:'22g',carb:'38g',cat:'Entrees',diet:'omnivore',diet_plan:'Omnivore',qty:0,img:null,_imgPlan:'omni',_imgInitial:'M',allergen:null,desc:'Herb-marinated chicken breast with roasted peppers and feta over herbed rice.',ingredients:'Chicken breast, jasmine rice, roasted red peppers, feta cheese, fresh herbs',tags:['High Protein']},
+      {id:'s2',name:'Sesame Steak Bowl',price:16.99,cal:520,protein:'44g',fat:'18g',carb:'40g',cat:'Entrees',diet:'omnivore',diet_plan:'Omnivore',qty:0,img:null,_imgPlan:'omni',_imgInitial:'S',allergen:null,desc:'Sesame-crusted sirloin with stir-fried vegetables.',ingredients:'Sirloin steak, jasmine rice, sesame seeds, broccoli, soy sauce',tags:['High Protein']},
+      {id:'s3',name:'Curry Club Butt\'r Tofu',price:15.99,cal:490,protein:'24g',fat:'20g',carb:'52g',cat:'Entrees',diet:'plant_based',diet_plan:'Plant-Based',qty:0,img:null,_imgPlan:'plant',_imgInitial:'C',allergen:null,desc:'Creamy plant-based butter curry with crispy tofu.',ingredients:'Tofu, coconut cream, basmati rice, garam masala',tags:['Vegetarian']},
+      {id:'s4',name:'Falafel Fusion Power Bowl',price:15.99,cal:540,protein:'26g',fat:'24g',carb:'50g',cat:'Entrees',diet:'plant_based',diet_plan:'Plant-Based',qty:0,img:null,_imgPlan:'plant',_imgInitial:'F',allergen:null,desc:'Herb-loaded falafel over quinoa tabbouleh.',ingredients:'Chickpeas, quinoa, parsley, tahini, lemon',tags:['Vegetarian']},
+      {id:'s5',name:'Southwest Breakfast Burrito',price:12.99,cal:420,protein:'28g',fat:'24g',carb:'22g',cat:'Breakfasts',diet:'omnivore',diet_plan:'Omnivore',qty:0,img:null,_imgPlan:'omni',_imgInitial:'S',allergen:'dairy',desc:'Scrambled eggs, black beans, peppers, and cheese.',ingredients:'Flour tortilla, eggs, black beans, cheddar cheese',tags:[]},
+      {id:'s6',name:'Protein Energy Bites',price:6.99,cal:220,protein:'14g',fat:'10g',carb:'22g',cat:'Snacks & Other',diet:'omnivore',diet_plan:'Omnivore',qty:0,img:null,_imgPlan:'omni',_imgInitial:'P',allergen:null,desc:'Peanut butter oat bites with dark chocolate chips.',ingredients:'Rolled oats, peanut butter, dark chocolate chips, honey',tags:[]},
+    ];
+  }
+
+  // Generate suggestion items from real data
+  generateSuggestionItems();
+
+  // DEV cart filler
+  if (typeof DEV_AUTO_FILL_CART !== 'undefined' && DEV_AUTO_FILL_CART) DEV_fillTestCart();
+
+  // Render everything
+  renderCompactCart();
+  renderSuggestions();
+  renderTimeline();
+}
+
+// ─── Generate suggestions from real meal data ────────────────────────
+function generateSuggestionItems() {
+  const withImg = allMeals.filter(m => m.img && m.price > 0);
+  const snacks = withImg.filter(m => m.cat === 'Breakfasts' || m.cat === 'Snacks & Other');
+  const entrees = withImg.filter(m => m.cat === 'Entrees');
+  suggestionItems = [
+    ...snacks.slice(0, 4).map(m => ({...m, badge:'best'})),
+    ...entrees.slice(-6).map(m => ({...m, badge:'new'})),
+  ];
+}
+
+// ╔════════════════════════════════════════════════════════════════════════════╗
+// ║  🚧 DEV CART FILLER — TEMPORARY TEST CODE                                ║
+// ║  🔍 Search "DEV-CART-FILLER" to find this block.                          ║
+// ║  🗑️  DELETE this entire block before shipping to production.              ║
+// ║  To DISABLE without deleting, set DEV_AUTO_FILL_CART = false below.       ║
+// ╚════════════════════════════════════════════════════════════════════════════╝
+const DEV_AUTO_FILL_CART = true;
+
+function DEV_fillTestCart() {
+  allMeals.forEach(m => m.qty = 0);
+  const meatEntrees = allMeals.filter(m => m.cat === 'Entrees' && m.diet !== 'plant_based');
+  meatEntrees.slice(0, 12).forEach(m => m.qty = 1);
+  const plantEntrees = allMeals.filter(m => m.cat === 'Entrees' && m.diet === 'plant_based');
+  plantEntrees.slice(0, 8).forEach(m => m.qty = 1);
+  allMeals.filter(m => m.cat === 'Breakfasts' || m.cat === 'Snacks & Other').forEach(m => m.qty = 1);
+  const total = allMeals.filter(m => m.qty > 0).reduce((s, m) => s + m.qty, 0);
+  console.log(`%c[DEV-CART-FILLER]%c ${total} meals loaded`, 'color:#22c55e;font-weight:bold', 'color:inherit');
+}
+// ╚════════════════════════════════════════════════════════════════════════════╝
 
 // ======= MENU CHANGES (auto-swaps from last week's cart) =======
-// Models dishes that were in the subscriber's cart last week but aren't on
-// this week's menu — they get auto-matched to close replacements.
-//   fromName/fromImg : frozen history (old dish may not exist this week)
-//   toId             : current meal in cart (lives in allMeals, qty > 0)
-//   qty              : how many got swapped (should match allMeals[toId].qty)
-//   userAdjusted     : set true after user manually re-swaps via the modal
-let menuChanges = [
-  {fromName:'Chicken Parm',         fromImg:'/conner/app/img/meal3.jpg', toId:3, qty:2, userAdjusted:false},
-  {fromName:'Greek Mediterranean Bowl', fromImg:'/conner/app/img/meal7.jpg', toId:8, qty:1, userAdjusted:false}
-];
+// TODO: populate from API — these are empty until the swap system is wired
+let menuChanges = [];
 let activeMenuChangeIndex = null;
 
 // upcomingDates models the weekly_cart_records concept:
@@ -3195,7 +3683,12 @@ function initAllPhoneInputs(){
 }
 
 // ======= INIT =======
-document.addEventListener('DOMContentLoaded',()=>{
+document.addEventListener('DOMContentLoaded',async()=>{
+  // Fire the /me fetch immediately — it's async and doesn't block the
+  // rest of init. The hardcoded DOM values stay visible while the fetch
+  // is in flight; loadProfile() swaps them out when the response lands.
+  loadProfile();
+  await loadAccountMeals();
   renderCompactCart();
   renderSuggestions();
   renderTimeline();
@@ -3261,10 +3754,10 @@ function renderCompactCart(){
     const cards = flatMeals.map(m => {
       const qtyBadge = m.qty > 1 ? `<span class="nd-card-qty">×${m.qty}</span>` : '';
       const safeName = (m.name||'').replace(/"/g,'&quot;');
-      return `<div class="nd-card" role="button" tabindex="0" onclick="ndCardClick(event,${m.id},this)" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();openMealDetail(${m.id})}" aria-label="Edit ${safeName}">
+      return `<div class="nd-card" role="button" tabindex="0" onclick="ndCardClick(event,'${m.id}',this)" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();openMealDetail('${m.id}')}" aria-label="Edit ${safeName}">
         <div class="nd-card-img-wrap">
-          <img src="${m.img}" alt="${safeName}">
-          <button type="button" class="nd-card-swap" title="Swap this meal" aria-label="Quick swap this meal" onclick="event.stopPropagation();openSwapPanel(${m.id})">${swapIconSvg}<span class="nd-card-swap-label"><span>Quick</span><span>Swap</span></span></button>
+          ${renderAccountImg(m,'nd-card-thumb')}
+          <button type="button" class="nd-card-swap" title="Swap this meal" aria-label="Quick swap this meal" onclick="event.stopPropagation();openSwapPanel('${m.id}')">${swapIconSvg}<span class="nd-card-swap-label"><span>Quick</span><span>Swap</span></span></button>
         </div>
         <div class="nd-card-name"><span>${safeName}</span></div>
         ${qtyBadge}
@@ -3280,7 +3773,7 @@ function renderCompactCart(){
     } else {
       thumbs = otherMeals.slice(0, 3);
     }
-    const thumbsHTML = thumbs.map(t => `<img class="nd-more-thumb" src="${t.img}" alt="">`).join('');
+    const thumbsHTML = thumbs.map(t => t.img ? `<img class="nd-more-thumb" src="${t.img}" alt="" onerror="swapToPlaceholder(this)">` : `<div class="nd-more-thumb meal-img-placeholder meal-img-placeholder--${t._imgPlan||'omni'}"><span>🍽️</span></div>`).join('');
     const mcCount=menuChanges.length;
     const mcLabel=mcCount===1?'1 dish<br>auto&#8209;swapped':`${mcCount} dishes<br>auto&#8209;swapped`;
     const noticeTile=mcCount>0?`<button type="button" class="nd-card-notice" onclick="openMenuChanges()" aria-label="${mcCount} ${mcCount===1?'dish':'dishes'} auto-swapped this week, tap to review">
@@ -3299,11 +3792,8 @@ function renderCompactCart(){
 
     container.innerHTML = `<div class="nd-grid">${cards}${moreTile}</div>`;
   }
-  // Subscriber discount from PERK_TIERS
-  let savingsPct = 0;
-  for (let i = PERK_TIERS.length - 1; i >= 0; i--) {
-    if (meals >= PERK_TIERS[i].meals) { savingsPct = PERK_TIERS[i].pct; break; }
-  }
+  // Subscriber discount — helper from subscription-config.js
+  const savingsPct = lookupSubscriberDiscountPct(meals);
   const subscriberPrice = price - price * (savingsPct / 100);
   const onetimeTotal = price; // one-time = full dish price
   const mealSavings = onetimeTotal - subscriberPrice;
@@ -3345,8 +3835,8 @@ function renderCartSummarySidebar({groups, meals, subscriberPrice, mealSavings, 
     </div>`;
   }).join('');
 
-  // GST 5% on subscriber subtotal (Canadian)
-  const gstRate = 0.05;
+  // GST on subscriber subtotal (Canadian) — rate from subscription-config.js
+  const gstRate = GST_RATE;
   const gst = subscriberPrice * gstRate;
   const deliveryFree = meals >= FREE_DELIVERY_MEALS;
   const deliveryCharge = deliveryFree ? 0 : DELIVERY_FEE;
@@ -3405,12 +3895,9 @@ function renderCartSummarySidebar({groups, meals, subscriberPrice, mealSavings, 
     </button>`;
 }
 
-const FREE_DELIVERY_MEALS = 8;
-const DELIVERY_FEE = 7.99;          // standard delivery fee
-const PERK_TIERS = [
-  {meals:4,pct:5},{meals:5,pct:8},{meals:7,pct:11},
-  {meals:9,pct:14},{meals:11,pct:17},{meals:13,pct:20},
-];
+// FREE_DELIVERY_MEALS, DELIVERY_FEE, PERK_TIERS, GST_RATE — loaded from
+// ../shared/subscription-config.js (single source of truth). Do NOT
+// re-declare them here.
 const MILESTONES = [
   [4,'5% off',false],[5,'8% off',false],[7,'11% off',false],
   [8,'Free Delivery',true],[9,'14% off',false],[11,'17% off',false],[13,'20% off',false],
@@ -3426,15 +3913,15 @@ function renderHubSavings(){
   const {meals:n, price}=getCartTotal();
   const cart=getCartMeals();
 
-  // One-time price calculation (sum of full retail prices)
-  const onetimeTotal=cart.reduce((s,m)=>s+(Math.floor(m.price*1.08)+0.99)*m.qty,0);
+  // One-time price = sum of full retail prices (meal.price is the retail price;
+  // subscribers get a %-off discount, one-time customers pay meal.price exactly)
+  const onetimeTotal=cart.reduce((s,m)=>s+m.price*m.qty,0);
   const deliveryEarned=n>=FREE_DELIVERY_MEALS;
   const dollarSaved=Math.max(0, onetimeTotal-price);
-  const totalSaved=dollarSaved+(deliveryEarned?7.99:0);
+  const totalSaved=dollarSaved+(deliveryEarned?DELIVERY_FEE:0);
 
   // Active subscriber tier
-  let savePct=0;
-  for(let i=PERK_TIERS.length-1;i>=0;i--){if(n>=PERK_TIERS[i].meals){savePct=PERK_TIERS[i].pct;break;}}
+  const savePct=lookupSubscriberDiscountPct(n);
 
   // Edge case — no meals in cart yet
   if(n===0){
@@ -3635,13 +4122,13 @@ function eoRenderGrid(){
 function eoRenderCard(m){
   const price = m.price;
   let badges='';
-  if(m.allergen==='dairy') badges+='<span class="eo-card-badge dairy">Dairy</span>';
+  if(m.allergen && m.allergen.includes('dairy')) badges+='<span class="eo-card-badge dairy">Dairy</span>';
   // Use tags if available (hub data may not have tags array)
-  const swapBtn = m.qty>0 ? `<button class="eo-swap-pill" onclick="event.stopPropagation();openSwapPanel(${m.id})"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M17 1l4 4-4 4"/><path d="M3 11V9a4 4 0 014-4h14"/><path d="M7 23l-4-4 4-4"/><path d="M21 13v2a4 4 0 01-4 4H3"/></svg>Swap</button>` : '';
+  const swapBtn = m.qty>0 ? `<button class="eo-swap-pill" onclick="event.stopPropagation();openSwapPanel('${m.id}')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M17 1l4 4-4 4"/><path d="M3 11V9a4 4 0 014-4h14"/><path d="M7 23l-4-4 4-4"/><path d="M21 13v2a4 4 0 01-4 4H3"/></svg>Swap</button>` : '';
   return `
-    <div class="eo-meal-card${m.qty>0?' in-cart':''}" data-id="${m.id}" onclick="openMealDetail(${m.id})">
+    <div class="eo-meal-card${m.qty>0?' in-cart':''}" data-id="${m.id}" onclick="openMealDetail('${m.id}')">
       <div class="eo-card-img-wrap">
-        <img class="eo-card-img" src="${m.img}" alt="${m.name}" loading="lazy">
+        ${renderAccountImg(m,'eo-card-img')}
         ${badges?`<div class="eo-card-badges">${badges}</div>`:''}
         ${swapBtn}
       </div>
@@ -3661,14 +4148,14 @@ function eoRenderCard(m){
 }
 
 function eoRenderAddBtn(id,price){
-  return `<button class="eo-add-btn" onclick="eoAddToCart(${id})"><span>ADD</span><span class="eo-add-btn-divider"></span><span class="eo-add-btn-price">$${price.toFixed(2)}</span></button>`;
+  return `<button class="eo-add-btn" onclick="eoAddToCart('${id}')"><span>ADD</span><span class="eo-add-btn-divider"></span><span class="eo-add-btn-price">$${price.toFixed(2)}</span></button>`;
 }
 
 function eoRenderQtyCtrl(id,qty){
   return `<div class="eo-qty-ctrl">
-    <button class="eo-qty-minus" onclick="eoChangeQty(${id},-1)">&minus;</button>
+    <button class="eo-qty-minus" onclick="eoChangeQty('${id}',-1)">&minus;</button>
     <div class="eo-qty-num">${qty}</div>
-    <button class="eo-qty-plus" onclick="eoChangeQty(${id},1)">+</button>
+    <button class="eo-qty-plus" onclick="eoChangeQty('${id}',1)">+</button>
   </div>`;
 }
 
@@ -3856,16 +4343,16 @@ function eoRenderCart(){
       const trashSvg='<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 011-1h4a1 1 0 011 1v2"/></svg>';
       const swapSvg='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M17 1l4 4-4 4"/><path d="M3 11V9a4 4 0 014-4h14"/><path d="M7 23l-4-4 4-4"/><path d="M21 13v2a4 4 0 01-4 4H3"/></svg>';
       const minusBtn = m.qty===1
-        ? `<button class="eo-cart-qty-btn remove" onclick="eoChangeQty(${m.id},-1)" title="Remove">${trashSvg}</button>`
-        : `<button class="eo-cart-qty-btn" onclick="eoChangeQty(${m.id},-1)" title="Decrease">&minus;</button>`;
+        ? `<button class="eo-cart-qty-btn remove" onclick="eoChangeQty('${m.id}',-1)" title="Remove">${trashSvg}</button>`
+        : `<button class="eo-cart-qty-btn" onclick="eoChangeQty('${m.id}',-1)" title="Decrease">&minus;</button>`;
       const priceDisplay = m.qty>1
         ? `<span class="eo-cart-item-unit">$${m.price.toFixed(2)} &times; ${m.qty}</span> <span class="eo-cart-item-total">$${(m.price*m.qty).toFixed(2)}</span>`
         : `$${m.price.toFixed(2)}`;
       const infoLabel='+ info';
       itemsHtml+=`
         <div class="eo-cart-item">
-          <div class="eo-cart-thumb-wrap" onclick="openMealDetail(${m.id})">
-            <img class="eo-cart-item-thumb" src="${m.img}" alt="${m.name}">
+          <div class="eo-cart-thumb-wrap" onclick="openMealDetail('${m.id}')">
+            ${renderAccountImg(m,'eo-cart-item-thumb')}
             <span class="eo-cart-info-icon">${infoLabel}</span>
           </div>
           <div class="eo-cart-item-info">
@@ -3876,9 +4363,9 @@ function eoRenderCart(){
             <div class="eo-cart-qty-ctrl">
               ${minusBtn}
               <div class="eo-cart-qty-num">${m.qty}</div>
-              <button class="eo-cart-qty-btn" onclick="eoChangeQty(${m.id},1)" title="Increase">+</button>
+              <button class="eo-cart-qty-btn" onclick="eoChangeQty('${m.id}',1)" title="Increase">+</button>
             </div>
-            <button class="eo-cart-swap-btn" onclick="openSwapPanel(${m.id})">${swapSvg}Swap</button>
+            <button class="eo-cart-swap-btn" onclick="openSwapPanel('${m.id}')">${swapSvg}Swap</button>
           </div>
         </div>`;
     });
@@ -3904,9 +4391,8 @@ function eoRenderRewards(){
   const price=getCartTotal().price;
   if(n===0){el.innerHTML='';return;}
 
-  // Subscriber discount from PERK_TIERS
-  let savePct=0;
-  for(let i=PERK_TIERS.length-1;i>=0;i--){if(n>=PERK_TIERS[i].meals){savePct=PERK_TIERS[i].pct;break;}}
+  // Subscriber discount — helper from subscription-config.js
+  const savePct=lookupSubscriberDiscountPct(n);
   const subscriberPrice=price-price*(savePct/100);
   const onetimeTotal=price; // one-time = full dish price
   const dollarSaved=onetimeTotal-subscriberPrice;
@@ -4030,7 +4516,7 @@ function eoGetFilteredMeals(){
     });
   }
   if(eoActiveAllergens.length>0){
-    meals=meals.filter(m=>!eoActiveAllergens.some(a=>m.allergen&&m.allergen.toLowerCase()===a.toLowerCase()));
+    meals=meals.filter(m=>!eoActiveAllergens.some(a=>m.allergen&&m.allergen.toLowerCase().includes(a.toLowerCase())));
   }
   if(eoActiveSort==='price-low') meals.sort((a,b)=>a.price-b.price);
   else if(eoActiveSort==='price-high') meals.sort((a,b)=>b.price-a.price);
@@ -4067,7 +4553,7 @@ function renderSuggestions(){
     //   - No NEW/POPULAR tag badge
     //   - Price badge in the top-right corner of the photo
     //   - Name takes the full info area, 2-line clamp with ellipsis
-    return `<div class="suggest-card" onclick="openMealDetail(${m.id})"><div class="sc-img"><img src="${m.img}" alt="${m.name}"><span class="sc-price">$${m.price.toFixed(2)}</span></div><div class="sc-info"><div class="sc-name">${m.name}</div><div class="sc-row"><button class="sc-add" data-price="${m.price.toFixed(2)}" data-id="${m.id}" onclick="event.stopPropagation();addSuggestionToCart(this,${m.id},'${m.name.replace(/'/g,"\\'")}')">Add to Plan</button></div></div></div>`;
+    return `<div class="suggest-card" onclick="openMealDetail('${m.id}')"><div class="sc-img">${renderAccountImg(m,'sc-thumb')}<span class="sc-price">$${m.price.toFixed(2)}</span></div><div class="sc-info"><div class="sc-name">${m.name}</div><div class="sc-row"><button class="sc-add" data-price="${m.price.toFixed(2)}" data-id="${m.id}" onclick="event.stopPropagation();addSuggestionToCart(this,'${m.id}','${m.name.replace(/'/g,"\\'")}')">Add to Plan</button></div></div></div>`;
   }).join('');
 }
 function addSuggestionToCart(btn,id,name){
@@ -4206,13 +4692,13 @@ function openSwapPanel(mealId){
   }
   area.innerHTML=`
     <div class="swap-current-img-wrap">
-      <img class="swap-current-img" src="${swapTarget.img}" alt="${swapTarget.name}">
-      <button class="swap-current-more" onclick="event.stopPropagation();openMealDetail(${swapTarget.id})">More Info</button>
+      ${renderAccountImg(swapTarget,'swap-current-img')}
+      <button class="swap-current-more" onclick="event.stopPropagation();openMealDetail('${swapTarget.id}')">More Info</button>
     </div>
     <div class="swap-current-info">
       <div class="swap-current-label">Swapping:</div>
       <div class="swap-current-name">${swapTarget.name}${swapTarget.qty>1?' <span style="font-weight:400;font-size:12px;color:rgba(0,49,65,0.5)">×'+swapTarget.qty+'</span>':''}</div>
-      <div class="swap-current-meta">$${swapTarget.price.toFixed(2)} · ${swapTarget.cal} cal · ${swapTarget.protein} pro · ${swapTarget.carb} carb · ${swapTarget.fat} fat</div>
+      <div class="swap-current-meta">$${swapTarget.price.toFixed(2)} · ${swapTarget.cal||'—'} cal · ${swapTarget.protein||'—'} pro · ${swapTarget.carb||'—'} carb · ${swapTarget.fat||'—'} fat</div>
     </div>
     ${modeHtml}`;
   swapMode='replaceAll';mixBasket={};
@@ -4243,15 +4729,15 @@ function renderSwapGrid(cat){
   grid.innerHTML=available.map(m=>{
     const btnHtml=swapMode==='mixMatch'&&swapTarget&&swapTarget.qty>1
       ?`<div class="swap-card-mix">
-          <button onclick="event.stopPropagation();adjustMix(${m.id},'${m.name.replace(/'/g,"\\'")}' ,-1)">&minus;</button>
+          <button onclick="event.stopPropagation();adjustMix('${m.id}','${m.name.replace(/'/g,"\\'")}' ,-1)">&minus;</button>
           <span class="mix-qty">${mixBasket[m.id]||0}</span>
-          <button onclick="event.stopPropagation();adjustMix(${m.id},'${m.name.replace(/'/g,"\\'")}',1)">+</button>
+          <button onclick="event.stopPropagation();adjustMix('${m.id}','${m.name.replace(/'/g,"\\'")}',1)">+</button>
         </div>`
-      :`<button class="swap-card-btn" onclick="event.stopPropagation();selectSwap(${m.id})">Select</button>`;
-    return `<div class="swap-card" onclick="openMealDetail(${m.id})">
+      :`<button class="swap-card-btn" onclick="event.stopPropagation();selectSwap('${m.id}')">Select</button>`;
+    return `<div class="swap-card" onclick="openMealDetail('${m.id}')">
       <div class="swap-card-img">
-        <img src="${m.img}" alt="${m.name}">
-        <button class="swap-card-info-pill" onclick="event.stopPropagation();openMealDetail(${m.id})">More Info</button>
+        ${renderAccountImg(m,'swap-card-thumb')}
+        <button class="swap-card-info-pill" onclick="event.stopPropagation();openMealDetail('${m.id}')">More Info</button>
       </div>
       <div class="swap-card-macros">
         <div class="eo-macro-cell"><span class="eo-macro-val">${m.cal||'—'}</span><span class="eo-macro-label">Cal</span></div>
@@ -4326,16 +4812,22 @@ function selectSwap(swapMealId){
 // ======= MEAL DETAIL =======
 function openMealDetail(id){
   const m=allMeals.find(x=>x.id===id);if(!m)return;mealDetailTarget=id;
-  document.getElementById('mealDetailImg').src=m.img;
+  const imgEl=document.getElementById('mealDetailImg');
+  if(m.img){
+    imgEl.style.display='';imgEl.src=m.img;imgEl.onerror=function(){swapToPlaceholder(this)};
+  } else {
+    imgEl.style.display='';imgEl.src='';imgEl.onerror=null;
+    swapToPlaceholder(imgEl);
+  }
   document.getElementById('mealDetailName').textContent=m.name;
   document.getElementById('mealDetailCat').textContent=m.cat;
   document.getElementById('mealDetailDesc').textContent=m.desc;
   // Macros as cell strip
   document.getElementById('mealDetailMacros').innerHTML=`
-    <div class="md-macro-cell"><div class="md-macro-val">${m.cal}</div><div class="md-macro-label">Cal</div></div>
-    <div class="md-macro-cell"><div class="md-macro-val">${m.protein}</div><div class="md-macro-label">Protein</div></div>
-    <div class="md-macro-cell"><div class="md-macro-val">${m.carb}</div><div class="md-macro-label">Carbs</div></div>
-    <div class="md-macro-cell"><div class="md-macro-val">${m.fat}</div><div class="md-macro-label">Fat</div></div>`;
+    <div class="md-macro-cell"><div class="md-macro-val">${m.cal||'—'}</div><div class="md-macro-label">Cal</div></div>
+    <div class="md-macro-cell"><div class="md-macro-val">${m.protein||'—'}</div><div class="md-macro-label">Protein</div></div>
+    <div class="md-macro-cell"><div class="md-macro-val">${m.carb||'—'}</div><div class="md-macro-label">Carbs</div></div>
+    <div class="md-macro-cell"><div class="md-macro-val">${m.fat||'—'}</div><div class="md-macro-label">Fat</div></div>`;
   // Ingredients
   if(m.ingredients){
     document.getElementById('mealDetailIngrLabel').textContent='Ingredients';
@@ -4362,14 +4854,14 @@ function openMealDetail(id){
       const curQty=mixBasket[m.id]||0;
       actionsEl.innerHTML=`
         <div class="meal-detail-qty">
-          <button onclick="adjustMix(${m.id},'${m.name.replace(/'/g,"\\'")}' ,-1);updateMdMixQty(${m.id})">&minus;</button>
+          <button onclick="adjustMix('${m.id}','${m.name.replace(/'/g,"\\'")}' ,-1);updateMdMixQty('${m.id}')">&minus;</button>
           <div class="mdq-num" id="mdMixQtyNum">${curQty}</div>
-          <button onclick="adjustMix(${m.id},'${m.name.replace(/'/g,"\\'")}',1);updateMdMixQty(${m.id})">+</button>
+          <button onclick="adjustMix('${m.id}','${m.name.replace(/'/g,"\\'")}',1);updateMdMixQty('${m.id}')">+</button>
         </div>`;
     } else {
       // Replace All: single swap button
       const swapQtyLabel = swapTarget && swapTarget.qty>1 ? ` all ${swapTarget.qty}` : '';
-      actionsEl.innerHTML=`<button class="meal-detail-add" style="background:#ffc600;color:#003141" onclick="closeMealDetail();selectSwap(${m.id})"><span style="font-weight:800">Swap${swapQtyLabel} to ${m.name}</span></button>`;
+      actionsEl.innerHTML=`<button class="meal-detail-add" style="background:#ffc600;color:#003141" onclick="closeMealDetail();selectSwap('${m.id}')"><span style="font-weight:800">Swap${swapQtyLabel} to ${m.name}</span></button>`;
     }
   } else if(fromSwap){
     // Opened from swap panel for the current dish (info only)
@@ -4385,19 +4877,19 @@ function openMealDetail(id){
       const fromHub = !document.getElementById('editOverlay').classList.contains('open');
       if(fromHub){
         actionsEl.innerHTML=`
-          <button class="md-action-quick-swap" onclick="closeMealDetail();openSwapPanel(${m.id})">${swapIcon}Quick Swap</button>
+          <button class="md-action-quick-swap" onclick="closeMealDetail();openSwapPanel('${m.id}')">${swapIcon}Quick Swap</button>
           <button class="md-action-browse-menu" onclick="closeMealDetail();openEditModal()">${gridIcon}Browse Full Menu</button>`;
       } else {
         actionsEl.innerHTML=`
           <div class="meal-detail-qty">
-            <button onclick="mdChangeQty(${m.id},-1)">&minus;</button>
+            <button onclick="mdChangeQty('${m.id}',-1)">&minus;</button>
             <div class="mdq-num" id="mdQtyNum">${m.qty}</div>
-            <button onclick="mdChangeQty(${m.id},1)">+</button>
+            <button onclick="mdChangeQty('${m.id}',1)">+</button>
           </div>
-          <button class="meal-detail-swap" onclick="closeMealDetail();openSwapPanel(${m.id})">${swapIcon}Swap</button>`;
+          <button class="meal-detail-swap" onclick="closeMealDetail();openSwapPanel('${m.id}')">${swapIcon}Swap</button>`;
       }
     } else {
-      actionsEl.innerHTML=`<button class="meal-detail-add" onclick="mdAddToCart(${m.id})"><span>ADD</span><span class="eo-add-btn-divider"></span><span class="eo-add-btn-price">$${m.price.toFixed(2)}</span></button>`;
+      actionsEl.innerHTML=`<button class="meal-detail-add" onclick="mdAddToCart('${m.id}')"><span>ADD</span><span class="eo-add-btn-divider"></span><span class="eo-add-btn-price">$${m.price.toFixed(2)}</span></button>`;
     }
   }
   document.getElementById('mealDetailOverlay').classList.add('open');
@@ -4855,21 +5347,71 @@ function cancelEditProfile(){
   document.getElementById('editProfileBtn').textContent='Edit';
   document.getElementById('editProfileBtn').onclick=()=>toggleEditProfile();
 }
-function saveProfile(){
+// WIRED (commit 2): Personal Information save → PATCH /api/commerce/customers/me
+//
+// Reads the three editable fields from the card (firstName, lastName,
+// birthday), builds a DTO matching UpdateProfileDto on the backend,
+// and PATCHes /me. On success, re-renders from the server's response
+// (authoritative — catches any backend normalization) and calls
+// cancelEditProfile() to exit edit mode. On error, the card stays in
+// edit mode so the user can fix their input and retry.
+//
+// Email + phone do NOT belong in this save — email is in the Contact
+// Details card (and gated behind verification via saveContact), and
+// phone is also in the Contact card. This card is firstName/lastName/
+// birthday only.
+async function saveProfile(){
   const card = document.getElementById('editProfileBtn').closest('.acct-card');
+  const saveBtn = document.querySelector('#profileActions button.acct-btn-primary-sm');
+
+  // Collect the three editable values from the card's .field-edit inputs
+  const edits = {};
   card.querySelectorAll('.field-edit').forEach(el=>{
-    const f=el.getAttribute('data-field');
-    userData[f]=el.value;
-    const disp=card.querySelector('.field-display[data-field="'+f+'"]');
-    if(f==='birthday'){
-      const d=new Date(el.value+'T12:00:00');
-      disp.textContent=d.toLocaleDateString('en',{month:'long',day:'numeric',year:'numeric'});
-    } else disp.textContent=el.value;
+    edits[el.getAttribute('data-field')] = el.value;
   });
-  document.getElementById('profileFullName').textContent=userData.firstName+' '+userData.lastName;
-  document.getElementById('profileAvatar').textContent=userData.firstName[0]+userData.lastName[0];
-  cancelEditProfile();
-  showToast('Profile updated!','success');
+
+  // Build DTO matching backend UpdateProfileDto. Empty strings become
+  // null (backend expects string or null, not empty). Birthday is a
+  // date string the backend parses with new Date().
+  const dto = {};
+  if(edits.firstName !== undefined) dto.first_name = edits.firstName || null;
+  if(edits.lastName  !== undefined) dto.last_name  = edits.lastName  || null;
+  if(edits.birthday  !== undefined && edits.birthday !== '') dto.birthday = edits.birthday;
+
+  if(saveBtn) saveBtn.disabled = true;
+  try {
+    const saved = await api('/commerce/customers/me', {
+      method: 'PATCH',
+      body: JSON.stringify(dto),
+    });
+
+    // Re-render from the server's authoritative response
+    userData.firstName = saved.first_name || '';
+    userData.lastName  = saved.last_name  || '';
+    if(saved.birthday) userData.birthday = String(saved.birthday).slice(0, 10);
+
+    setField('firstName', userData.firstName);
+    setField('lastName',  userData.lastName);
+    if(userData.birthday){
+      const d = new Date(userData.birthday + 'T12:00:00');
+      setField('birthday', userData.birthday,
+        d.toLocaleDateString('en',{month:'long',day:'numeric',year:'numeric'}));
+    }
+
+    document.getElementById('profileFullName').textContent =
+      (userData.firstName + ' ' + userData.lastName).trim() || 'Your account';
+    document.getElementById('profileAvatar').textContent =
+      ((userData.firstName[0] || '') + (userData.lastName[0] || '')).toUpperCase() || '??';
+
+    cancelEditProfile();
+    showToast('Profile updated!','success');
+  } catch(err) {
+    console.error('[account] saveProfile failed', err);
+    showToast("Couldn't save: " + (err.message || 'unknown error'), 'warning');
+    // Leave the card in edit mode so the user can retry or cancel
+  } finally {
+    if(saveBtn) saveBtn.disabled = false;
+  }
 }
 
 // ======= CONTACT EDIT =======
@@ -4889,40 +5431,163 @@ function cancelEditContact(){
   document.getElementById('contactActions').style.display='none';
   document.getElementById('editContactBtn').textContent='Edit';
 }
-function saveContact(){
-  const card=document.getElementById('editContactBtn').closest('.acct-card');
+// WIRED (commit 2): Contact Details save → PATCH /api/commerce/customers/me
+//
+// Sends only `phone` in the PATCH body. Email is deliberately NOT sent
+// because the backend's UpdateProfileDto doesn't accept it — email
+// changes require a verification round-trip (magic link to the new
+// address) which is a separate flow, tracked in deferred-decisions
+// under "Phone + email change flows for the account hub."
+//
+// If the user edited the email field in place, we show a warning toast
+// explaining it's coming soon and revert the input to the original
+// value so the displayed state matches what's actually saved.
+async function saveContact(){
+  const card = document.getElementById('editContactBtn').closest('.acct-card');
+  const saveBtn = document.querySelector('#contactActions button.acct-btn-primary-sm');
+
+  // Collect the two editable values (email, phone)
+  const edits = {};
   card.querySelectorAll('.field-edit').forEach(el=>{
-    const f=el.getAttribute('data-field');
-    let v = el.value;
-    if(f === 'phone') v = formatPhoneNumber(v);
-    userData[f]=v;
-    el.value = v;
-    card.querySelector('.field-display[data-field="'+f+'"]').textContent=v;
+    edits[el.getAttribute('data-field')] = el.value;
   });
-  cancelEditContact();
-  showToast('Contact info updated!','success');
+
+  // Check whether the user actually tried to change their email.
+  // If yes, show a "coming soon" toast and revert the input.
+  const emailChanged = edits.email !== undefined
+    && edits.email !== userData.email
+    && edits.email.trim() !== '';
+  if(emailChanged){
+    showToast('Email changes need verification — coming soon','info');
+    const emailEdit = card.querySelector('.field-edit[data-field="email"]');
+    if(emailEdit) emailEdit.value = userData.email || '';
+  }
+
+  // Build DTO: phone only. Format it via the existing helper first so
+  // the server receives the canonical format, not whatever the user
+  // happened to type.
+  const dto = {};
+  if(edits.phone !== undefined){
+    const formattedPhone = (typeof formatPhoneNumber === 'function')
+      ? formatPhoneNumber(edits.phone)
+      : edits.phone;
+    dto.phone = formattedPhone || null;
+  }
+
+  if(saveBtn) saveBtn.disabled = true;
+  try {
+    const saved = await api('/commerce/customers/me', {
+      method: 'PATCH',
+      body: JSON.stringify(dto),
+    });
+
+    // Re-render from server response (authoritative)
+    userData.phone = saved.phone || '';
+    setField('phone', userData.phone);
+
+    cancelEditContact();
+    showToast('Contact info updated!','success');
+  } catch(err) {
+    console.error('[account] saveContact failed', err);
+    showToast("Couldn't save: " + (err.message || 'unknown error'), 'warning');
+  } finally {
+    if(saveBtn) saveBtn.disabled = false;
+  }
 }
-function toggleSms(el){el.classList.toggle('active');userData.smsOptIn=el.classList.contains('active');showToast(userData.smsOptIn?'SMS notifications enabled':'SMS notifications disabled','success')}
-function toggleChip(el,type){
-  const isAllergen=type==='allergen';
-  const activeClass=isAllergen?'active-red':el.getAttribute('data-val')==='High Protein'?'active-blue':el.getAttribute('data-val')==='Vegan'?'active-green':'active';
-  if(el.classList.contains(activeClass)){el.classList.remove(activeClass)}
-  else{el.className='acct-chip '+activeClass}
+// WIRED (commit 2): SMS Order Updates toggle → PATCH /me/notifications
+//
+// Optimistic update: flip the .active class on the toggle element
+// IMMEDIATELY so the customer sees instant feedback, then fire the
+// PATCH in the background. If the PATCH fails, revert the class and
+// show a warning toast. Keeping the optimistic flip feels much faster
+// than waiting for the request to round-trip before moving the toggle.
+async function toggleSms(el){
+  const newValue = !el.classList.contains('active');
+  // Optimistic UI flip
+  el.classList.toggle('active', newValue);
+  try {
+    await api('/commerce/customers/me/notifications', {
+      method: 'PATCH',
+      body: JSON.stringify({ sms_opt_in: newValue }),
+    });
+    userData.smsOptIn = newValue;
+    showToast(newValue ? 'SMS notifications enabled' : 'SMS notifications disabled','success');
+  } catch(err) {
+    // Revert the optimistic flip
+    el.classList.toggle('active', !newValue);
+    console.error('[account] toggleSms failed', err);
+    showToast("Couldn't update SMS preference",'warning');
+  }
 }
-function savePreferences(){
-  showToast('Preferences saved!','success');
-  const icon=document.getElementById('savePrefsIcon');
-  const label=document.getElementById('savePrefsLabel');
-  if(!icon||!label)return;
-  icon.outerHTML='<svg id="savePrefsIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px"><polyline points="20 6 9 17 4 12"/></svg>';
-  label.textContent='Saved';
-  clearTimeout(window._savePrefsResetT);
-  window._savePrefsResetT=setTimeout(()=>{
-    const i=document.getElementById('savePrefsIcon');
-    const l=document.getElementById('savePrefsLabel');
-    if(i)i.outerHTML='<svg id="savePrefsIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px"><path d="M19 21H5a2 2 0 01-2-2V5a2 2 0 012-2h11l5 5v11a2 2 0 01-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>';
-    if(l)l.textContent='Save Preferences';
-  },2200);
+// WIRED (commit 4): chip toggle — local-only, no server call here.
+// Flips the active-red / active-blue class based on the type parameter
+// passed from the onclick handler in the HTML ('allergen' or 'tag').
+// The change is purely visual until the customer clicks Save Preferences.
+function toggleChip(el, type){
+  const activeClass = type === 'allergen' ? 'active-red' : 'active-blue';
+  if (el.classList.contains(activeClass)) {
+    el.classList.remove(activeClass);
+  } else {
+    el.className = 'acct-chip ' + activeClass;
+  }
+}
+
+// WIRED (commit 4): Save Preferences → PATCH /me/preferences
+//
+// Collects the currently-active chips from both sub-groups and sends
+// { allergens, diet_tags } in one PATCH. Array fields REPLACE (not
+// merge) on the backend — this matches UpdatePreferencesDto semantics.
+//
+// On success: re-renders userData + chip state from the server response
+// (authoritative), shows a success toast, and briefly morphs the Save
+// button icon to a check mark + "Saved" text for 2.2 seconds (keeps
+// the prototype's delightful save-confirmation UX). On failure: logs
+// to console.error, warning toast, chip classes stay where they are
+// so the customer can retry.
+async function savePreferences(){
+  const saveBtn = document.getElementById('savePrefsBtn');
+
+  // Collect active chips from both sub-groups
+  const allergens = Array.from(document.querySelectorAll('#allergenChipsWrap .acct-chip.active-red'))
+    .map(el => el.getAttribute('data-val'));
+  const dietTags  = Array.from(document.querySelectorAll('#dietTagChipsWrap  .acct-chip.active-blue'))
+    .map(el => el.getAttribute('data-val'));
+
+  if (saveBtn) saveBtn.disabled = true;
+  try {
+    const saved = await api('/commerce/customers/me/preferences', {
+      method: 'PATCH',
+      body: JSON.stringify({ allergens, diet_tags: dietTags }),
+    });
+
+    // Re-render from server response (authoritative — catches any
+    // backend normalization like whitespace trimming or dedup).
+    userData.allergens = Array.isArray(saved.allergens) ? saved.allergens.slice() : [];
+    userData.dietTags  = Array.isArray(saved.diet_tags) ? saved.diet_tags.slice()  : [];
+    applyChipState();
+
+    showToast('Preferences saved!','success');
+
+    // Button morph animation — preserves the prototype's UX flourish
+    const icon  = document.getElementById('savePrefsIcon');
+    const label = document.getElementById('savePrefsLabel');
+    if (icon && label) {
+      icon.outerHTML = '<svg id="savePrefsIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px"><polyline points="20 6 9 17 4 12"/></svg>';
+      label.textContent = 'Saved';
+      clearTimeout(window._savePrefsResetT);
+      window._savePrefsResetT = setTimeout(() => {
+        const i = document.getElementById('savePrefsIcon');
+        const l = document.getElementById('savePrefsLabel');
+        if (i) i.outerHTML = '<svg id="savePrefsIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px"><path d="M19 21H5a2 2 0 01-2-2V5a2 2 0 012-2h11l5 5v11a2 2 0 01-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>';
+        if (l) l.textContent = 'Save Preferences';
+      }, 2200);
+    }
+  } catch (err) {
+    console.error('[account] savePreferences failed', err);
+    showToast("Couldn't save: " + (err.message || 'unknown error'), 'warning');
+  } finally {
+    if (saveBtn) saveBtn.disabled = false;
+  }
 }
 
 // ======= ADDRESSES =======
