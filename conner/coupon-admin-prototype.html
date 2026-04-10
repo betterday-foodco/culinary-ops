@@ -1,0 +1,1283 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Coupons — BetterDay Kitchen (prototype)</title>
+
+<!--
+  ═══════════════════════════════════════════════════════════════════════
+  Admin dashboard prototype — Coupons module.
+  ═══════════════════════════════════════════════════════════════════════
+
+  RESTYLED on 2026-04-09 from the customer-site visual language
+  (cream/navy/Gaya fonts, accordion stepper in the checkout.html vibe)
+  into the actual admin dashboard language documented in
+  conner/dashboard-style-guide.md.
+
+  Uses Tailwind Play CDN (https://cdn.tailwindcss.com) with a config
+  override that mirrors frontend/tailwind.config.ts — the same brand
+  color palette the real dashboard uses. Play CDN prints a warning
+  that it's not production-ready; that's fine for a mockup.
+
+  The left sidebar is the "placeholder sidebar" pattern from style
+  guide §15 — lifted directly from frontend/app/(dashboard)/layout.tsx
+  so the coupon page lands visually inside the real dashboard frame.
+  All nav links except /coupons are non-functional placeholders.
+
+  Everything is client-side only — state lives in JS globals, no
+  backend calls. The actual validator lives at
+  backend/src/modules/commerce-coupons/coupon-validation.service.ts.
+-->
+
+<script src="https://cdn.tailwindcss.com"></script>
+<script>
+  tailwind.config = {
+    theme: {
+      extend: {
+        colors: {
+          brand: {
+            50:  '#EFF6FF',
+            100: '#DBEAFE',
+            200: '#BFDBFE',
+            300: '#93C5FD',
+            400: '#60A5FA',
+            500: '#1B6DB5',
+            600: '#1559A0',
+            700: '#0E3A6E',
+          },
+          'bd-yellow': '#F5C400',
+        },
+      },
+    },
+  };
+</script>
+
+<style>
+  /* ━━━ Minimal custom CSS ━━━
+     Only what's awkward in utility classes: stepper connector line,
+     state-driven visibility, animation keyframes. */
+
+  html { scroll-behavior: smooth; }
+
+  /* Stepper column padding — leaves room for the absolute-positioned
+     circles on the left edge. Vertical line connects the circles. */
+  .cpn-stepper { padding-left: 56px; position: relative; }
+  .cpn-stepper::before {
+    content: '';
+    position: absolute;
+    left: 18px; top: 24px; bottom: 24px;
+    width: 2px;
+    background: #E5E7EB; /* tailwind gray-200 */
+    z-index: 0;
+  }
+  @media (max-width: 640px) {
+    .cpn-stepper { padding-left: 0; }
+    .cpn-stepper::before { display: none; }
+  }
+
+  .cpn-step { position: relative; }
+  .cpn-step-num {
+    position: absolute;
+    left: -48px; top: 18px;
+    width: 36px; height: 36px;
+    z-index: 1;
+  }
+  @media (max-width: 640px) {
+    .cpn-step-num { position: static; margin-bottom: 12px; }
+  }
+
+  /* State-driven visibility */
+  .cpn-step[data-state="active"] .cpn-step-body { display: block; animation: stepIn .25s ease; }
+  .cpn-step[data-state="active"] .cpn-step-recap { display: none; }
+  .cpn-step[data-state="active"] .cpn-step-edit { display: none; }
+  .cpn-step[data-state="complete"] .cpn-step-body { display: none; }
+  .cpn-step[data-state="complete"] .cpn-step-recap { display: block; }
+  .cpn-step[data-state="complete"] .cpn-step-edit { display: inline-block; }
+  .cpn-step[data-state="pending"]  .cpn-step-body { display: none; }
+  .cpn-step[data-state="pending"]  .cpn-step-recap { display: none; }
+  .cpn-step[data-state="pending"]  .cpn-step-edit { display: none; }
+  .cpn-step-body { display: none; }
+  .cpn-step-recap { display: none; }
+  .cpn-step-edit { display: none; }
+
+  @keyframes stepIn {
+    from { opacity: 0; transform: translateY(-4px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+
+  /* Toast */
+  .cpn-toast {
+    position: fixed; bottom: 24px; left: 50%;
+    transform: translateX(-50%) translateY(20px);
+    opacity: 0; pointer-events: none;
+    transition: all 0.25s ease;
+    z-index: 1000;
+  }
+  .cpn-toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+</style>
+
+</head>
+<body class="bg-gray-50 text-gray-900" style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;">
+
+<div class="flex h-screen">
+
+  <!-- ═══════════════════════════════════════════════════════════════
+       SIDEBAR PLACEHOLDER — per style guide §15
+       Ported from frontend/app/(dashboard)/layout.tsx.
+       All links except Coupons are non-functional placeholders.
+       ═══════════════════════════════════════════════════════════════ -->
+  <aside class="w-60 bg-white border-r border-gray-200 flex flex-col flex-shrink-0">
+
+    <!-- Logo -->
+    <div class="h-14 flex items-center px-5 border-b border-gray-200">
+      <span class="w-8 h-8 bg-bd-yellow rounded-lg flex items-center justify-center text-brand-700 font-black text-xs mr-2.5 tracking-tight shadow-sm">BD</span>
+      <span class="font-semibold text-gray-900 text-sm">BetterDay Kitchen</span>
+    </div>
+
+    <!-- Nav -->
+    <nav class="flex-1 py-4 px-3 overflow-y-auto">
+      <div class="space-y-0.5">
+        <a href="#" class="flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm text-gray-600 hover:bg-gray-100 hover:text-gray-900 transition-colors">
+          <span class="text-base leading-none">⊞</span>Dashboard
+        </a>
+        <a href="#" class="flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm text-gray-600 hover:bg-gray-100 hover:text-gray-900 transition-colors">
+          <span class="text-base leading-none">📅</span>Production Plans
+        </a>
+        <a href="#" class="flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm text-gray-600 hover:bg-gray-100 hover:text-gray-900 transition-colors">
+          <span class="text-base leading-none">📦</span>Inventory
+        </a>
+        <a href="#" class="flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm text-gray-600 hover:bg-gray-100 hover:text-gray-900 transition-colors">
+          <span class="text-base leading-none">🍽</span>Meal Recipes
+        </a>
+        <a href="#" class="flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm text-gray-600 hover:bg-gray-100 hover:text-gray-900 transition-colors">
+          <span class="text-base leading-none">📋</span>Menu Builder
+        </a>
+        <a href="#" class="flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm text-gray-600 hover:bg-gray-100 hover:text-gray-900 transition-colors">
+          <span class="text-base leading-none">🍲</span>Sub-Recipes
+        </a>
+        <a href="#" class="flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm text-gray-600 hover:bg-gray-100 hover:text-gray-900 transition-colors">
+          <span class="text-base leading-none">🥦</span>Ingredients
+        </a>
+        <!-- NEW: Coupons (ACTIVE) -->
+        <a href="#" class="flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm bg-brand-50 text-brand-700 font-medium">
+          <span class="text-base leading-none">🎟️</span>Coupons
+        </a>
+      </div>
+
+      <div class="my-3 border-t border-gray-100"></div>
+
+      <!-- Manage Kitchen (collapsible placeholder) -->
+      <button onclick="toggleSection('kitchen')" class="w-full flex items-center justify-between gap-2.5 px-3 py-2 rounded-lg text-sm text-gray-600 hover:bg-gray-100 hover:text-gray-900 transition-colors">
+        <div class="flex items-center gap-2.5">
+          <span class="text-base leading-none">🍳</span>Manage Kitchen
+        </div>
+        <span id="chev-kitchen" class="text-xs transition-transform">▾</span>
+      </button>
+      <div id="section-kitchen" class="hidden mt-0.5 ml-2 pl-3 border-l border-gray-100 space-y-0.5">
+        <a href="#" class="flex items-center gap-2 px-2 py-1.5 rounded-lg text-xs text-gray-500 hover:bg-gray-100 hover:text-gray-700"><span>👨‍🍳</span>Kitchen Admin</a>
+        <a href="#" class="flex items-center gap-2 px-2 py-1.5 rounded-lg text-xs text-gray-500 hover:bg-gray-100 hover:text-gray-700"><span>📍</span>Station Assignment</a>
+        <a href="#" class="flex items-center gap-2 px-2 py-1.5 rounded-lg text-xs text-gray-500 hover:bg-gray-100 hover:text-gray-700"><span>💬</span>Kitchen Messages</a>
+        <a href="#" class="flex items-center gap-2 px-2 py-1.5 rounded-lg text-xs text-gray-500 hover:bg-gray-100 hover:text-gray-700"><span>✅</span>Approvals</a>
+        <a href="#" class="flex items-center gap-2 px-2 py-1.5 rounded-lg text-xs text-gray-500 hover:bg-gray-100 hover:text-gray-700"><span>🏷️</span>System Tags</a>
+      </div>
+
+      <!-- BD Corporate -->
+      <a href="#" class="flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm text-gray-600 hover:bg-gray-100 hover:text-gray-900 transition-colors">
+        <span class="text-base leading-none">🏢</span>BD Corporate
+      </a>
+
+      <!-- Settings -->
+      <a href="#" class="flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm text-gray-600 hover:bg-gray-100 hover:text-gray-900 transition-colors">
+        <span class="text-base leading-none">⚙</span>Settings
+      </a>
+
+      <!-- Others (collapsible placeholder) -->
+      <div class="mt-1">
+        <button onclick="toggleSection('others')" class="w-full flex items-center justify-between gap-2.5 px-3 py-2 rounded-lg text-sm text-gray-500 hover:bg-gray-100 hover:text-gray-700 transition-colors">
+          <div class="flex items-center gap-2.5">
+            <span class="text-base leading-none">⋯</span>Others
+          </div>
+          <span id="chev-others" class="text-xs transition-transform">▾</span>
+        </button>
+        <div id="section-others" class="hidden mt-0.5 ml-2 pl-3 border-l border-gray-100 space-y-0.5">
+          <a href="#" class="flex items-center gap-2 px-2 py-1.5 rounded-lg text-xs text-gray-500 hover:bg-gray-100 hover:text-gray-700"><span>⚖️</span>Portion Specs</a>
+          <a href="#" class="flex items-center gap-2 px-2 py-1.5 rounded-lg text-xs text-gray-500 hover:bg-gray-100 hover:text-gray-700"><span>💲</span>Meal Pricing</a>
+          <a href="#" class="flex items-center gap-2 px-2 py-1.5 rounded-lg text-xs text-gray-500 hover:bg-gray-100 hover:text-gray-700"><span>📊</span>Reports</a>
+        </div>
+      </div>
+    </nav>
+
+    <!-- Sign out -->
+    <div class="p-3 border-t border-gray-200">
+      <button class="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm text-gray-500 hover:bg-gray-100 hover:text-gray-700 transition-colors">
+        <span class="text-base leading-none">→</span>Sign out
+      </button>
+    </div>
+  </aside>
+
+  <!-- ═══════════════════════════════════════════════════════════════
+       MAIN CONTENT
+       ═══════════════════════════════════════════════════════════════ -->
+  <main class="flex-1 overflow-y-auto">
+    <div class="p-8">
+
+      <!-- Page header -->
+      <div class="flex items-center justify-between mb-6 flex-wrap gap-3">
+        <div>
+          <h1 class="text-2xl font-bold text-gray-900">Coupons</h1>
+          <p class="text-sm text-gray-500 mt-0.5" id="pageSubtitle">7 total · 4 active · 1 scheduled · 1 expired</p>
+        </div>
+        <div class="flex gap-2" id="headerActions">
+          <button onclick="showToast('DOTW Calendar — coming in v2')" class="px-4 py-2 border border-gray-300 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-50 transition-colors">
+            📅 DOTW Calendar
+          </button>
+          <button onclick="showTiles()" class="px-4 py-2 bg-brand-500 text-white text-sm font-medium rounded-lg hover:bg-brand-600 transition-colors">
+            + New coupon
+          </button>
+        </div>
+      </div>
+
+      <!-- Breadcrumbs (shown in tile + form views) -->
+      <nav id="breadcrumbs" class="hidden text-xs text-gray-500 mb-4 font-medium"></nav>
+
+      <!-- ═══════ VIEW 1: LIST ═══════ -->
+      <div id="listView">
+
+        <!-- Status pills -->
+        <div class="flex flex-wrap gap-2 mb-5" id="statusPills"></div>
+
+        <!-- Search + filters -->
+        <div class="flex gap-3 mb-6 flex-wrap">
+          <input type="text" id="searchInput" placeholder="Search by code or name..." class="flex-1 min-w-[240px] px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-500" oninput="renderList()">
+          <select id="typeFilter" class="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 bg-white" onchange="renderList()">
+            <option value="">All types</option>
+            <option value="percentage">Percentage</option>
+            <option value="dollar_amount">Dollar off</option>
+            <option value="free_delivery">Free delivery</option>
+          </select>
+          <select id="categoryFilter" class="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 bg-white" onchange="renderList()">
+            <option value="">All categories</option>
+            <option value="intro">Intro</option>
+            <option value="seasonal">Seasonal</option>
+            <option value="partnership">Partnership</option>
+            <option value="loyalty">Loyalty</option>
+            <option value="email_flow">Email flow</option>
+          </select>
+        </div>
+
+        <!-- Table -->
+        <div class="bg-white rounded-xl border border-gray-200 overflow-hidden">
+          <table class="w-full text-sm">
+            <thead class="bg-gray-50 border-b border-gray-200">
+              <tr>
+                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Code</th>
+                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Name</th>
+                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Type</th>
+                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Value</th>
+                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Uses</th>
+                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                <th class="px-4 py-3"></th>
+              </tr>
+            </thead>
+            <tbody id="tableBody" class="divide-y divide-gray-100"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- ═══════ VIEW 2: TILE PICKER ═══════ -->
+      <div id="tilesView" class="hidden">
+        <div class="bg-white rounded-xl border border-gray-200 p-6 mb-5">
+          <h2 class="text-lg font-semibold text-gray-900 mb-1">What kind of coupon?</h2>
+          <p class="text-sm text-gray-500 max-w-2xl">Pick a starting point. Each one sets up the form with sensible defaults, so you only fill in what's unique to this campaign.</p>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
+          <button onclick="startCreate('code')" class="group text-left bg-white rounded-xl border border-gray-200 p-5 hover:border-brand-500 hover:shadow-lg transition-all">
+            <div class="w-10 h-10 rounded-lg bg-brand-50 text-brand-600 flex items-center justify-center text-xl mb-3">🎟️</div>
+            <h3 class="text-base font-semibold text-gray-900 mb-1 group-hover:text-brand-600">Code discount</h3>
+            <p class="text-xs text-gray-500 leading-relaxed">A code customers type at checkout. Best for email promos, flyer drops, or influencers.</p>
+          </button>
+
+          <button onclick="startCreate('auto')" class="group text-left bg-white rounded-xl border border-gray-200 p-5 hover:border-brand-500 hover:shadow-lg transition-all">
+            <div class="w-10 h-10 rounded-lg bg-yellow-50 text-yellow-700 flex items-center justify-center text-xl mb-3">✨</div>
+            <h3 class="text-base font-semibold text-gray-900 mb-1 group-hover:text-brand-600">Automatic discount</h3>
+            <p class="text-xs text-gray-500 leading-relaxed">Applies itself at checkout when the cart meets the rules. No code entry needed.</p>
+          </button>
+
+          <button onclick="startCreate('dotw')" class="group text-left bg-white rounded-xl border border-gray-200 p-5 hover:border-brand-500 hover:shadow-lg transition-all">
+            <div class="w-10 h-10 rounded-lg bg-purple-50 text-purple-700 flex items-center justify-center text-xl mb-3">📅</div>
+            <h3 class="text-base font-semibold text-gray-900 mb-1 group-hover:text-brand-600">Deal of the Week</h3>
+            <p class="text-xs text-gray-500 leading-relaxed">Tied to a specific delivery week. Only usable on orders arriving that week.</p>
+            <span class="inline-flex items-center gap-1 mt-2 text-[10px] font-semibold text-brand-600 uppercase tracking-wider">⚡ Preset included</span>
+          </button>
+
+          <button onclick="startCreate('welcome')" class="group text-left bg-white rounded-xl border border-gray-200 p-5 hover:border-brand-500 hover:shadow-lg transition-all">
+            <div class="w-10 h-10 rounded-lg bg-green-50 text-green-700 flex items-center justify-center text-xl mb-3">👋</div>
+            <h3 class="text-base font-semibold text-gray-900 mb-1 group-hover:text-brand-600">Welcome offer</h3>
+            <p class="text-xs text-gray-500 leading-relaxed">First-order discount for new customers. Requires verified email by default.</p>
+            <span class="inline-flex items-center gap-1 mt-2 text-[10px] font-semibold text-brand-600 uppercase tracking-wider">⚡ Preset included</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- ═══════ VIEW 3: CREATE FORM ═══════ -->
+      <div id="formView" class="hidden">
+        <div class="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_360px] gap-6 items-start">
+
+          <!-- Left: accordion stepper -->
+          <div class="cpn-stepper space-y-4 min-w-0">
+
+            <!-- ─── STEP 1 — Essentials ─── -->
+            <div class="cpn-step bg-white rounded-xl border p-6 transition-all" data-step="1" data-state="active">
+              <div class="cpn-step-num"><div class="w-9 h-9 rounded-full flex items-center justify-center text-sm font-bold border-2 bg-brand-500 text-white border-brand-500">1</div></div>
+              <div class="flex items-center justify-between gap-3">
+                <h3 class="text-lg font-semibold text-gray-900">Essentials</h3>
+                <button class="cpn-step-edit text-xs text-brand-600 hover:underline font-medium" onclick="editStep(1)">Edit</button>
+              </div>
+              <p class="cpn-step-recap text-sm text-gray-600 mt-1"></p>
+              <div class="cpn-step-body mt-5">
+                <div class="bg-blue-50 border-l-4 border-brand-500 px-4 py-3 rounded-r-lg mb-4 text-sm text-gray-700">
+                  <strong class="text-gray-900">Start here.</strong> The code is what customers type; the name is what you see in reports.
+                </div>
+                <div class="space-y-4">
+                  <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label class="block text-sm font-medium text-gray-700 mb-1">Code *</label>
+                      <input type="text" id="f_code" oninput="uppercaseInput(this); updateSummary();" placeholder="WELCOME10" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 font-mono">
+                      <p class="text-xs text-gray-500 mt-1">Customers type this. Letters + numbers only.</p>
+                    </div>
+                    <div>
+                      <label class="block text-sm font-medium text-gray-700 mb-1">Internal name *</label>
+                      <input type="text" id="f_name" oninput="updateSummary()" placeholder="Welcome offer" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-500">
+                      <p class="text-xs text-gray-500 mt-1">Admin label — never shown to customers.</p>
+                    </div>
+                  </div>
+                  <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Customer-facing message</label>
+                    <input type="text" id="f_message" oninput="updateSummary()" placeholder="Welcome to BetterDay — 10% off your first order!" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-500">
+                    <p class="text-xs text-gray-500 mt-1">Appears in cart + confirmation emails. Optional.</p>
+                  </div>
+                </div>
+                <div class="flex justify-end pt-4 mt-4 border-t border-gray-100">
+                  <button onclick="continueStep(1)" class="px-4 py-2 bg-brand-500 text-white text-sm font-medium rounded-lg hover:bg-brand-600 transition-colors">Continue →</button>
+                </div>
+              </div>
+            </div>
+
+            <!-- ─── STEP 2 — Discount value ─── -->
+            <div class="cpn-step bg-gray-50 rounded-xl border border-gray-200 p-6 opacity-60 transition-all" data-step="2" data-state="pending">
+              <div class="cpn-step-num"><div class="w-9 h-9 rounded-full flex items-center justify-center text-sm font-bold border-2 bg-white text-gray-400 border-gray-300">2</div></div>
+              <div class="flex items-center justify-between gap-3">
+                <h3 class="text-lg font-semibold text-gray-900">Discount value</h3>
+                <button class="cpn-step-edit text-xs text-brand-600 hover:underline font-medium" onclick="editStep(2)">Edit</button>
+              </div>
+              <p class="cpn-step-recap text-sm text-gray-600 mt-1"></p>
+              <div class="cpn-step-body mt-5">
+                <div class="space-y-4">
+                  <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">Type *</label>
+                    <div class="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                      <label class="cpn-radio-card flex items-center gap-2 px-3 py-3 border rounded-lg cursor-pointer transition-colors" data-value="percentage">
+                        <input type="radio" name="f_type" value="percentage" checked class="w-4 h-4 text-brand-600 focus:ring-brand-500">
+                        <span class="text-sm font-medium text-gray-700">Percentage off</span>
+                      </label>
+                      <label class="cpn-radio-card flex items-center gap-2 px-3 py-3 border rounded-lg cursor-pointer transition-colors" data-value="dollar_amount">
+                        <input type="radio" name="f_type" value="dollar_amount" class="w-4 h-4 text-brand-600 focus:ring-brand-500">
+                        <span class="text-sm font-medium text-gray-700">Dollar amount</span>
+                      </label>
+                      <label class="cpn-radio-card flex items-center gap-2 px-3 py-3 border rounded-lg cursor-pointer transition-colors" data-value="free_delivery">
+                        <input type="radio" name="f_type" value="free_delivery" class="w-4 h-4 text-brand-600 focus:ring-brand-500">
+                        <span class="text-sm font-medium text-gray-700">Free delivery</span>
+                      </label>
+                    </div>
+                  </div>
+                  <div id="valueRow">
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Amount *</label>
+                    <div class="flex rounded-lg border border-gray-300 focus-within:ring-2 focus-within:ring-brand-500 focus-within:border-brand-500">
+                      <span id="valuePrefix" class="flex items-center px-3 bg-gray-50 text-sm font-medium text-gray-500 border-r border-gray-300 rounded-l-lg">%</span>
+                      <input type="number" id="f_value" oninput="updateSummary()" placeholder="10" class="flex-1 px-3 py-2 text-sm focus:outline-none rounded-r-lg">
+                    </div>
+                  </div>
+                  <div id="capRow">
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Max discount cap</label>
+                    <div class="flex rounded-lg border border-gray-300 focus-within:ring-2 focus-within:ring-brand-500 focus-within:border-brand-500">
+                      <span class="flex items-center px-3 bg-gray-50 text-sm font-medium text-gray-500 border-r border-gray-300 rounded-l-lg">$</span>
+                      <input type="number" id="f_max_discount" oninput="updateSummary()" placeholder="25" class="flex-1 px-3 py-2 text-sm focus:outline-none rounded-r-lg">
+                    </div>
+                    <p class="text-xs text-gray-500 mt-1">Optional cap so a 20% coupon on a $500 order doesn't give away $100.</p>
+                  </div>
+                </div>
+                <div class="flex justify-between pt-4 mt-4 border-t border-gray-100">
+                  <button onclick="editStep(1)" class="px-4 py-2 border border-gray-300 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-50 transition-colors">← Back</button>
+                  <button onclick="continueStep(2)" class="px-4 py-2 bg-brand-500 text-white text-sm font-medium rounded-lg hover:bg-brand-600 transition-colors">Continue →</button>
+                </div>
+              </div>
+            </div>
+
+            <!-- ─── STEP 3 — Scope ─── -->
+            <div class="cpn-step bg-gray-50 rounded-xl border border-gray-200 p-6 opacity-60 transition-all" data-step="3" data-state="pending">
+              <div class="cpn-step-num"><div class="w-9 h-9 rounded-full flex items-center justify-center text-sm font-bold border-2 bg-white text-gray-400 border-gray-300">3</div></div>
+              <div class="flex items-center justify-between gap-3">
+                <h3 class="text-lg font-semibold text-gray-900">What it applies to</h3>
+                <button class="cpn-step-edit text-xs text-brand-600 hover:underline font-medium" onclick="editStep(3)">Edit</button>
+              </div>
+              <p class="cpn-step-recap text-sm text-gray-600 mt-1"></p>
+              <div class="cpn-step-body mt-5">
+                <div class="bg-blue-50 border-l-4 border-brand-500 px-4 py-3 rounded-r-lg mb-4 text-sm text-gray-700">
+                  Leave blank for <strong class="text-gray-900">the entire order</strong>. Select specific meals or categories to scope the discount.
+                </div>
+                <div class="space-y-4">
+                  <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Include only these meal codes</label>
+                    <input type="text" id="f_product_include" oninput="updateSummary()" placeholder="MEAL-A, MEAL-B (comma-separated)" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-500">
+                  </div>
+                  <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Include only these categories</label>
+                    <input type="text" id="f_category_include" oninput="updateSummary()" placeholder="entree, snack" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-500">
+                  </div>
+                  <label class="flex items-start gap-2 cursor-pointer p-3 border border-gray-200 rounded-lg hover:bg-gray-50">
+                    <input type="checkbox" id="f_exclude_sale_items" onchange="updateSummary()" class="w-4 h-4 mt-0.5 rounded border-gray-300 text-brand-600 focus:ring-brand-500">
+                    <div>
+                      <div class="text-sm font-medium text-gray-700">Don't apply to meals already on sale</div>
+                      <div class="text-xs text-gray-500 mt-0.5">Sale items are skipped when calculating the discount amount.</div>
+                    </div>
+                  </label>
+                </div>
+                <div class="flex justify-between pt-4 mt-4 border-t border-gray-100">
+                  <button onclick="editStep(2)" class="px-4 py-2 border border-gray-300 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-50 transition-colors">← Back</button>
+                  <button onclick="continueStep(3)" class="px-4 py-2 bg-brand-500 text-white text-sm font-medium rounded-lg hover:bg-brand-600 transition-colors">Continue →</button>
+                </div>
+              </div>
+            </div>
+
+            <!-- ─── STEP 4 — Who ─── -->
+            <div class="cpn-step bg-gray-50 rounded-xl border border-gray-200 p-6 opacity-60 transition-all" data-step="4" data-state="pending">
+              <div class="cpn-step-num"><div class="w-9 h-9 rounded-full flex items-center justify-center text-sm font-bold border-2 bg-white text-gray-400 border-gray-300">4</div></div>
+              <div class="flex items-center justify-between gap-3">
+                <h3 class="text-lg font-semibold text-gray-900">Who can use it</h3>
+                <button class="cpn-step-edit text-xs text-brand-600 hover:underline font-medium" onclick="editStep(4)">Edit</button>
+              </div>
+              <p class="cpn-step-recap text-sm text-gray-600 mt-1"></p>
+              <div class="cpn-step-body mt-5">
+                <div class="space-y-4">
+                  <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Subscription status</label>
+                    <select id="f_subscription_restriction" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 bg-white" onchange="updateSummary()">
+                      <option value="none">Everyone</option>
+                      <option value="active_subscribers_only">Active subscribers only</option>
+                      <option value="new_subscribers_only">First-time subscribers only</option>
+                      <option value="non_subscribers_only">Non-subscribers only</option>
+                    </select>
+                  </div>
+                  <label class="flex items-start gap-2 cursor-pointer p-3 border border-gray-200 rounded-lg hover:bg-gray-50">
+                    <input type="checkbox" id="f_new_customers_only" onchange="updateSummary()" class="w-4 h-4 mt-0.5 rounded border-gray-300 text-brand-600 focus:ring-brand-500">
+                    <div>
+                      <div class="text-sm font-medium text-gray-700">First-time customers only</div>
+                      <div class="text-xs text-gray-500 mt-0.5">Customer must have zero prior non-cancelled orders.</div>
+                    </div>
+                  </label>
+                  <label class="flex items-start gap-2 cursor-pointer p-3 border border-gray-200 rounded-lg hover:bg-gray-50">
+                    <input type="checkbox" id="f_require_verified_email" onchange="updateSummary()" class="w-4 h-4 mt-0.5 rounded border-gray-300 text-brand-600 focus:ring-brand-500">
+                    <div>
+                      <div class="text-sm font-medium text-gray-700">Require verified email</div>
+                      <div class="text-xs text-gray-500 mt-0.5">Recommended for high-value discounts to prevent abuse.</div>
+                    </div>
+                  </label>
+                </div>
+                <div class="flex justify-between pt-4 mt-4 border-t border-gray-100">
+                  <button onclick="editStep(3)" class="px-4 py-2 border border-gray-300 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-50 transition-colors">← Back</button>
+                  <button onclick="continueStep(4)" class="px-4 py-2 bg-brand-500 text-white text-sm font-medium rounded-lg hover:bg-brand-600 transition-colors">Continue →</button>
+                </div>
+              </div>
+            </div>
+
+            <!-- ─── STEP 5 — Limits ─── -->
+            <div class="cpn-step bg-gray-50 rounded-xl border border-gray-200 p-6 opacity-60 transition-all" data-step="5" data-state="pending">
+              <div class="cpn-step-num"><div class="w-9 h-9 rounded-full flex items-center justify-center text-sm font-bold border-2 bg-white text-gray-400 border-gray-300">5</div></div>
+              <div class="flex items-center justify-between gap-3">
+                <h3 class="text-lg font-semibold text-gray-900">Limits</h3>
+                <button class="cpn-step-edit text-xs text-brand-600 hover:underline font-medium" onclick="editStep(5)">Edit</button>
+              </div>
+              <p class="cpn-step-recap text-sm text-gray-600 mt-1"></p>
+              <div class="cpn-step-body mt-5">
+                <div class="space-y-4">
+                  <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label class="block text-sm font-medium text-gray-700 mb-1">Minimum order</label>
+                      <div class="flex rounded-lg border border-gray-300 focus-within:ring-2 focus-within:ring-brand-500 focus-within:border-brand-500">
+                        <span class="flex items-center px-3 bg-gray-50 text-sm font-medium text-gray-500 border-r border-gray-300 rounded-l-lg">$</span>
+                        <input type="number" id="f_min_order_value" oninput="updateSummary()" placeholder="50" class="flex-1 px-3 py-2 text-sm focus:outline-none rounded-r-lg">
+                      </div>
+                    </div>
+                    <div>
+                      <label class="block text-sm font-medium text-gray-700 mb-1">Maximum order</label>
+                      <div class="flex rounded-lg border border-gray-300 focus-within:ring-2 focus-within:ring-brand-500 focus-within:border-brand-500">
+                        <span class="flex items-center px-3 bg-gray-50 text-sm font-medium text-gray-500 border-r border-gray-300 rounded-l-lg">$</span>
+                        <input type="number" id="f_max_order_value" oninput="updateSummary()" placeholder="500" class="flex-1 px-3 py-2 text-sm focus:outline-none rounded-r-lg">
+                      </div>
+                    </div>
+                  </div>
+                  <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div>
+                      <label class="block text-sm font-medium text-gray-700 mb-1">Global usage cap</label>
+                      <input type="number" id="f_max_uses" oninput="updateSummary()" placeholder="100" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-500">
+                      <p class="text-xs text-gray-500 mt-1">Total across all customers.</p>
+                    </div>
+                    <div>
+                      <label class="block text-sm font-medium text-gray-700 mb-1">Per-customer cap</label>
+                      <input type="number" id="f_max_uses_per_customer" oninput="updateSummary()" placeholder="1" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-500">
+                    </div>
+                    <div>
+                      <label class="block text-sm font-medium text-gray-700 mb-1">Per-household cap</label>
+                      <input type="number" id="f_max_uses_per_household" oninput="updateSummary()" placeholder="Optional" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-500">
+                    </div>
+                  </div>
+                </div>
+                <div class="flex justify-between pt-4 mt-4 border-t border-gray-100">
+                  <button onclick="editStep(4)" class="px-4 py-2 border border-gray-300 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-50 transition-colors">← Back</button>
+                  <button onclick="continueStep(5)" class="px-4 py-2 bg-brand-500 text-white text-sm font-medium rounded-lg hover:bg-brand-600 transition-colors">Continue →</button>
+                </div>
+              </div>
+            </div>
+
+            <!-- ─── STEP 6 — Schedule ─── -->
+            <div class="cpn-step bg-gray-50 rounded-xl border border-gray-200 p-6 opacity-60 transition-all" data-step="6" data-state="pending">
+              <div class="cpn-step-num"><div class="w-9 h-9 rounded-full flex items-center justify-center text-sm font-bold border-2 bg-white text-gray-400 border-gray-300">6</div></div>
+              <div class="flex items-center justify-between gap-3">
+                <h3 class="text-lg font-semibold text-gray-900">Schedule</h3>
+                <button class="cpn-step-edit text-xs text-brand-600 hover:underline font-medium" onclick="editStep(6)">Edit</button>
+              </div>
+              <p class="cpn-step-recap text-sm text-gray-600 mt-1"></p>
+              <div class="cpn-step-body mt-5">
+                <div class="space-y-4">
+                  <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label class="block text-sm font-medium text-gray-700 mb-1">Starts at</label>
+                      <input type="date" id="f_starts_at" oninput="updateSummary()" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-500">
+                    </div>
+                    <div>
+                      <label class="block text-sm font-medium text-gray-700 mb-1">Expires at</label>
+                      <input type="date" id="f_expires_at" oninput="updateSummary()" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-500">
+                    </div>
+                  </div>
+                  <div id="dotwRow" class="hidden">
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Delivery week (Sunday) *</label>
+                    <input type="date" id="f_delivery_week_sunday" oninput="updateSummary()" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-500">
+                    <p class="text-xs text-gray-500 mt-1">DOTW coupons are bound to a specific delivery week — only usable on orders arriving that Sunday.</p>
+                  </div>
+                </div>
+                <div class="flex justify-between pt-4 mt-4 border-t border-gray-100">
+                  <button onclick="editStep(5)" class="px-4 py-2 border border-gray-300 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-50 transition-colors">← Back</button>
+                  <button onclick="continueStep(6)" class="px-4 py-2 bg-brand-500 text-white text-sm font-medium rounded-lg hover:bg-brand-600 transition-colors">Continue →</button>
+                </div>
+              </div>
+            </div>
+
+            <!-- ─── STEP 7 — Review & publish ─── -->
+            <div class="cpn-step bg-gray-50 rounded-xl border border-gray-200 p-6 opacity-60 transition-all" data-step="7" data-state="pending">
+              <div class="cpn-step-num"><div class="w-9 h-9 rounded-full flex items-center justify-center text-sm font-bold border-2 bg-white text-gray-400 border-gray-300">7</div></div>
+              <div class="flex items-center justify-between gap-3">
+                <h3 class="text-lg font-semibold text-gray-900">Review &amp; publish</h3>
+              </div>
+              <p class="cpn-step-recap text-sm text-gray-600 mt-1"></p>
+              <div class="cpn-step-body mt-5">
+                <div class="bg-blue-50 border-l-4 border-brand-500 px-4 py-3 rounded-r-lg mb-4 text-sm text-gray-700">
+                  Last checks before publishing. Review the summary sidebar for a plain-English preview, then publish.
+                </div>
+                <div class="space-y-3">
+                  <label class="flex items-start gap-2 cursor-pointer p-3 border border-gray-200 rounded-lg hover:bg-gray-50">
+                    <input type="checkbox" id="f_stackable" checked onchange="updateSummary()" class="w-4 h-4 mt-0.5 rounded border-gray-300 text-brand-600 focus:ring-brand-500">
+                    <div>
+                      <div class="text-sm font-medium text-gray-700">Can stack with subscription discounts</div>
+                      <div class="text-xs text-gray-500 mt-0.5">BetterDay policy defaults this <strong class="text-gray-700">on</strong> to reward subscribers.</div>
+                    </div>
+                  </label>
+                  <label class="flex items-start gap-2 cursor-pointer p-3 border border-gray-200 rounded-lg hover:bg-gray-50">
+                    <input type="checkbox" id="f_auto_apply" onchange="updateSummary()" class="w-4 h-4 mt-0.5 rounded border-gray-300 text-brand-600 focus:ring-brand-500">
+                    <div>
+                      <div class="text-sm font-medium text-gray-700">Auto-apply at checkout when eligible</div>
+                      <div class="text-xs text-gray-500 mt-0.5">Customer doesn't need to enter the code.</div>
+                    </div>
+                  </label>
+                  <label class="flex items-start gap-2 cursor-pointer p-3 border border-gray-200 rounded-lg hover:bg-gray-50">
+                    <input type="checkbox" id="f_show_as_clippable" onchange="updateSummary()" class="w-4 h-4 mt-0.5 rounded border-gray-300 text-brand-600 focus:ring-brand-500">
+                    <div>
+                      <div class="text-sm font-medium text-gray-700">Show as a clippable card on the cart page</div>
+                      <div class="text-xs text-gray-500 mt-0.5">Customers see the offer and can "Clip" it to their account.</div>
+                    </div>
+                  </label>
+                </div>
+                <button onclick="toggleAdvanced()" id="advToggle" class="mt-4 inline-flex items-center gap-1 text-xs text-brand-600 hover:underline font-medium">
+                  <span>▸</span><span>Show advanced options</span>
+                </button>
+                <div id="advSection" class="hidden mt-4 space-y-4 pt-4 border-t border-gray-100">
+                  <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Category (for reporting)</label>
+                    <select id="f_category" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 bg-white">
+                      <option value="manual">Manual</option>
+                      <option value="intro">Intro</option>
+                      <option value="email_flow">Email flow</option>
+                      <option value="seasonal">Seasonal</option>
+                      <option value="partnership">Partnership</option>
+                      <option value="loyalty">Loyalty</option>
+                      <option value="referral">Referral</option>
+                      <option value="other">Other</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Admin tags</label>
+                    <input type="text" id="f_tags" placeholder="spring2026, email-blast" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-500">
+                    <p class="text-xs text-gray-500 mt-1">Free-form labels for filtering later. Comma-separated.</p>
+                  </div>
+                </div>
+                <div class="flex justify-between pt-4 mt-4 border-t border-gray-100">
+                  <button onclick="editStep(6)" class="px-4 py-2 border border-gray-300 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-50 transition-colors">← Back</button>
+                  <div class="flex gap-2">
+                    <button onclick="saveDraft()" class="px-4 py-2 border border-gray-300 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-50 transition-colors">Save as draft</button>
+                    <button onclick="publishCoupon()" class="px-4 py-2 bg-brand-500 text-white text-sm font-medium rounded-lg hover:bg-brand-600 transition-colors">✓ Publish coupon</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+          </div>
+
+          <!-- Right: sticky sidebar (Summary + Test tool) -->
+          <aside class="space-y-4 xl:sticky xl:top-6">
+
+            <!-- Summary card -->
+            <div class="bg-white rounded-xl border border-gray-200 p-5">
+              <h3 class="text-base font-semibold text-gray-900 mb-0.5">📝 Summary</h3>
+              <p class="text-xs text-gray-500 uppercase tracking-wider mb-3">Updates as you type</p>
+              <div id="summaryHero" class="rounded-lg border-2 border-dashed border-gray-300 bg-gray-50 p-4 text-sm text-gray-500 text-center italic mb-3">
+                Start filling out the form and a plain-English preview appears here.
+              </div>
+              <ul id="summaryDetails" class="space-y-1.5"></ul>
+            </div>
+
+            <!-- Test tool card -->
+            <div class="bg-white rounded-xl border border-gray-200 p-5">
+              <h3 class="text-base font-semibold text-gray-900 mb-0.5">🧪 Test this code</h3>
+              <p class="text-xs text-gray-500 uppercase tracking-wider mb-3">Simulate a customer cart</p>
+
+              <div class="space-y-3">
+                <div>
+                  <label class="block text-xs font-medium text-gray-700 mb-1">Customer</label>
+                  <select id="test_customer" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 bg-white">
+                    <option value="new">New customer — 0 orders, verified</option>
+                    <option value="returning">Returning — 5 orders, active sub</option>
+                    <option value="cancelled">Cancelled — 12 orders</option>
+                    <option value="unverified">Unverified email — 0 orders</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label class="block text-xs font-medium text-gray-700 mb-1">Cart items</label>
+                  <div id="testCartList" class="space-y-1.5"></div>
+                  <button onclick="addCartLine()" class="w-full mt-2 px-3 py-1.5 border border-dashed border-gray-300 text-xs text-gray-600 rounded-lg hover:bg-gray-50 hover:border-gray-400">
+                    + Add item
+                  </button>
+                </div>
+
+                <div>
+                  <label class="block text-xs font-medium text-gray-700 mb-1">Delivery week (for DOTWs)</label>
+                  <input type="date" id="test_delivery_week" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-500">
+                </div>
+
+                <button onclick="runTest()" class="w-full px-4 py-2 bg-brand-500 text-white text-sm font-medium rounded-lg hover:bg-brand-600 transition-colors">
+                  ▶ Validate code
+                </button>
+
+                <div id="testResult"></div>
+              </div>
+            </div>
+
+          </aside>
+
+        </div>
+      </div>
+
+    </div>
+  </main>
+
+</div>
+
+<!-- Toast -->
+<div id="toast" class="cpn-toast bg-gray-900 text-white text-sm font-medium px-4 py-3 rounded-lg shadow-lg"></div>
+
+<script>
+  /* ═══════════════════════════════════════════════════════════════════════
+     SEED DATA
+     ═══════════════════════════════════════════════════════════════════════ */
+  const SEED_COUPONS = [
+    { id: 'c1', code: 'WELCOME10',   name: 'Welcome offer',          type: 'percentage',    value: 10, status: 'active',    category: 'intro',       uses: 47,  max_uses: 500 },
+    { id: 'c2', code: 'DOTW-APR12',  name: 'Deal of the Week — Apr 12', type: 'dollar_amount', value: 5,  status: 'active',    category: 'seasonal',    uses: 12,  max_uses: null },
+    { id: 'c3', code: 'SPRING30',    name: 'Spring sale 30%',        type: 'percentage',    value: 30, status: 'scheduled', category: 'seasonal',    uses: 0,   max_uses: 200 },
+    { id: 'c4', code: 'FIRSTORDER',  name: 'First order 20% off',    type: 'percentage',    value: 20, status: 'active',    category: 'intro',       uses: 89,  max_uses: null },
+    { id: 'c5', code: 'FREESHIP50',  name: 'Free delivery over $50', type: 'free_delivery', value: 0,  status: 'active',    category: 'loyalty',     uses: 156, max_uses: null },
+    { id: 'c6', code: 'JANEFITNESS', name: 'Jane Fitness partnership', type: 'percentage',  value: 15, status: 'expired',   category: 'partnership', uses: 34,  max_uses: 100 },
+    { id: 'c7', code: 'LOYAL25',     name: 'Loyalty bonus',          type: 'dollar_amount', value: 25, status: 'archived',  category: 'loyalty',     uses: 12,  max_uses: null },
+  ];
+
+  /* ═══════════════════════════════════════════════════════════════════════
+     STATE
+     ═══════════════════════════════════════════════════════════════════════ */
+  let currentStatus = 'all';
+  let currentStep = 1;
+  const completed = {};
+  const TOTAL_STEPS = 7;
+  let formType = 'percentage';
+  let isDotwPreset = false;
+  let testCart = [
+    { meal_code: 'MEAL-A', meal_name: 'Grilled Chicken', category: 'entree', quantity: 2, price: 15 },
+    { meal_code: 'MEAL-B', meal_name: 'Tofu Bowl',       category: 'entree', quantity: 1, price: 14.50 },
+  ];
+
+  /* ═══════════════════════════════════════════════════════════════════════
+     VIEW SWITCHING
+     ═══════════════════════════════════════════════════════════════════════ */
+  function showView(name) {
+    document.getElementById('listView').classList.toggle('hidden', name !== 'list');
+    document.getElementById('tilesView').classList.toggle('hidden', name !== 'tiles');
+    document.getElementById('formView').classList.toggle('hidden', name !== 'form');
+    document.getElementById('breadcrumbs').classList.toggle('hidden', name === 'list');
+    document.getElementById('headerActions').classList.toggle('hidden', name !== 'list');
+    window.scrollTo(0, 0);
+  }
+  function showList() {
+    showView('list');
+    document.getElementById('pageSubtitle').textContent = '7 total · 4 active · 1 scheduled · 1 expired';
+    renderList();
+  }
+  function showTiles() {
+    showView('tiles');
+    document.getElementById('pageSubtitle').textContent = 'Create a new coupon';
+    document.getElementById('breadcrumbs').innerHTML = '<a onclick="showList()" class="text-brand-600 hover:underline cursor-pointer">Coupons</a> <span class="text-gray-400 mx-1">/</span> <strong class="text-gray-900">New</strong>';
+  }
+  function showForm(kind) {
+    showView('form');
+    document.getElementById('pageSubtitle').textContent = 'Configure and publish';
+    const name = { code: 'Code discount', auto: 'Automatic discount', dotw: 'Deal of the Week', welcome: 'Welcome offer' }[kind] || 'New coupon';
+    document.getElementById('breadcrumbs').innerHTML =
+      '<a onclick="showList()" class="text-brand-600 hover:underline cursor-pointer">Coupons</a> <span class="text-gray-400 mx-1">/</span> ' +
+      '<a onclick="showTiles()" class="text-brand-600 hover:underline cursor-pointer">New</a> <span class="text-gray-400 mx-1">/</span> ' +
+      '<strong class="text-gray-900">' + name + '</strong>';
+  }
+
+  /* ═══════════════════════════════════════════════════════════════════════
+     LIST VIEW
+     ═══════════════════════════════════════════════════════════════════════ */
+  function setStatus(s) { currentStatus = s; renderStatusPills(); renderList(); }
+
+  function renderStatusPills() {
+    const counts = { all: SEED_COUPONS.length };
+    for (const c of SEED_COUPONS) counts[c.status] = (counts[c.status] || 0) + 1;
+    const order = ['all', 'active', 'scheduled', 'expired', 'archived'];
+    const html = order.map(s => {
+      const active = s === currentStatus;
+      const label = s[0].toUpperCase() + s.slice(1);
+      const cnt = counts[s] || 0;
+      const cls = active
+        ? 'bg-brand-500 text-white'
+        : 'bg-gray-100 text-gray-600 hover:bg-gray-200';
+      return `<button onclick="setStatus('${s}')" class="px-3 py-1 rounded-full text-xs font-medium transition-colors ${cls}">${label} (${cnt})</button>`;
+    }).join('');
+    document.getElementById('statusPills').innerHTML = html;
+  }
+
+  function renderList() {
+    const search = (document.getElementById('searchInput').value || '').toLowerCase().trim();
+    const typeF = document.getElementById('typeFilter').value;
+    const catF = document.getElementById('categoryFilter').value;
+    const filtered = SEED_COUPONS.filter(c => {
+      if (currentStatus !== 'all' && c.status !== currentStatus) return false;
+      if (typeF && c.type !== typeF) return false;
+      if (catF && c.category !== catF) return false;
+      if (search && !c.code.toLowerCase().includes(search) && !c.name.toLowerCase().includes(search)) return false;
+      return true;
+    });
+    const body = document.getElementById('tableBody');
+    if (filtered.length === 0) {
+      body.innerHTML = '<tr><td colspan="7" class="px-4 py-10 text-center text-gray-400">No coupons found</td></tr>';
+      return;
+    }
+    body.innerHTML = filtered.map(c => {
+      const valueStr =
+        c.type === 'percentage'    ? c.value + '%' :
+        c.type === 'dollar_amount' ? '$' + c.value :
+        c.type === 'free_delivery' ? 'Free ship'    : '—';
+      const typeLabel =
+        c.type === 'percentage'    ? 'Percentage'   :
+        c.type === 'dollar_amount' ? 'Dollar off'   :
+        c.type === 'free_delivery' ? 'Free delivery': c.type;
+      const uses = c.max_uses ? (c.uses + '/' + c.max_uses) : String(c.uses);
+      const statusClasses = {
+        active:    'bg-green-50 text-green-700',
+        scheduled: 'bg-yellow-50 text-yellow-700',
+        expired:   'bg-gray-100 text-gray-600',
+        archived:  'bg-red-50 text-red-700',
+      }[c.status];
+      return `
+        <tr class="hover:bg-gray-50 cursor-pointer">
+          <td class="px-4 py-3 font-mono text-xs font-medium text-brand-600">${c.code}</td>
+          <td class="px-4 py-3 font-medium text-gray-900">${c.name}</td>
+          <td class="px-4 py-3 text-gray-600">${typeLabel}</td>
+          <td class="px-4 py-3 text-gray-900 font-medium">${valueStr}</td>
+          <td class="px-4 py-3 text-gray-600">${uses}</td>
+          <td class="px-4 py-3"><span class="px-2 py-0.5 ${statusClasses} rounded-md text-xs font-medium capitalize">${c.status}</span></td>
+          <td class="px-4 py-3"><button onclick="event.stopPropagation(); showToast('Row actions — coming in v2')" class="text-gray-400 hover:text-gray-600 text-lg leading-none">⋯</button></td>
+        </tr>`;
+    }).join('');
+  }
+
+  /* ═══════════════════════════════════════════════════════════════════════
+     CREATE FLOW — tile picker → 7-step form
+     ═══════════════════════════════════════════════════════════════════════ */
+  function startCreate(kind) {
+    // Reset form state
+    document.querySelectorAll('#formView input[type="text"], #formView input[type="number"], #formView input[type="date"]').forEach(el => el.value = '');
+    document.querySelectorAll('#formView input[type="checkbox"]').forEach(el => el.checked = false);
+    document.getElementById('f_stackable').checked = true;
+    Object.keys(completed).forEach(k => delete completed[k]);
+    currentStep = 1;
+    formType = 'percentage';
+    isDotwPreset = (kind === 'dotw');
+    const r = document.querySelector('input[name="f_type"][value="percentage"]');
+    if (r) r.checked = true;
+    selectType('percentage');
+    document.getElementById('dotwRow').classList.toggle('hidden', kind !== 'dotw');
+
+    // Presets
+    if (kind === 'welcome') {
+      document.getElementById('f_code').value = 'WELCOME';
+      document.getElementById('f_name').value = 'Welcome offer';
+      document.getElementById('f_message').value = 'Welcome to BetterDay — enjoy 10% off your first order!';
+      document.getElementById('f_value').value = '10';
+      document.getElementById('f_new_customers_only').checked = true;
+      document.getElementById('f_require_verified_email').checked = true;
+    }
+    if (kind === 'dotw') {
+      const today = new Date();
+      const label = today.toLocaleDateString('en', { month: 'short', day: 'numeric' }).toUpperCase().replace(' ', '-');
+      document.getElementById('f_code').value = 'DOTW-' + label;
+      document.getElementById('f_name').value = 'Deal of the Week';
+    }
+
+    showForm(kind);
+    renderStepper();
+    updateSummary();
+  }
+
+  /* ═══════════════════════════════════════════════════════════════════════
+     STEPPER — render state-driven styles per step
+     ═══════════════════════════════════════════════════════════════════════ */
+  function renderStepper() {
+    for (let i = 1; i <= TOTAL_STEPS; i++) {
+      const step = document.querySelector('[data-step="' + i + '"]');
+      if (!step) continue;
+
+      let state;
+      if (completed[i] && i !== currentStep) state = 'complete';
+      else if (i === currentStep) state = 'active';
+      else state = 'pending';
+      step.setAttribute('data-state', state);
+
+      // Clear any previous state classes and apply new ones
+      step.className = 'cpn-step rounded-xl border p-6 transition-all';
+
+      // Step number badge
+      const numWrap = step.querySelector('.cpn-step-num');
+      if (numWrap) {
+        if (state === 'active') {
+          numWrap.innerHTML = '<div class="w-9 h-9 rounded-full flex items-center justify-center text-sm font-bold border-2 bg-brand-500 text-white border-brand-500 shadow-md">' + i + '</div>';
+        } else if (state === 'complete') {
+          numWrap.innerHTML = '<div class="w-9 h-9 rounded-full flex items-center justify-center text-sm font-bold border-2 bg-green-500 text-white border-green-500">✓</div>';
+        } else {
+          numWrap.innerHTML = '<div class="w-9 h-9 rounded-full flex items-center justify-center text-sm font-bold border-2 bg-white text-gray-400 border-gray-300">' + i + '</div>';
+        }
+      }
+
+      // Card visual state
+      if (state === 'active') {
+        step.classList.add('bg-white', 'border-brand-500', 'ring-2', 'ring-brand-100', 'shadow-md');
+      } else if (state === 'complete') {
+        step.classList.add('bg-white', 'border-gray-200');
+      } else {
+        step.classList.add('bg-gray-50', 'border-gray-200', 'opacity-60');
+      }
+
+      // Clickable-to-edit on complete steps
+      step.onclick = (state === 'complete') ? ((n) => function(ev) {
+        if (ev.target.closest('button, input, select, textarea, .cpn-step-body')) return;
+        editStep(n);
+      })(i) : null;
+
+      // Recap text
+      const recap = step.querySelector('.cpn-step-recap');
+      if (recap && state === 'complete') recap.innerHTML = getStepRecap(i);
+    }
+  }
+
+  function getStepRecap(i) {
+    const v = (id) => document.getElementById(id).value;
+    if (i === 1) {
+      const code = v('f_code').trim();
+      const name = v('f_name').trim();
+      return '<strong class="text-gray-900">' + (code || '—') + '</strong> · ' + (name || '<span class="italic text-gray-400">no name</span>');
+    }
+    if (i === 2) {
+      const val = v('f_value');
+      if (formType === 'percentage')    return '<strong class="text-gray-900">' + (val || '0') + '% off</strong>';
+      if (formType === 'dollar_amount') return '<strong class="text-gray-900">$' + (val || '0') + ' off</strong>';
+      if (formType === 'free_delivery') return '<strong class="text-gray-900">Free delivery</strong>';
+      return '';
+    }
+    if (i === 3) {
+      const inc = v('f_product_include').trim();
+      const catInc = v('f_category_include').trim();
+      if (inc || catInc) {
+        const parts = [];
+        if (inc) parts.push('meals ' + inc);
+        if (catInc) parts.push('cats ' + catInc);
+        return 'Scoped to <strong class="text-gray-900">' + parts.join(' · ') + '</strong>';
+      }
+      return '<span class="italic text-gray-400">Entire order</span>';
+    }
+    if (i === 4) {
+      const sr = v('f_subscription_restriction');
+      const newCust = document.getElementById('f_new_customers_only').checked;
+      const parts = [];
+      if (newCust) parts.push('first-time');
+      if (sr === 'active_subscribers_only') parts.push('active subs');
+      if (sr === 'new_subscribers_only') parts.push('first-time subs');
+      if (sr === 'non_subscribers_only') parts.push('non-subscribers');
+      return parts.length ? '<strong class="text-gray-900">' + parts.join(' · ') + '</strong>' : '<span class="italic text-gray-400">Anyone</span>';
+    }
+    if (i === 5) {
+      const min = v('f_min_order_value');
+      const cap = v('f_max_uses');
+      const parts = [];
+      if (min) parts.push('$' + min + '+');
+      if (cap) parts.push(cap + ' uses');
+      return parts.length ? '<strong class="text-gray-900">' + parts.join(' · ') + '</strong>' : '<span class="italic text-gray-400">No limits</span>';
+    }
+    if (i === 6) {
+      const s = v('f_starts_at');
+      const e = v('f_expires_at');
+      if (!s && !e) return '<span class="italic text-gray-400">Active now, no expiry</span>';
+      const fmt = d => new Date(d + 'T12:00:00').toLocaleDateString('en', { month: 'short', day: 'numeric' });
+      return (s ? 'from <strong>' + fmt(s) + '</strong>' : 'now') + (e ? ' → <strong>' + fmt(e) + '</strong>' : '');
+    }
+    return '';
+  }
+
+  function continueStep(n) {
+    // Minimal per-step validation
+    if (n === 1) {
+      const code = document.getElementById('f_code');
+      const name = document.getElementById('f_name');
+      let ok = true;
+      if (!code.value.trim()) { code.classList.add('border-red-500'); ok = false; } else code.classList.remove('border-red-500');
+      if (!name.value.trim()) { name.classList.add('border-red-500'); ok = false; } else name.classList.remove('border-red-500');
+      if (!ok) { showToast('Fill in the code and name to continue'); return; }
+    }
+    if (n === 2 && formType !== 'free_delivery') {
+      const v = document.getElementById('f_value');
+      if (!v.value.trim() || Number(v.value) <= 0) {
+        v.classList.add('border-red-500');
+        showToast('Enter a discount amount');
+        return;
+      }
+      v.classList.remove('border-red-500');
+    }
+    if (n === 6 && isDotwPreset) {
+      const d = document.getElementById('f_delivery_week_sunday');
+      if (!d.value) {
+        d.classList.add('border-red-500');
+        showToast('DOTWs need a delivery week');
+        return;
+      }
+      d.classList.remove('border-red-500');
+    }
+
+    completed[n] = true;
+    if (n < TOTAL_STEPS) currentStep = n + 1;
+    renderStepper();
+    updateSummary();
+    setTimeout(() => {
+      const el = document.querySelector('[data-step="' + currentStep + '"]');
+      if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }, 50);
+  }
+
+  function editStep(n) {
+    currentStep = n;
+    renderStepper();
+    setTimeout(() => {
+      const el = document.querySelector('[data-step="' + n + '"]');
+      if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }, 50);
+  }
+
+  /* ═══════════════════════════════════════════════════════════════════════
+     FIELD HELPERS
+     ═══════════════════════════════════════════════════════════════════════ */
+  function uppercaseInput(el) {
+    const pos = el.selectionStart;
+    el.value = el.value.toUpperCase().replace(/[^A-Z0-9_-]/g, '');
+    if (pos !== null) el.setSelectionRange(pos, pos);
+  }
+
+  function selectType(t) {
+    formType = t;
+    document.querySelectorAll('.cpn-radio-card').forEach(el => {
+      if (el.dataset.value === t) {
+        el.className = 'cpn-radio-card flex items-center gap-2 px-3 py-3 border-2 border-brand-500 bg-brand-50 rounded-lg cursor-pointer transition-colors';
+      } else {
+        el.className = 'cpn-radio-card flex items-center gap-2 px-3 py-3 border border-gray-300 rounded-lg cursor-pointer hover:bg-gray-50 transition-colors';
+      }
+    });
+    const prefix = document.getElementById('valuePrefix');
+    const valueRow = document.getElementById('valueRow');
+    const capRow = document.getElementById('capRow');
+    if (t === 'percentage')    { prefix.textContent = '%'; valueRow.style.display = ''; capRow.style.display = ''; }
+    else if (t === 'dollar_amount') { prefix.textContent = '$'; valueRow.style.display = ''; capRow.style.display = 'none'; }
+    else                       { valueRow.style.display = 'none'; capRow.style.display = 'none'; }
+    updateSummary();
+  }
+
+  // Listen for radio changes on the type picker
+  document.addEventListener('change', (e) => {
+    if (e.target && e.target.name === 'f_type') selectType(e.target.value);
+  });
+
+  function toggleAdvanced() {
+    const btn = document.getElementById('advToggle');
+    const sec = document.getElementById('advSection');
+    const open = !sec.classList.contains('hidden');
+    sec.classList.toggle('hidden');
+    btn.innerHTML = (open ? '<span>▸</span><span>Show advanced options</span>' : '<span>▾</span><span>Hide advanced options</span>');
+  }
+
+  function toggleSection(name) {
+    const sec = document.getElementById('section-' + name);
+    const chev = document.getElementById('chev-' + name);
+    sec.classList.toggle('hidden');
+    chev.style.transform = sec.classList.contains('hidden') ? '' : 'rotate(180deg)';
+  }
+
+  /* ═══════════════════════════════════════════════════════════════════════
+     LIVE SUMMARY — plain-English preview
+     ═══════════════════════════════════════════════════════════════════════ */
+  function updateSummary() {
+    const v = (id) => (document.getElementById(id).value || '').trim();
+    const c = (id) => document.getElementById(id).checked;
+
+    const code = v('f_code');
+    const name = v('f_name');
+    const value = v('f_value');
+    const min = v('f_min_order_value');
+    const maxDiscount = v('f_max_discount');
+    const maxUses = v('f_max_uses');
+    const perCust = v('f_max_uses_per_customer');
+    const newCust = c('f_new_customers_only');
+    const verified = c('f_require_verified_email');
+    const sr = v('f_subscription_restriction');
+    const starts = v('f_starts_at');
+    const expires = v('f_expires_at');
+    const stackable = c('f_stackable');
+    const autoApply = c('f_auto_apply');
+    const inc = v('f_product_include');
+    const catInc = v('f_category_include');
+
+    const hero = document.getElementById('summaryHero');
+    const details = document.getElementById('summaryDetails');
+
+    if (!code && !value) {
+      hero.className = 'rounded-lg border-2 border-dashed border-gray-300 bg-gray-50 p-4 text-sm text-gray-500 text-center italic mb-3';
+      hero.innerHTML = 'Start filling out the form and a plain-English preview appears here.';
+      details.innerHTML = '';
+      return;
+    }
+
+    // Hero
+    let valueStr = '';
+    if (formType === 'percentage' && value) valueStr = value + '% off';
+    else if (formType === 'dollar_amount' && value) valueStr = '$' + value + ' off';
+    else if (formType === 'free_delivery') valueStr = 'Free delivery';
+    else valueStr = '[value]';
+
+    const codeBadge = code
+      ? '<code class="inline-block bg-brand-500 text-white font-mono font-bold px-2 py-0.5 rounded text-xs align-middle">' + code + '</code>'
+      : '<span class="italic text-gray-400">[no code]</span>';
+
+    hero.className = 'rounded-lg bg-brand-50 border border-brand-200 p-4 mb-3';
+    hero.innerHTML =
+      '<div class="text-sm text-gray-900">' + (autoApply ? 'Auto-applies ' : 'Apply ') + codeBadge + ' for <strong>' + valueStr + '</strong>' + (min ? ' on orders over $' + min : '') + '</div>' +
+      (name ? '<div class="text-xs text-gray-500 mt-1 italic">Internal: ' + name + '</div>' : '');
+
+    // Detail lines
+    const lines = [];
+    if (inc || catInc) {
+      const parts = [];
+      if (inc) parts.push('meals ' + inc);
+      if (catInc) parts.push('categories ' + catInc);
+      lines.push('🎯 Applies only to ' + parts.join(' + '));
+    } else {
+      lines.push('🎯 Applies to the entire order');
+    }
+
+    if (maxDiscount && formType === 'percentage') {
+      lines.push('🧢 Capped at <strong class="text-gray-900">$' + maxDiscount + ' max</strong> per order');
+    }
+
+    if (newCust || verified || sr !== 'none') {
+      const parts = [];
+      if (newCust) parts.push('first-time customers');
+      if (sr === 'active_subscribers_only') parts.push('active subscribers');
+      if (sr === 'new_subscribers_only') parts.push('first-time subscribers');
+      if (sr === 'non_subscribers_only') parts.push('non-subscribers only');
+      if (verified) parts.push('verified email required');
+      lines.push('👤 ' + parts.join(' · '));
+    } else {
+      lines.push('👤 Anyone can use it');
+    }
+
+    if (maxUses || perCust) {
+      const parts = [];
+      if (maxUses) parts.push(maxUses + ' uses total');
+      if (perCust) parts.push(perCust + ' per customer');
+      lines.push('🎟️ ' + parts.join(' · '));
+    }
+
+    if (starts || expires) {
+      const fmt = d => new Date(d + 'T12:00:00').toLocaleDateString('en', { month: 'short', day: 'numeric', year: 'numeric' });
+      let s = '📅 ';
+      if (starts && expires) s += 'Active <strong class="text-gray-900">' + fmt(starts) + ' → ' + fmt(expires) + '</strong>';
+      else if (starts) s += 'Starts <strong class="text-gray-900">' + fmt(starts) + '</strong>';
+      else s += 'Expires <strong class="text-gray-900">' + fmt(expires) + '</strong>';
+      lines.push(s);
+    } else {
+      lines.push('📅 <span class="italic text-gray-400">Active immediately, no expiry</span>');
+    }
+
+    lines.push(stackable
+      ? '➕ Stacks with subscription discounts'
+      : '🚫 Does <strong class="text-gray-900">not</strong> stack with other discounts');
+
+    details.innerHTML = lines.map(l => '<li class="text-sm text-gray-600">' + l + '</li>').join('');
+  }
+
+  /* ═══════════════════════════════════════════════════════════════════════
+     TEST TOOL
+     ═══════════════════════════════════════════════════════════════════════ */
+  function renderTestCart() {
+    document.getElementById('testCartList').innerHTML = testCart.map((item, i) => `
+      <div class="flex items-center gap-2 px-2 py-1.5 bg-gray-50 border border-gray-200 rounded-md text-xs">
+        <span class="flex-1 truncate font-medium text-gray-700">${item.meal_code} · ${item.meal_name}</span>
+        <span class="text-gray-500">×${item.quantity}</span>
+        <span class="font-mono font-medium text-gray-900">$${(item.price * item.quantity).toFixed(2)}</span>
+        <button onclick="removeCartLine(${i})" class="text-gray-400 hover:text-red-500 px-1 leading-none">×</button>
+      </div>
+    `).join('');
+  }
+
+  function addCartLine() {
+    const meals = [
+      { code: 'MEAL-C', name: 'Salmon & Quinoa', price: 18 },
+      { code: 'MEAL-D', name: 'Veggie Wrap',     price: 12 },
+      { code: 'MEAL-E', name: 'Pad Thai',        price: 16 },
+    ];
+    const pick = meals[Math.floor(Math.random() * meals.length)];
+    testCart.push({ meal_code: pick.code, meal_name: pick.name, category: 'entree', quantity: 1, price: pick.price });
+    renderTestCart();
+  }
+
+  function removeCartLine(idx) {
+    testCart.splice(idx, 1);
+    renderTestCart();
+  }
+
+  function runTest() {
+    const code = (document.getElementById('f_code').value || '').trim().toUpperCase();
+    const value = Number(document.getElementById('f_value').value) || 0;
+    const min = Number(document.getElementById('f_min_order_value').value) || 0;
+    const newCustOnly = document.getElementById('f_new_customers_only').checked;
+    const requireVerified = document.getElementById('f_require_verified_email').checked;
+    const sr = document.getElementById('f_subscription_restriction').value;
+    const maxDiscount = Number(document.getElementById('f_max_discount').value) || null;
+    const subtotal = testCart.reduce((s, i) => s + i.price * i.quantity, 0);
+    const profiles = {
+      new:        { priorOrders: 0,  subscription: null,         emailVerified: true  },
+      returning:  { priorOrders: 5,  subscription: 'active',     emailVerified: true  },
+      cancelled:  { priorOrders: 12, subscription: 'cancelled',  emailVerified: true  },
+      unverified: { priorOrders: 0,  subscription: null,         emailVerified: false },
+    };
+    const p = profiles[document.getElementById('test_customer').value];
+
+    const result = document.getElementById('testResult');
+    const fail = (reason, detail) => {
+      result.innerHTML = `
+        <div class="mt-3 p-3 bg-red-50 border border-red-200 rounded-lg">
+          <div class="text-[10px] font-bold uppercase tracking-wider text-red-700">❌ Validation failed</div>
+          <div class="text-sm font-semibold text-red-900 mt-1">${reason}</div>
+          <div class="text-xs text-red-700 mt-0.5">${detail}</div>
+        </div>`;
+    };
+    const ok = (savings) => {
+      result.innerHTML = `
+        <div class="mt-3 p-3 bg-green-50 border border-green-200 rounded-lg">
+          <div class="text-[10px] font-bold uppercase tracking-wider text-green-700">✅ Valid — applied</div>
+          <div class="text-sm font-semibold text-green-900 mt-1">You save $${savings.toFixed(2)}</div>
+          <div class="text-xs text-green-700 mt-0.5">Cart: $${subtotal.toFixed(2)} → $${(subtotal - savings).toFixed(2)}</div>
+        </div>`;
+    };
+
+    if (!code)                     return fail('CODE_MISSING',         'Fill in a code in step 1 first.');
+    if (subtotal < min)            return fail('MIN_ORDER_NOT_MET',    'Cart is $' + subtotal.toFixed(2) + ' but minimum is $' + min.toFixed(2) + '. Add $' + (min - subtotal).toFixed(2) + ' more.');
+    if (newCustOnly && p.priorOrders > 0) return fail('NEW_CUSTOMERS_ONLY', 'This customer profile has ' + p.priorOrders + ' prior orders.');
+    if (requireVerified && !p.emailVerified) return fail('EMAIL_NOT_VERIFIED', 'This customer profile has an unverified email.');
+    if (sr === 'active_subscribers_only' && p.subscription !== 'active') return fail('REQUIRES_SUBSCRIPTION', 'Customer needs an active subscription.');
+    if (sr === 'non_subscribers_only' && p.subscription === 'active')   return fail('NON_SUBSCRIBERS_ONLY',   'This customer is an active subscriber.');
+
+    let savings = 0;
+    if (formType === 'percentage') {
+      savings = subtotal * value / 100;
+      if (maxDiscount) savings = Math.min(savings, maxDiscount);
+    } else if (formType === 'dollar_amount') {
+      savings = Math.min(value, subtotal);
+    }
+    ok(savings);
+  }
+
+  /* ═══════════════════════════════════════════════════════════════════════
+     ACTIONS
+     ═══════════════════════════════════════════════════════════════════════ */
+  function saveDraft() { showToast('💾 Draft saved (mockup)'); }
+  function publishCoupon() {
+    const code = (document.getElementById('f_code').value || '').trim();
+    if (!code) { showToast('Fill in the code before publishing'); return; }
+    showToast('🎉 ' + code + ' published (mockup)');
+    setTimeout(showList, 1500);
+  }
+
+  function showToast(msg) {
+    const t = document.getElementById('toast');
+    t.textContent = msg;
+    t.classList.add('show');
+    clearTimeout(t._timer);
+    t._timer = setTimeout(() => t.classList.remove('show'), 2400);
+  }
+
+  /* ═══════════════════════════════════════════════════════════════════════
+     BOOT
+     ═══════════════════════════════════════════════════════════════════════ */
+  renderStatusPills();
+  renderList();
+  renderTestCart();
+  selectType('percentage');
+</script>
+
+</body>
+</html>
