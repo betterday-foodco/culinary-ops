@@ -10,6 +10,24 @@ A running list of things that came up in chats but were consciously deferred —
 
 ## 🔮 Edge cases to handle later
 
+- [2026-04-10] **Customer skips/pauses/cancels DURING the Tuesday pre-auth cron run**
+  Customer hits "skip" on the website at 8:07 PM while the pre-auth cron is mid-loop. If their pre-auth already fired, the skip/pause endpoint must immediately void it via `POST /v2/payment/reverse`. If the cron hasn't reached them yet, skip them entirely. The skip/pause API handler must check "does an `authorized` order exist for this delivery week?" and void it on the spot. Do not wait for Thursday's capture cron to discover the skip.
+
+- [2026-04-10] **Customer un-skips after their pre-auth was already voided**
+  Customer skips Tuesday night (pre-auth voided), then changes their mind Wednesday morning. The old hold was released. The un-skip action must trigger a fresh pre-auth immediately. If it succeeds, the order re-enters the Thursday capture queue. If it fails, the customer gets the standard dunning email like any other decline. UI should say: *"We'll try to authorize your card now. If it goes through, your delivery is back on track."*
+
+- [2026-04-10] **Admin edits an order after pre-auth (price change)**
+  Shouldn't happen because carts lock at pre-auth time. But if a future admin-override feature lets someone adjust an order (wrong item, CS swap), the admin edit flow must: void the original pre-auth → update the order snapshot with the new total → run a fresh pre-auth for the new amount. If the new pre-auth fails, the admin sees the decline and decides what to do. Never capture an old pre-auth for a different amount than what the order now shows.
+
+- [2026-04-10] **Pre-auth expires before Thursday capture (system outage)**
+  Helcim pre-auths are valid ~7 days; our window is 48 hours. If Thursday's capture cron doesn't run until Saturday (deploy failure, Render outage, etc.), the hold could have dropped. The capture call will simply fail. Fallback: treat it as a fresh decline and run a direct `POST /v2/payment/purchase` (no pre-auth, just charge). Log an alert because a >48h capture gap means the cron infrastructure broke.
+
+- [2026-04-10] **Customer sees two pending holds on their card (void + re-auth overlap)**
+  Happens if: pre-auth Tuesday → void Wednesday (they skipped) → un-skip Wednesday evening (new pre-auth). Bank might show both the dying hold AND the new hold for a few hours. Confusing but harmless — the voided one drops off within 1-2 business days. Cover with messaging: *"You may see two pending charges from BetterDay briefly. The older one is being released — only the current one will post."*
+
+- [2026-04-10] **Post-void customer messaging — where and how to display universally**
+  When a pre-auth is voided (skip, pause, cancel, card removal), the customer may see a lingering "pending" charge on their bank statement for 1-2 business days. Need to show a clear message both (a) immediately in the UI when they take the action, and (b) in a follow-up email. Draft copy: *"You may see a pending charge of $XX.XX from BetterDay on your card statement. This is just a hold that's being released — you will not be charged. It typically drops off within 1-2 business days."* Needs UX decision on where this shows: toast notification? inline banner in subscriber hub? confirmation modal? all three? Track alongside the other customer-facing email copy review in this file.
+
 - [2026-04-09] **Card removed from Helcim vault outside our admin UI**
   If someone deletes a card directly in the Helcim dashboard (not via our admin), our `PaymentMethod.processor_token` becomes orphaned and the next weekly charge fails with "invalid token." Need to either periodically refresh from `GET /customers/{id}/cards` or treat the specific error as "card removed" in the decline classifier and auto-pause. Surfaced during Helcim integration research — see `conner/data-model/helcim-integration.md` §4.
 
@@ -34,6 +52,9 @@ A running list of things that came up in chats but were consciously deferred —
 ---
 
 ## 🎯 Design decisions pending
+
+- [2026-04-10] **Post-void messaging UX — where to surface the "pending charge will drop off" notice**
+  When a pre-auth hold is voided (customer skips, pauses, cancels, or removes card between Tuesday pre-auth and Thursday capture), the customer may see a lingering "pending" charge on their bank statement for 1-2 business days. Draft copy exists (see edge case entry above). Needs a UX decision: toast notification? inline banner in subscriber hub? confirmation modal? follow-up email? All of the above? This is a customer-trust issue — a confused customer seeing an unexpected pending charge after they skipped their delivery is exactly the kind of thing that triggers a chargeback. Getting the messaging right and visible is important. Track alongside the other customer-facing email copy review.
 
 - [2026-04-09] **Tax calculation strategy — hardcoded AB GST 5% vs TaxJar vs manual**
   Helcim has no Stripe-Tax equivalent; we must compute tax on our side before calling `/v2/payment/purchase`. Three options in `conner/data-model/helcim-integration.md` §11. Recommended: ship Option A (hardcoded 5% behind a `TaxCalculator` interface) contingent on an accountant confirming BetterDay prepared meals are classified as taxable under CRA rules (prepared food, NOT basic groceries). Cannot be confirmed without accountant review.
@@ -252,5 +273,20 @@ A running list of things that came up in chats but were consciously deferred —
 ---
 
 ## ✅ Resolved
+
+- ✅ [2026-04-10] **Monthly plan = every 4th Thursday, no special payment logic**
+  Resolved: BetterDay's "monthly" plans are literally 4-week plans that follow the same weekly rhythm. A monthly subscriber simply has their `WeeklyCartRecord` generated every 4th week instead of every week. The payment pipeline (pre-auth Tuesday → capture Thursday) is identical for weekly and monthly subscribers. The cadence logic lives entirely in the cart generation cron, upstream of payments. The payment cron is cadence-agnostic — if a cart record exists for the delivery week, it gets charged. If no record exists, nothing happens. No per-subscriber renewal dates, no special monthly billing path.
+
+- ✅ [2026-04-10] **Cart generation cron owns cadence, payment cron is cadence-agnostic**
+  Resolved: the separation of concerns is: (1) cart generation cron creates `WeeklyCartRecord` rows for the right subscribers at the right cadence, (2) payment cron operates on whatever records exist for the delivery week without knowing or caring about cadence. This means `Subscription.cadence` is only read by the cart generation cron, never by the payment flow. Clean boundary.
+
+- ✅ [2026-04-10] **Payment architecture = pre-auth Tuesday → capture Thursday (not just-in-time)**
+  Resolved: the original Phase 3 plan was just-in-time charging at Thursday cutoff (lock + charge in one pass). Changed to a two-phase pre-auth model after analyzing BetterDay's real failure rate (~2-5 out of 125 charges/week = 1.6-4%) and $130K/month volume. The 48-hour buffer between pre-auth and capture gives customers time to fix card issues before their delivery is affected. Estimated $35K/year in recovered revenue from dunning vs just-in-time. Design details in `helcim-integration-plan.md` §18.
+
+- ✅ [2026-04-10] **Lock carts BEFORE charging, not during**
+  Resolved: the lock phase (snapshot cart → create order as `pending`) happens in bulk in ~2 seconds before any Helcim calls. The charge phase (sequential API calls) can take 5-15 minutes. Because carts are locked first, no amount of charge-phase latency can cause cart drift. The order is the source of truth; the payment is a status field on the order.
+
+- ✅ [2026-04-10] **Helcim Recurring API is NOT used — confirmed card-on-file is the correct model**
+  Resolved: BetterDay's variable-amount weekly carts don't fit Helcim's Recurring API (which is designed for fixed-amount subscriptions like gym memberships). We use `/v2/payment/preauth` + `/v2/payment/capture` with saved `cardToken` via the Payment API instead. Helcim's Recurring API is only relevant if BetterDay ever sells a fixed-price add-on product. Full analysis in `helcim-integration.md` §1.
 
 *(Move completed items here with a ✅ prefix and the resolution date.)*

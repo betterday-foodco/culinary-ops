@@ -1339,9 +1339,129 @@ The integration ships to production when ALL of the following are true:
 
 ---
 
-## 17. What's NOT in this plan (explicit exclusions)
+## 18. REVISED Phase 3 — Pre-auth → Capture two-phase architecture
 
-So the next chat doesn't get confused about scope:
+> **Added 2026-04-10** after analyzing BetterDay's real payment volume ($130K/month, ~125 charges/week, 1.6-4% failure rate). The original Phase 3 was a just-in-time charge model (lock + charge in one pass Thursday night). This revision adds a 48-hour pre-auth buffer that gives customers time to fix card issues before delivery is affected. Estimated $35K/year in recovered revenue from dunning.
+
+### Why the change from just-in-time to pre-auth
+
+BetterDay's old system (SPRWT + Shopify) gave subscribers several days between order creation and payment processing. Failed payments had a buffer to be resolved. The original Phase 3 design had zero buffer — charge at cutoff, fail at cutoff, no time to recover. At $130K/month with a 3% failure rate, that's ~$1,000/week in revenue at risk with no recovery window.
+
+### The revised weekly rhythm
+
+```
+SUNDAY NIGHT
+  Cart generation cron creates WeeklyCartRecord for active subscribers
+  (cadence-aware: weekly subscribers every week, monthly every 4th week)
+  Customers can edit their cart Sun-Tue
+
+TUESDAY 8:00 PM MT — LOCK + PRE-AUTH PHASE (~2 seconds lock, 5-15 min pre-auth)
+  Step 1 (bulk, fast): For ALL carts for this delivery week:
+    - Snapshot cart_items into a new CustomerOrder (status = 'pending')
+    - Set WeeklyCartRecord.delivery_status = 'confirmed', is_locked = true
+    - Cart is now frozen — customer can no longer edit
+  Step 2 (sequential, slow): For each new 'pending' order:
+    - POST /v2/payment/preauth with cardToken for the full order amount
+    - APPROVED → order.status = 'authorized', order.preauth_id = txnId
+      Customer sees "pending $XX.XX" on their bank statement
+    - DECLINED → order.status = 'payment_failed'
+      Immediately send dunning email #1:
+      "Your card was declined. Update by Thursday 8 PM to keep your delivery."
+
+WEDNESDAY 8:00 AM MT — RETRY #1
+  For each 'payment_failed' order: re-run preauth
+  If success → flip to 'authorized'
+  If still failed → send dunning email #2
+
+WEDNESDAY 8:00 PM MT — RETRY #2
+  Same as above. Send dunning email #3 if still failing:
+  "Last chance — update your card by tomorrow 8 PM"
+
+THURSDAY 8:00 PM MT — CAPTURE PHASE
+  For each 'authorized' order:
+    RE-CHECK before capturing:
+      - Is subscription still active? (not paused/cancelled since Tuesday)
+      - Is delivery_status still 'confirmed'? (not skipped since Tuesday)
+      - Is payment method still valid? (not disputed/removed since Tuesday)
+    If any check fails → VOID the pre-auth (POST /v2/payment/reverse)
+      → order.status = 'skipped' or 'cancelled' as appropriate
+      → customer sees pending charge drop off their statement
+    If all checks pass → CAPTURE (POST /v2/payment/capture)
+      → order.status = 'confirmed', processor_charge_id = capture txnId
+      → send order confirmation email
+  For each still 'payment_failed' order:
+    One final preauth attempt
+    If success → immediate capture → 'confirmed'
+    If still failed → order.status = 'skipped'
+    → send "your delivery was skipped this week" email
+    → DON'T pause the subscription yet (skip != pause)
+    → Pause after 2-3 consecutive skipped weeks
+
+FRIDAY 6:00 AM MT — KITCHEN PRODUCTION REPORT
+  Pulls only status = 'confirmed' orders
+  100% of these are funded (pre-auth captured)
+```
+
+### Skip / pause / cancel between pre-auth and capture
+
+The capture cron must re-check order + subscription + payment method status before calling Helcim. If the customer took any action between Tuesday and Thursday that should prevent the charge, the pre-auth must be VOIDED (not captured).
+
+| Customer action between Tue-Thu | Capture cron action | Helcim call | Order status | Money |
+|---|---|---|---|---|
+| Nothing (happy path) | Capture the pre-auth | `POST /v2/payment/capture` | `confirmed` | Held → charged |
+| Skipped this week | VOID the pre-auth | `POST /v2/payment/reverse` | `skipped` | Hold drops, $0 charged |
+| Paused subscription | VOID the pre-auth | `POST /v2/payment/reverse` | `paused` | Hold drops, $0 charged |
+| Cancelled subscription | VOID the pre-auth | `POST /v2/payment/reverse` | `cancelled` | Hold drops, $0 charged |
+| Removed payment method | VOID the pre-auth | `POST /v2/payment/reverse` | `payment_method_removed` | Hold drops |
+| Card got disputed (reconciliation flagged) | VOID the pre-auth | `POST /v2/payment/reverse` | `payment_failed` | Hold drops |
+
+**Critical rule:** the skip/pause/cancel API handlers must ALSO check for existing 'authorized' orders and void them immediately at the time of the action — don't wait for Thursday's capture cron. This means the customer's pending charge drops off their statement within 1-2 business days of their action, and the Thursday cron's re-check is just a safety net.
+
+### Post-void customer messaging
+
+When a hold is voided for any reason, the customer should see:
+
+> *"You may see a pending charge of $XX.XX from BetterDay on your card statement. This is just a hold that's being released — you will not be charged. It typically drops off within 1-2 business days."*
+
+Where to display this is a UX design decision tracked in `conner/deferred-decisions.md`.
+
+### Schema additions needed for pre-auth (on top of Phase 1.2)
+
+```prisma
+// On CustomerOrder — add these fields in a follow-up migration
+preauth_id          String?    // Helcim transactionId from the /v2/payment/preauth response
+preauth_at          DateTime?  // When the pre-auth was placed
+preauth_voided_at   DateTime?  // When we voided (if skipped/cancelled between Tue-Thu)
+preauth_void_reason String?    // "customer_skip" | "customer_pause" | "customer_cancel" |
+                               // "payment_method_removed" | "card_disputed" | "admin_override"
+```
+
+### Cron changes vs Phase 3
+
+The current Phase 3 `WeeklyChargeCron` needs to be split into:
+- `TuesdayPreauthCron` — lock phase + pre-auth loop + decline email
+- `DunningRetryCron` — Wed morning + Wed evening retry sweeps
+- `ThursdayCaptureOrVoidCron` — capture authorized orders, void changed ones, final retry on failures
+
+These replace the single `WeeklyChargeCron.runCutoff()` that exists today. The existing `processOne()` logic (validate record, resolve IP, call Helcim, handle result) is reusable — it just needs to call `postPreauth` instead of `postPurchase` on Tuesday and `postCapture` on Thursday.
+
+### What this means for the HelcimApiClient
+
+Two methods need real bodies added (they're already in the types but not wired):
+- `postPreauth(body, idempotencyKey)` — same shape as `postPurchase`, different endpoint
+- `postCapture(body, idempotencyKey)` — takes the preauth `transactionId` + amount
+
+Plus `postReverse(originalTransactionId, idempotencyKey)` for voiding pre-auths on skip/pause/cancel.
+
+### Cadence simplification (locked decision 2026-04-10)
+
+All billing cadences follow the same Tuesday pre-auth → Thursday capture rhythm. "Monthly" subscribers are just weekly subscribers whose `WeeklyCartRecord` is generated every 4th week instead of every week by the cart generation cron. The payment pipeline is completely cadence-agnostic — if a cart record exists for the delivery week, it gets pre-auth'd and captured. If no record exists, nothing happens. `Subscription.cadence` is only read by the cart generation cron, never by the payment flow.
+
+---
+
+## 19. What's NOT in this plan (explicit exclusions)
+
+So the next chat doesn't get confused about scope (renumbered from §17 after §18 was inserted):
 
 - **HelcimPay.js redesign.** We use it as-is via the CDN script. We are not embedding, forking, or customizing the iframe.
 - **Apple Pay / Google Pay Express checkout.** These are in the schema (`CustomerSource.apple_pay_express`, `google_pay_express`) but their integration is a separate workstream.
