@@ -6,10 +6,29 @@ import { CommercePrismaService } from '../../../prisma/commerce-prisma.service';
 import { HelcimService, type ChargeResult } from '../helcim/helcim.service';
 
 /**
- * WeeklyChargeCron — the Thursday cutoff MIT (merchant-initiated) charge
- * loop. Runs once per week at the delivery-week cutoff and iterates every
+ * WeeklyChargeCron — the weekly cutoff MIT (merchant-initiated) charge
+ * loop. Runs once per week at the order cutoff time and iterates every
  * active subscriber with a non-empty WeeklyCartRecord, charging their
  * saved card for whatever their cart currently totals.
+ *
+ * SCHEDULE CONFIGURATION:
+ *   The cutoff cron expression is set via ORDER_CUTOFF_CRON env var.
+ *   Default: '1 0 * * 5' (Friday 00:01 MT) for BetterDay's Sunday
+ *   delivery schedule. This should eventually be admin-configurable
+ *   via a SystemConfig table (like Shopify's order deadlines), not
+ *   hardcoded in env. See TODO below.
+ *
+ *   BetterDay's actual rhythm:
+ *     Sunday    → deliveries arrive
+ *     Mon-Thu   → customers edit carts for next week
+ *     Fri 00:01 → orders lock + payment capture
+ *     Fri-Sat   → kitchen production
+ *     Sunday    → delivery
+ *
+ *   With the pre-auth model (plan §18), the rhythm becomes:
+ *     Wed 00:01 → pre-auth (48h before cutoff)
+ *     Wed-Thu   → dunning for failures
+ *     Fri 00:01 → capture (or void if skipped/paused/cancelled)
  *
  * Uses the existing @prisma/commerce-client schema. Built against the
  * Phase 1 schema additions (CustomerOrder.charge_attempts,
@@ -20,7 +39,7 @@ import { HelcimService, type ChargeResult } from '../helcim/helcim.service';
  * instead of Helcim's Recurring API.
  *
  * Research: conner/data-model/helcim-integration.md §5 + §6
- * Plan: conner/data-model/helcim-integration-plan.md §7
+ * Plan: conner/data-model/helcim-integration-plan.md §7 + §18 (revised pre-auth)
  *
  * ⚠️ STATUS — Phase 3 scaffolding:
  *   - The runCutoff() cron handler is wired but DISABLED in dev (it would
@@ -34,6 +53,15 @@ import { HelcimService, type ChargeResult } from '../helcim/helcim.service';
  *   - Full integration requires the cart generation cron + order totals
  *     engine + coupon application + points earn — none of which exist.
  *     A TODO block in processOne() lists what's missing.
+ *
+ * TODO(admin-configurable-schedule): Replace the @Cron decorator with
+ *   SchedulerRegistry-based dynamic cron registration that reads the
+ *   schedule from a SystemConfig table at startup (and reloads when an
+ *   admin changes it). NestJS's @Cron decorator is evaluated at class
+ *   decoration time and can't read runtime config. The SchedulerRegistry
+ *   approach creates the CronJob programmatically in onModuleInit().
+ *   Until then, the schedule comes from the ORDER_CUTOFF_CRON env var
+ *   and changing it requires a redeploy.
  */
 @Injectable()
 export class WeeklyChargeCron {
@@ -63,10 +91,12 @@ export class WeeklyChargeCron {
   }
 
   /**
-   * Thursday cutoff cron. Fires weekly at 8:00 PM America/Denver (MT).
-   * Tentative timing — tune per ops feedback. The only hard requirement
-   * is "after the edit window closes, before the kitchen production plan
-   * gets generated Friday morning."
+   * Order cutoff cron. Fires weekly per ORDER_CUTOFF_CRON env var.
+   * Default: Friday 00:01 MT (for Sunday deliveries).
+   *
+   * TODO(admin-configurable-schedule): read from SystemConfig table
+   * instead of env var. For now, changing the cutoff time requires
+   * editing ORDER_CUTOFF_CRON in .env and restarting.
    *
    * Iterates every WeeklyCartRecord for the current delivery week that's:
    *   - status = 'scheduled' (not skipped/paused/cancelled)
@@ -74,7 +104,7 @@ export class WeeklyChargeCron {
    *
    * For each row, processOne() is called.
    */
-  @Cron('0 20 * * 4', { timeZone: 'America/Denver' })
+  @Cron(process.env.ORDER_CUTOFF_CRON || '1 0 * * 5', { timeZone: 'America/Denver' })
   async runCutoff(): Promise<void> {
     if (!this.enabled) return;
 
@@ -151,7 +181,7 @@ export class WeeklyChargeCron {
    *
    * Used for sandbox testing — the admin hits
    * POST /api/admin/commerce/weekly-charge/run-once { recordId: "..." }
-   * to exercise chargeSavedCard without waiting for Thursday.
+   * to exercise chargeSavedCard without waiting for the weekly cutoff.
    */
   async processOne(weeklyCartRecordId: string): Promise<ChargeResult | null> {
     const record = await this.commercePrisma.weeklyCartRecord.findUnique({
@@ -310,15 +340,21 @@ export class WeeklyChargeCron {
   }
 
   /**
-   * Compute the delivery week (Sunday date) for a given reference date.
-   * Thursday cutoff fires during the week BEFORE delivery, so the
-   * delivery week is the following Sunday.
+   * Compute the delivery week (the Sunday date) for a given reference date.
+   * The cutoff fires before delivery day, so the delivery week is the
+   * upcoming Sunday.
+   *
+   * TODO(admin-configurable-schedule): the delivery day (Sunday) should
+   * come from SystemConfig, not be hardcoded here. Some food businesses
+   * deliver on different days per route/zone. For BetterDay v1, Sunday
+   * is the only delivery day.
    */
   private computeDeliveryWeekFor(now: Date): Date {
+    const deliveryDayOfWeek = 0; // 0 = Sunday. TODO: read from config
     const d = new Date(now);
-    const day = d.getDay(); // 0 = Sunday
-    const daysUntilSunday = (7 - day) % 7;
-    d.setDate(d.getDate() + (daysUntilSunday || 7));
+    const day = d.getDay();
+    const daysUntilDelivery = (deliveryDayOfWeek - day + 7) % 7;
+    d.setDate(d.getDate() + (daysUntilDelivery || 7));
     d.setHours(0, 0, 0, 0);
     return d;
   }

@@ -37,11 +37,11 @@ export class RunOnceDto {
  *   that protects culinary admin routes; no new auth concept introduced.
  *
  * Currently exposes a single endpoint for dev + sandbox testing: a manual
- * trigger for WeeklyChargeCron.processOne() that bypasses the Thursday
+ * trigger for WeeklyChargeCron.processOne() that bypasses the weekly
  * schedule and charges a single WeeklyCartRecord immediately.
  *
  * This lets Conner test the Helcim card-on-file flow end-to-end without
- * waiting for Thursday 8 PM or fiddling with the system clock.
+ * waiting for the weekly cutoff or fiddling with the system clock.
  *
  * Research: conner/data-model/helcim-integration.md §5
  * Plan: conner/data-model/helcim-integration-plan.md §7 (manual trigger)

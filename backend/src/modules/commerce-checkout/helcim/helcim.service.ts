@@ -261,7 +261,7 @@ export class HelcimService {
   // ─── Flow B: merchant-initiated weekly charge ────────────────────────────
 
   /**
-   * Charge a saved card on behalf of a customer. Called by the Thursday
+   * Charge a saved card on behalf of a customer. Called by the weekly
    * cutoff cron for each active subscriber with a non-empty cart, and
    * by the manual admin trigger endpoint for sandbox testing.
    *

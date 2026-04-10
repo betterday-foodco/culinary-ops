@@ -22,7 +22,7 @@ import { HelcimWebhookController } from './webhooks/helcim-webhook.controller';
 /**
  * CommerceCheckoutModule — wires the Helcim payment integration into the
  * NestJS app. Owns everything under `commerce-checkout/`: the HelcimPay.js
- * customer-present card save flow, the Thursday cutoff merchant-initiated
+ * customer-present card save flow, the weekly cutoff merchant-initiated
  * weekly charge cron, refunds, webhooks, and the daily reconciliation
  * cron.
  *
