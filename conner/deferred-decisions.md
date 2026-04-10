@@ -10,6 +10,25 @@ A running list of things that came up in chats but were consciously deferred —
 
 ## 🔮 Edge cases to handle later
 
+- [2026-04-10] **DOTW: admin edits delivery_week_sunday on a used coupon → data corruption**
+  If admin moves a DOTW from April 13 to May 4 after 50 people used it, all
+  historical CustomerCoupon records now link to "May 4" — April 13 history is
+  silently rewritten. **Lock `delivery_week_sunday` after first use.** Add to
+  `CouponAdminService.update()`: if `uses_count > 0` and field is changing,
+  throw `BadRequestException`. Admin must create a new coupon instead.
+
+- [2026-04-10] **DOTW targets a product removed from that week's menu**
+  Admin schedules "Chicken Bowl BOGO" for May 4, then kitchen pulls Chicken
+  Bowl. Coupon is valid but useless — nobody can add the product. No system
+  breakage, but confusing. Fix in admin UI: show a warning when DOTW product
+  targets don't overlap with the week's published menu.
+
+- [2026-04-10] **Cross-week deal confusion in pre-ordering**
+  Customer browsing April 13 + April 20 menus sees cookies on DOTW for
+  April 13. Adds cookies to both weeks, expects the deal on both. April 20
+  order has cookies at full price. Fix in UX: per-week deal badge on the
+  menu page + clear "this deal applies to April 13 delivery only" callout.
+
 - [2026-04-09] **Timezone issue in DOTW coupon week matching**
   `CouponValidationService.sameDateDay()` (line 743) compares delivery
   weeks using UTC. A Vancouver customer at 11pm Monday (Tuesday UTC) could
@@ -36,6 +55,72 @@ A running list of things that came up in chats but were consciously deferred —
 
 ## 🎯 Design decisions pending
 
+- [2026-04-10] **Subscription cart coupon lifecycle — validate at confirmation, best-effort at charge**
+  Decided architecture for coupons on subscription carts (Mon pick → Thu charge):
+  1. **Draft** — light validation when coupon is applied (is it real, active?)
+  2. **Confirmed** — full re-validation when customer confirms selections.
+     If coupon fails, customer sees why and can fix it while still on page.
+     This is the key checkpoint — customer is actively paying attention.
+  3. **Charged** — Thursday EOD auto-charge re-validates inside the payment
+     transaction (TOCTOU). If coupon fails here, order processes at full price.
+  **Three-lane validation model (decided 2026-04-10):**
+  Different coupon types validate on different axes:
+  1. **Time-window coupons** (starts_at / expires_at only, no delivery_week):
+     If *either* confirmation or charge timestamp falls in the valid window,
+     honor the coupon. Confirmation timestamp is primary source of truth.
+  2. **DOTW coupons** (delivery_week_sunday set): Subscriber-only
+     (`subscription_restriction: active_subscribers_only` enforced by
+     default). Validate on delivery week matching — does the order's
+     delivery week match the coupon's `delivery_week_sunday`? The existing
+     validator Rule 10 already works this way. DOTW visibility window is
+     auto-set by the scheduler: `starts_at` = Monday of delivery week,
+     `expires_at` = Thursday cutoff. One week at a time — never visible
+     in advance. This is a deliberate product decision: the weekly surprise
+     creates a reason to check in every Monday. Showing future weeks kills
+     the excitement (Costco monthly flyer problem). If a subscriber
+     pre-ordered meals before the DOTW was announced, they don't get the
+     deal retroactively — Option C, don't worry about it. Worst case they
+     paid full price for something they wanted anyway. Future enhancement:
+     Smart Hub nudge when DOTW matches items already in a confirmed cart
+     (Option A from 2026-04-10 discussion, not building now).
+  **Overrides that trump everything:**
+  - `is_active = false` (admin archive) kills a coupon regardless of
+    timestamps or delivery week — emergency brake.
+  - Cart-content rules (min_order_value, product targeting) validate against
+    the actual cart at charge time (cart may change after confirmation).
+  - Max-uses: honor if valid at confirmation (rare, not worth complexity).
+  **DOTW auto-generated codes (decided 2026-04-10):**
+  DOTW creation portal auto-builds codes from meal name + delivery date:
+  `DOTW-GREEN-THAI-CURRY-20260426`. Self-documenting, unique, no admin
+  guesswork. Implemented via slugify(meal_name) + date format in the DOTW
+  scheduler (not yet built).
+  **Failed coupon notification (decided 2026-04-10):**
+  When the Thursday charge cron drops a coupon, write a notification record.
+  Display in the customer's Rewards/account section as an unread alert:
+  "Coupon code ___ failed to apply to your weekly plan payment due to ___.
+  If you need assistance, please email hello@eatbetterday.ca." Message
+  content comes from the existing error-messages catalog (`error-messages.ts`).
+  Needs: `CustomerNotification` model, charge cron writes, account page reads.
+  **Personal coupon grants** — separate action from coupon creation. ~10 times
+  in 5 years. Simple `grantCoupon(couponId, customerId)` that creates a
+  `CustomerCoupon` row with status `available`. No need to bundle into create.
+  **Seam points:** `CouponApplyService.applyCoupon()` handles draft-time apply.
+  `CouponApplyService.validatePreview()` handles confirmation-time check.
+  Thursday charge cron (not yet built) calls the same validator one final time.
+
+- [2026-04-10] **Revisit: CustomerCoupon as the universal coupon interaction layer**
+  `CustomerCoupon` is the single table that tracks every coupon interaction
+  regardless of source (clip, auto-apply, admin grant, checkout entry, streak
+  reward). Confirmed 2026-04-10 that the status machine (available → applied
+  → redeemed / expired / revoked) handles all flows. Revisit this concept
+  after the coupon module is fully shipped to think through: (a) reporting
+  queries (clip-through rate, redemption rate by source), (b) the offers
+  feed query that powers the Discounts tab (clippable + personal + DOTW),
+  (c) how streak/reward milestones auto-generate CustomerCoupon rows, and
+  (d) whether `available` needs sub-states (e.g. `clipped` vs `granted` vs
+  `earned` for analytics). No schema change needed now — just a thinking
+  exercise once the dust settles.
+
 - [2026-04-08] **DOTW scheduler access control — separate role for head chef / ops manager?**
   Should the DOTW scheduler be accessible to a restricted role (e.g. "Operations" or "Culinary") that can only touch DOTWs + menu planning, without seeing customer PII or full coupon admin? Worth resolving before the admin UI ships. Not urgent for the schema.
 
@@ -48,6 +133,13 @@ A running list of things that came up in chats but were consciously deferred —
 ---
 
 ## 🛠️ Implementation TODOs
+
+- [2026-04-10] **Standardize skip/take pagination as a universal admin pattern**
+  Gurleen's `corp-admin.service.ts` has the only pagination in the codebase
+  (page/limit with parallel count query). Building the same pattern into
+  coupon admin list. Once proven here, extract a shared DTO + helper so all
+  future admin listing endpoints use the same shape:
+  `{ data, total, page, limit }`. Candidate for a `conner/README.md` convention.
 
 - [2026-04-09] **Customer order metrics — denormalized counters on Customer profile**
   Add 8 columns to the commerce `Customer` model: `total_orders`,
@@ -163,28 +255,56 @@ A running list of things that came up in chats but were consciously deferred —
   current `(level?.tier_config as any)` cast. Defer until the subscription
   admin page work is in flight — same lane (Gurleen's frontend dashboard).
 
-- [2026-04-09] **Subscription pricing settings — admin dashboard UI**
-  `conner/client-website/shared/subscription-config.js` is currently the
-  single source of truth for `PERK_TIERS`, `FREE_DELIVERY_MEALS`,
-  `DELIVERY_FEE`, `GST_RATE`, and `POINTS_PER_DOLLAR`. Both the menu page
-  and the checkout page consume it via `<script src>`. The values are
-  hardcoded JS constants — they should move into the existing
-  `SystemConfig` key-value table (`backend/prisma/schema.prisma:511`) and
-  be served via `/api/system-config/public` (the same endpoint that
-  already delivers `public.contact.email`, `public.delivery.areas`, etc).
-  Then `subscription-config.js` becomes a thin shim that fetches the live
-  config and falls back to the hardcoded defaults if the fetch fails.
-  **Where the admin UI lives:** `frontend/app/(dashboard)/settings/subscription-plans/page.tsx`
-  (new — sibling of `settings/integration`, `settings/staff`, `settings/tags`).
-  Schema for the seed: encode the tier table as a JSON-stringified value
-  on a single key (e.g. `public.subscription.tiers = "[{...},{...}]"`)
-  since `SystemConfig.value` is a `String` column. **Lane:** the admin UI
-  is in Gurleen's `frontend/` territory and needs to ship through her
-  worktree. Backend changes (seed file + endpoint passthrough) are
-  Conner's. See the calculator-fix commit on
-  `conner/2026-04-09-checkout-page` for the full context of why this
-  matters — the menu page and checkout page used to have drifted copies
-  of these constants, which produced math bugs.
+- [2026-04-09] **Subscription pricing settings — admin dashboard UI** *(partially done)*
+  **Done (2026-04-09):** Seed keys added to `brand/site-info.seed.json`
+  (`public.pricing.perkTiers`, `public.pricing.freeDeliveryMeals`,
+  `public.pricing.deliveryFee`, `public.pricing.gstRate`,
+  `public.pricing.dollarsPerPoint`). `subscription-config.js` now fetches
+  from `/api/system-config/public` on load, with hardcoded fallbacks if
+  the API is unreachable. Constants changed from `const` to `let` so the
+  fetch can overwrite them. Exported `pricingReady` promise for pages
+  that need to `await` before computing totals (e.g. checkout).
+  **Still TODO:**
+  1. Run `npx prisma db seed` on the Neon dev branch to insert the new
+     keys into the SystemConfig table (or add them manually via the admin
+     PATCH endpoint).
+  2. Build admin UI at `frontend/app/(dashboard)/settings/subscription-plans/page.tsx`
+     — Gurleen's lane. Should display a form for editing tiers, delivery
+     fee, GST rate, points config. PATCH to `/api/system-config`.
+  3. Wire `subscription-config.js` into account/index.html and
+     index.html (homepage) — both currently re-declare their own copies
+     of PERK_TIERS and DELIVERY_FEE instead of loading the shared file.
+
+- [2026-04-09] **Remove DEV-CART-FILLER test code before production**
+  `conner/client-website/account/index.html` has a temporary cart-filling
+  function (`DEV_fillTestCart()`) that auto-loads 12 meat entrees, 8
+  plant-based entrees, and all snacks/breakfasts on page load. Search
+  `DEV-CART-FILLER` to find the block. Also includes 8 placeholder
+  plant-based meals (ids 150–157, search `PLANT-BASED-TEST-DATA`). Both
+  blocks need to be removed before the account page goes live — the real
+  data should come from the API. To disable without removing, set
+  `DEV_AUTO_FILL_CART = false`.
+
+- [2026-04-09] ✅ **Account page + homepage now use shared pricing constants**
+  Both `account/index.html` and `index.html` (homepage) now load
+  `shared/subscription-config.js` and use `lookupSubscriberDiscountPct()`.
+  Local re-declarations removed. Account page's hardcoded `gstRate = 0.05`
+  replaced with `GST_RATE` from shared config. Fake `*1.08+0.99` one-time
+  price formula removed (one-time price = `meal.price`, no markup).
+  Hardcoded `$7.99` replaced with `DELIVERY_FEE`. Homepage's `TIERS`
+  object (different structure) replaced with shared `lookupSubscriberDiscountPct()`.
+  **Still open:** category naming convention differs (`'Entrees'` in
+  account vs `'Entree'` in menu page) — reconcile when wiring to API.
+
+- [2026-04-09] **Free delivery rule divergence — quantity vs dollar threshold**
+  Three different rules exist:
+  - `subscription-config.js:74` → `FREE_DELIVERY_MEALS = 8` (qty-based, subscribers)
+  - `checkout.html:2774` → uses `FREE_DELIVERY_MEALS` from shared config (correct)
+  - `index.html:1612-1613` → `const free = _type==='plant' ? wt>=119.5 : wt>=120;` (dollar-based, everyone)
+  Business intent (Conner, 2026-04-09): $120 for everyone, 8 meals for
+  subscribers, undecided for one-time orders. Reconcile before launch.
+  The homepage's dollar-based rule should be a separate constant in
+  subscription-config.js (e.g. `FREE_DELIVERY_SPEND = 120`).
 
 - [2026-04-09] **Build a wiring/inventory scanner + per-page inventory report**
   Conner asked for "an absolute inventory of every button, endpoint, tag, and connection" so any new feature can reference a database of what populates what (e.g., what fills the discount tiers, where macros come from, what the submit-order button does). Decided to defer building it. The plan when picked up:
@@ -229,6 +349,39 @@ A running list of things that came up in chats but were consciously deferred —
 ---
 
 ## 💡 Future ideas (not on the roadmap yet)
+
+- [2026-04-10] **Subscriber Smart Hub — unified dashboard for alerts, actions, deals, news**
+  Replace the current flat subscriber dashboard with a two-zone layout:
+  **Zone 1 — Persistent quick-actions strip** (always visible, same for all):
+  Edit my meals, adjust plan slots, pause/skip week, view order history.
+  **Zone 2 — Dynamic cards feed** (personal + broadcast, dismissable):
+  Alerts (failed coupon, expiring card, cutoff approaching), deals (DOTW
+  spotlight, personal coupons, clippable offers), content (weekly menu
+  update, company announcements, newsletter-style messages from founders),
+  rewards (streak tracker, milestone badges, points balance).
+  **Foundation model — `CustomerHubCard`:**
+  `id, customer_id (nullable = broadcast), type (alert/deal/action/news),
+  category (coupon_failed/card_expiring/dotw/menu_update/etc), priority
+  (urgent/normal/low), title, body, action_label, action_url, image_url,
+  target_customer_tags[] (empty = everyone), dismissed_at, expires_at,
+  created_at`. Broadcast cards use `customer_id = NULL` — one row reaches
+  all subscribers. Tag-targeted broadcasts filter by `target_customer_tags`
+  against `Customer.tags` (same field the auto-computed marketing tags
+  will populate). Cards auto-expire via `WHERE expires_at IS NULL OR
+  expires_at > NOW()`. Priority drives sort order (urgent pins to top).
+  **Connects to:** failed coupon notifications (error-messages.ts copy),
+  auto-computed marketing tags (customer metrics), DOTW scheduler, and
+  any future email/push notification system (hub cards become the
+  canonical "what to tell this customer" source, channels just deliver).
+  **Build when:** client-profile account hub page is ready for dynamic
+  content. Foundation model can land anytime as a migration.
+
+- [2026-04-10] **Recurring DOTW template — generate N coupon rows from one form**
+  Admin wants "cookies 50% off" every week for 4 weeks. Currently must
+  create 4 separate coupons with different codes + delivery_week_sunday.
+  Convenience shortcut: one form generates N coupon rows with auto-suffixed
+  codes (e.g. COOKIES50-APR13, COOKIES50-APR20). Thin wrapper over the
+  existing `CouponAdminService.create()`. Build when DOTW scheduler UI ships.
 
 - [2026-04-08] **Welcome series / birthday / abandoned cart automation**
   All T3 in the coupon feature picker. Require a scheduled-job runner that doesn't exist yet. Layer in as a separate migration once execution infrastructure is in place.

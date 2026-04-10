@@ -61,7 +61,12 @@
 
    Format: { meals: minimum cart quantity, pct: discount percentage }
 */
-const PERK_TIERS = [
+/* ─── Defaults (overwritten by API when available) ───────────────── */
+// These are `let` (not `const`) so _loadPricingFromAPI() can overwrite
+// them with live values from the SystemConfig database table. If the
+// API is unreachable (offline, backend not running, etc.) the hardcoded
+// defaults here are used — they're always safe fallbacks.
+let PERK_TIERS = [
   { meals: 4,  pct: 5  },
   { meals: 5,  pct: 8  },
   { meals: 7,  pct: 11 },
@@ -71,9 +76,9 @@ const PERK_TIERS = [
 ];
 
 /* ─── Delivery + tax ──────────────────────────────────────────────── */
-const FREE_DELIVERY_MEALS = 8;     // subscribers with 8+ meals get free delivery
-const DELIVERY_FEE        = 7.99;  // standard delivery fee, CAD
-const GST_RATE            = 0.05;  // 5% Canadian GST (Alberta + most provinces)
+let FREE_DELIVERY_MEALS = 8;     // subscribers with 8+ meals get free delivery
+let DELIVERY_FEE        = 7.99;  // standard delivery fee, CAD
+let GST_RATE            = 0.05;  // 5% Canadian GST (Alberta + most provinces)
 
 /* ─── Reward points (loyalty) ─────────────────────────────────────── */
 // Conversion rate: each redeemed point is worth this many dollars.
@@ -82,8 +87,43 @@ const GST_RATE            = 0.05;  // 5% Canadian GST (Alberta + most provinces)
 // $1 of subtotal in the checkout (~2.1% effective return).
 // Renamed from the original prototype constant for clarity, but kept
 // the legacy name as an alias so any other consumer keeps working.
-const DOLLARS_PER_POINT = 0.03;
-const POINTS_PER_DOLLAR = DOLLARS_PER_POINT;  // legacy alias — do not remove
+let DOLLARS_PER_POINT = 0.03;
+let POINTS_PER_DOLLAR = DOLLARS_PER_POINT;  // legacy alias — do not remove
+
+/* ─── Live config fetch from SystemConfig API ────────────────────── *
+ * Tries to load pricing values from the admin-editable SystemConfig
+ * table via GET /api/system-config/public. On success, the globals
+ * above are silently overwritten with live DB values. On failure
+ * (backend not running, network error, bad JSON), nothing happens —
+ * the hardcoded defaults above stay in effect.
+ *
+ * Consuming pages can optionally `await pricingReady` before running
+ * price-sensitive calculations (e.g. checkout totals). For pages that
+ * only display prices on cards (menu), the defaults render instantly
+ * and get silently corrected if the API responds before the user acts.
+ *
+ * The API endpoint is the same one that serves public.contact.email,
+ * public.delivery.areas, etc. — no new backend code is needed. The
+ * keys are seeded from brand/site-info.seed.json and editable via
+ * the admin dashboard at /api/system-config (PATCH, JWT-protected).
+ * ─────────────────────────────────────────────────────────────────── */
+async function _loadPricingFromAPI() {
+  try {
+    const res = await fetch('/api/system-config/public');
+    if (!res.ok) return;
+    const cfg = await res.json();
+    if (cfg['pricing.perkTiers'])         PERK_TIERS          = JSON.parse(cfg['pricing.perkTiers']);
+    if (cfg['pricing.freeDeliveryMeals']) FREE_DELIVERY_MEALS = Number(cfg['pricing.freeDeliveryMeals']);
+    if (cfg['pricing.deliveryFee'])       DELIVERY_FEE        = Number(cfg['pricing.deliveryFee']);
+    if (cfg['pricing.gstRate'])           GST_RATE            = Number(cfg['pricing.gstRate']);
+    if (cfg['pricing.dollarsPerPoint'])   { DOLLARS_PER_POINT = Number(cfg['pricing.dollarsPerPoint']); POINTS_PER_DOLLAR = DOLLARS_PER_POINT; }
+  } catch {
+    // Silently fall back to hardcoded defaults — no action needed.
+    // This fires when running HTML locally without the backend, or
+    // when the backend is temporarily unreachable.
+  }
+}
+const pricingReady = _loadPricingFromAPI();
 
 /* ─── Helper: tier-discount lookup for a given cart quantity ──────── */
 // Returns the percentage (0-20+) for the highest tier the cart qualifies

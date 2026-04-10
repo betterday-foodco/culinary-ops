@@ -181,6 +181,11 @@ a{color:inherit;text-decoration:none}
 .nd-card-img-wrap{width:100%;aspect-ratio:1;background:#e8ddd0;overflow:hidden;position:relative;border-radius:12.5px 12.5px 0 0}
 .nd-card-img-wrap img{width:100%;height:100%;object-fit:cover;display:block}
 
+/* Meal image placeholder — gradient fallback for meals without photos */
+.meal-img-placeholder{display:flex;align-items:center;justify-content:center;width:100%;height:100%;font-size:2.2rem;color:#FAEBDA;line-height:1}
+.meal-img-placeholder--omni{background:linear-gradient(135deg,#00465e 0%,#006d6f 100%)}
+.meal-img-placeholder--plant{background:linear-gradient(135deg,#2d6a4f 0%,#52b788 100%)}
+
 /* Quick Swap button — pill badge with icon left + stacked "Quick / Swap" right
    Matches the look of swap buttons elsewhere in the app, just stacked to fit the small card */
 .nd-card-swap{position:absolute;top:8px;left:8px;display:inline-flex;flex-direction:row;align-items:center;gap:6px;padding:6px 11px 6px 9px;border-radius:100px;background:#c8a4f5;border:none;color:#faebda;cursor:pointer;box-shadow:0 3px 8px rgba(0,49,65,.28);z-index:3;transition:all .12s ease;font-family:'Sofia Pro','Inter',sans-serif;line-height:1}
@@ -2971,6 +2976,8 @@ select.acct-form-input{appearance:none;background-image:url("data:image/svg+xml,
 <!-- Footer injected from shared/marketing-footer.html by site-shell.js -->
 <div data-shell="footer"></div>
 
+<!-- Shared pricing constants (PERK_TIERS, DELIVERY_FEE, GST_RATE, etc.) -->
+<script src="../shared/subscription-config.js"></script>
 <script>
 // ============================================================
 // AUTH GATE — bounce to login.html if no active session
@@ -3013,62 +3020,148 @@ function logoutAndRedirect(){
 }
 
 // ======= DATA =======
-const allMeals = [
-  // In cart
-  {id:1,name:'Mediterranean Chicken',price:15.99,cal:580,protein:'42g',fat:'22g',carb:'38g',cat:'Entrees',qty:1,img:'/conner/app/img/meal1.jpg',allergen:null,desc:'Herb-marinated chicken breast with roasted peppers, kalamata olives, and feta over herbed rice.',ingredients:'Chicken breast, jasmine rice, roasted red peppers, kalamata olives, feta cheese, fresh herbs, lemon, olive oil, garlic'},
-  {id:2,name:'Sesame Steak',price:16.99,cal:520,protein:'44g',fat:'18g',carb:'40g',cat:'Entrees',qty:1,img:'/conner/app/img/meal2.jpg',allergen:null,desc:'Sesame-crusted sirloin steak with stir-fried vegetables and jasmine rice.',ingredients:'Sirloin steak, jasmine rice, sesame seeds, broccoli, bell pepper, snap peas, soy sauce, ginger, garlic, sesame oil'},
-  {id:3,name:'Beef Bulgogi',price:16.99,cal:620,protein:'43g',fat:'30g',carb:'28g',cat:'Entrees',qty:2,img:'/conner/app/img/meal3.jpg',allergen:null,desc:'Korean-style marinated beef with pickled daikon, steamed broccoli, and sticky rice.',ingredients:'Beef sirloin, sticky rice, gochujang, soy sauce, pickled daikon, broccoli, sesame seeds, green onion, garlic, pear'},
-  {id:4,name:'Chicken Risotto',price:14.99,cal:620,protein:'35g',fat:'24g',carb:'52g',cat:'Entrees',qty:1,img:'/conner/app/img/meal4.jpg',allergen:'dairy',desc:'Creamy parmesan risotto with tender roasted chicken, peas, and fresh herbs.',ingredients:'Chicken thigh, arborio rice, parmesan, peas, chicken broth, white wine, butter, shallots, fresh thyme, garlic'},
-  {id:6,name:'Bang Bang Salmon',price:17.99,cal:670,protein:'40g',fat:'26g',carb:'66g',cat:'Entrees',qty:1,img:'/conner/app/img/meal6.jpg',allergen:null,desc:'Crispy salmon with bang bang sauce, coconut rice, and charred broccoli.',ingredients:'Atlantic salmon, coconut rice, broccoli, bang bang sauce, sriracha, mayo, sweet chili sauce, garlic, lime, sesame seeds'},
-  {id:8,name:'Teriyaki Chicken',price:14.99,cal:550,protein:'36g',fat:'16g',carb:'60g',cat:'Entrees',qty:1,img:'/conner/app/img/meal8.jpg',allergen:null,desc:'Glazed teriyaki chicken with edamame, shredded carrots, and steamed brown rice.',ingredients:'Chicken breast, brown rice, edamame, carrots, teriyaki sauce, soy sauce, mirin, ginger, garlic, green onion'},
-  {id:5,name:'Southwest Breakfast Burrito',price:12.99,cal:420,protein:'28g',fat:'24g',carb:'22g',cat:'Breakfasts',qty:1,img:'/conner/app/img/meal5.jpg',allergen:'dairy',desc:'Scrambled eggs, black beans, peppers, cheese, and salsa verde in a flour tortilla.',ingredients:'Flour tortilla, eggs, black beans, cheddar cheese, bell peppers, salsa verde, onion, cumin, cilantro, sour cream'},
-  {id:9,name:'Overnight Protein Oats',price:8.99,cal:380,protein:'22g',fat:'12g',carb:'44g',cat:'Breakfasts',qty:1,img:'/conner/app/img/meal8.jpg',allergen:null,desc:'Vanilla protein oats topped with banana, almond butter, and granola.',ingredients:'Rolled oats, vanilla protein powder, almond milk, banana, almond butter, granola, chia seeds, honey, cinnamon'},
-  // Available (not in cart)
-  {id:101,name:'Grilled Lemon Chicken',price:14.99,cal:490,protein:'40g',fat:'14g',carb:'36g',cat:'Entrees',qty:0,img:'/conner/app/img/meal1.jpg',allergen:null,desc:'Bright lemon-herb grilled chicken with roasted potatoes.',ingredients:'Chicken breast, baby potatoes, lemon, fresh oregano, garlic, olive oil, green beans, cherry tomatoes, capers'},
-  {id:102,name:'Herb Roasted Chicken',price:15.49,cal:510,protein:'42g',fat:'16g',carb:'34g',cat:'Entrees',qty:0,img:'/conner/app/img/meal4.jpg',allergen:null,desc:'Slow-roasted chicken with garlic mashed potatoes.',ingredients:'Chicken thigh, Yukon gold potatoes, garlic, butter, rosemary, thyme, green beans, chicken jus, black pepper'},
-  {id:104,name:'BBQ Pulled Chicken',price:14.49,cal:530,protein:'36g',fat:'18g',carb:'48g',cat:'Entrees',qty:0,img:'/conner/app/img/meal1.jpg',allergen:null,desc:'Smoky pulled chicken with coleslaw and cornbread.',ingredients:'Chicken breast, BBQ sauce, coleslaw mix, cornbread, apple cider vinegar, smoked paprika, garlic powder, brown sugar, mayo'},
-  {id:105,name:'NY Strip Steak',price:18.99,cal:580,protein:'48g',fat:'24g',carb:'30g',cat:'Entrees',qty:0,img:'/conner/app/img/meal2.jpg',allergen:null,desc:'Center-cut NY strip with garlic butter and asparagus.',ingredients:'NY strip steak, asparagus, garlic butter, baby potatoes, rosemary, olive oil, sea salt, black pepper, shallot'},
-  {id:106,name:'Korean Beef Bowl',price:17.49,cal:600,protein:'44g',fat:'26g',carb:'36g',cat:'Entrees',qty:0,img:'/conner/app/img/meal3.jpg',allergen:null,desc:'Marinated beef with kimchi, pickled vegetables, and jasmine rice.',ingredients:'Beef sirloin, jasmine rice, kimchi, pickled cucumber, gochujang, soy sauce, sesame oil, rice vinegar, green onion, sesame seeds'},
-  {id:107,name:'Chicken Caesar Wrap',price:13.99,cal:520,protein:'36g',fat:'22g',carb:'38g',cat:'Sandwich & Wraps',qty:0,img:'/conner/app/img/meal6.jpg',allergen:null,desc:'Grilled chicken, romaine, parmesan, and Caesar dressing in a flour wrap.',ingredients:'Flour tortilla, grilled chicken, romaine lettuce, parmesan, Caesar dressing, croutons, lemon, black pepper'},
-  {id:108,name:'Turkey Club Wrap',price:14.49,cal:480,protein:'34g',fat:'18g',carb:'40g',cat:'Sandwich & Wraps',qty:0,img:'/conner/app/img/meal6.jpg',allergen:null,desc:'Sliced turkey, bacon, avocado, and ranch in a spinach tortilla.',ingredients:'Spinach tortilla, sliced turkey, bacon, avocado, ranch dressing, tomato, mixed greens, red onion'},
-  {id:109,name:'Steak & Cheese Panini',price:16.49,cal:580,protein:'42g',fat:'26g',carb:'36g',cat:'Sandwich & Wraps',qty:0,img:'/conner/app/img/meal7.jpg',allergen:'dairy',desc:'Shaved steak with provolone, peppers, and onions on pressed ciabatta.',ingredients:'Ciabatta bread, shaved steak, provolone cheese, bell peppers, caramelized onions, garlic aioli, olive oil'},
-  {id:110,name:'Egg White Veggie Cups',price:9.49,cal:280,protein:'22g',fat:'10g',carb:'18g',cat:'Breakfasts',qty:0,img:'/conner/app/img/meal5.jpg',allergen:null,desc:'Baked egg white cups with spinach, tomato, and feta.',ingredients:'Egg whites, spinach, cherry tomatoes, feta cheese, bell pepper, onion, fresh basil, garlic, olive oil'},
-  {id:111,name:'Banana Protein Pancakes',price:10.99,cal:420,protein:'28g',fat:'12g',carb:'48g',cat:'Breakfasts',qty:0,img:'/conner/app/img/meal4.jpg',allergen:'dairy',desc:'Fluffy protein pancakes with fresh banana and maple drizzle.',ingredients:'Oat flour, vanilla protein powder, banana, eggs, milk, baking powder, maple syrup, butter, cinnamon'},
-  {id:112,name:'Protein Energy Bites',price:6.99,cal:220,protein:'14g',fat:'10g',carb:'22g',cat:'Snacks & Other',qty:0,img:'/conner/app/img/meal7.jpg',allergen:null,desc:'Peanut butter oat bites with dark chocolate chips and honey.',ingredients:'Rolled oats, peanut butter, dark chocolate chips, honey, vanilla extract, chia seeds, flax meal'},
-  {id:113,name:'Greek Yogurt Parfait',price:7.49,cal:310,protein:'20g',fat:'8g',carb:'38g',cat:'Snacks & Other',qty:0,img:'/conner/app/img/meal8.jpg',allergen:'dairy',desc:'Thick Greek yogurt layered with granola, berries, and honey.',ingredients:'Greek yogurt, granola, mixed berries, honey, chia seeds, vanilla extract, sliced almonds'},
-  {id:114,name:'Mango Chili Shrimp',price:17.49,cal:480,protein:'36g',fat:'16g',carb:'44g',cat:'Entrees',qty:0,img:'/conner/app/img/meal6.jpg',allergen:null,desc:'Spicy mango-chili glazed shrimp with cilantro lime rice.',ingredients:'Shrimp, cilantro lime rice, mango, chili flakes, lime, garlic, soy sauce, honey, cilantro, red onion'},
-];
+// Meals are loaded from meals.seed.json (152 real meals from the database).
+// normalizeForAccount() maps DB field names to the format account templates expect.
+let allMeals = [];
+let suggestionItems = [];
 
-const suggestionItems = [
-  {id:301,name:'Protein Energy Bites',price:6.99,img:'/conner/app/img/meal7.jpg',badge:'best'},
-  {id:302,name:'Overnight Oats',price:7.49,img:'/conner/app/img/meal4.jpg',badge:'best'},
-  {id:303,name:'Greek Yogurt Parfait',price:5.99,img:'/conner/app/img/meal5.jpg',badge:'best'},
-  {id:304,name:'Avocado Toast Cup',price:8.49,img:'/conner/app/img/meal1.jpg',badge:'best'},
-  {id:201,name:'Mango Chili Shrimp',price:17.49,img:'/conner/app/img/meal6.jpg',badge:'new'},
-  {id:202,name:'Truffle Mushroom Bowl',price:15.99,img:'/conner/app/img/meal7.jpg',badge:'new'},
-  {id:203,name:'Spicy Korean Tofu',price:13.49,img:'/conner/app/img/meal5.jpg',badge:'new'},
-  {id:204,name:'Chimichurri Steak',price:18.99,img:'/conner/app/img/meal2.jpg',badge:'new'},
-  {id:205,name:'Coconut Curry Chicken',price:15.49,img:'/conner/app/img/meal1.jpg',badge:'new'},
-  {id:206,name:'Pesto Salmon',price:18.49,img:'/conner/app/img/meal6.jpg',badge:'new'},
-];
-// Add suggestion items to allMeals so openMealDetail and addToCart work
-suggestionItems.forEach(s=>{
-  if(!allMeals.find(m=>m.id===s.id)){
-    allMeals.push({id:s.id,name:s.name,price:s.price,cal:480,protein:'34g',fat:'18g',carb:'42g',cat:'Snacks & Other',qty:0,img:s.img,allergen:null,desc:`Delicious ${s.name.toLowerCase()} — a perfect addition to your weekly plan.`,tags:[]});
+// ─── Category mapping ────────────────────────────────────────────────
+// Seed data uses singular names (Entree, Breakfast, Snack). Account page
+// templates use plural names (Entrees, Breakfasts, Snacks & Other).
+const CAT_MAP = {'Entree':'Entrees','Breakfast':'Breakfasts','Snack':'Snacks & Other'};
+function mapCategory(c) { return CAT_MAP[c] || c; }
+
+// ─── Badge derivation (ported from menu/index.html) ──────────────────
+function deriveBadges(row) {
+  const out = [];
+  const tags = row.dietary_tags || [];
+  const allergens = row.allergen_tags || [];
+  const proteins = row.protein_types || [];
+  const isPlantBased = row.diet_plan === 'Plant-Based';
+  if (tags.includes('Freezable')) out.push('Freezable');
+  if (tags.includes('Family Friendly')) out.push('Family Friendly');
+  if (tags.includes('Gluten Free')) out.push('Gluten Free');
+  if (tags.includes('Dairy Free')) out.push('Dairy Free');
+  if ((row.protein_g ?? 0) >= 35) out.push('High Protein');
+  if (isPlantBased && !allergens.includes('Dairy')) out.push('Vegetarian');
+  const landMeat = ['Chicken', 'Beef', 'Turkey', 'Pork'];
+  if (!isPlantBased && proteins.length > 0 && !proteins.some(p => landMeat.includes(p))) out.push('Pescatarian');
+  return out;
+}
+
+// ─── Image placeholder (ported from menu/index.html) ─────────────────
+function swapToPlaceholder(img) {
+  const plan = img.dataset.plan || 'omni';
+  const placeholder = document.createElement('div');
+  placeholder.className = img.className + ' meal-img-placeholder meal-img-placeholder--' + plan;
+  placeholder.setAttribute('aria-label', img.alt || '');
+  placeholder.innerHTML = '<span>🍽️</span>';
+  img.replaceWith(placeholder);
+}
+
+// ─── Normalize one raw DB row → account page format ──────────────────
+function normalizeForAccount(row) {
+  const allergenArr = row.allergen_tags || [];
+  const plan = row.diet_plan === 'Plant-Based' ? 'plant' : 'omni';
+  const initial = ((row.display_name || row.name || '?').charAt(0)).toUpperCase();
+  return {
+    id:          row.id,
+    name:        row.display_name || row.name,
+    price:       row.price ?? 0,
+    cal:         row.calories ?? null,
+    protein:     row.protein_g != null ? row.protein_g + 'g' : null,
+    fat:         row.fat_g != null ? row.fat_g + 'g' : null,
+    carb:        row.carbs_g != null ? row.carbs_g + 'g' : null,
+    cat:         mapCategory(row.menu_category),
+    diet:        (row.diet_plan || '').toLowerCase().replace('-','_'),  // "plant_based" / "omnivore"
+    diet_plan:   row.diet_plan,                                        // original for badge derivation
+    qty:         0,
+    img:         row.image_url || null,
+    _imgPlan:    plan,
+    _imgInitial: initial,
+    allergen:    allergenArr.length ? allergenArr.map(a => a.toLowerCase()).join(', ') : null,
+    desc:        row.description || row.short_description || '',
+    ingredients: row.label_ingredients || '',
+    tags:        deriveBadges(row),
+  };
+}
+
+// ─── Render img with placeholder fallback ─────────────────────────────
+function renderAccountImg(m, className) {
+  const plan = m._imgPlan || 'omni';
+  if (!m.img) {
+    return `<div class="${className} meal-img-placeholder meal-img-placeholder--${plan}" aria-label="${m.name}"><span>🍽️</span></div>`;
   }
-});
+  return `<img class="${className}" src="${m.img}" alt="${m.name}" loading="lazy" data-plan="${plan}" onerror="swapToPlaceholder(this)">`;
+}
+
+// ─── Load meals from seed JSON ───────────────────────────────────────
+async function loadAccountMeals() {
+  try {
+    const res = await fetch('../menu/meals.seed.json');
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const rows = await res.json();
+    allMeals = rows.map(normalizeForAccount);
+    console.log(`%c[account]%c Loaded ${allMeals.length} meals from meals.seed.json`, 'color:#4EA2FD;font-weight:bold', 'color:inherit');
+  } catch (e) {
+    console.warn('[account] Could not fetch meals.seed.json, using sample data:', e.message);
+    // Fallback sample data so page still works via file://
+    allMeals = [
+      {id:'s1',name:'Mediterranean Chicken',price:16.99,cal:580,protein:'42g',fat:'22g',carb:'38g',cat:'Entrees',diet:'omnivore',diet_plan:'Omnivore',qty:0,img:null,_imgPlan:'omni',_imgInitial:'M',allergen:null,desc:'Herb-marinated chicken breast with roasted peppers and feta over herbed rice.',ingredients:'Chicken breast, jasmine rice, roasted red peppers, feta cheese, fresh herbs',tags:['High Protein']},
+      {id:'s2',name:'Sesame Steak Bowl',price:16.99,cal:520,protein:'44g',fat:'18g',carb:'40g',cat:'Entrees',diet:'omnivore',diet_plan:'Omnivore',qty:0,img:null,_imgPlan:'omni',_imgInitial:'S',allergen:null,desc:'Sesame-crusted sirloin with stir-fried vegetables.',ingredients:'Sirloin steak, jasmine rice, sesame seeds, broccoli, soy sauce',tags:['High Protein']},
+      {id:'s3',name:'Curry Club Butt\'r Tofu',price:15.99,cal:490,protein:'24g',fat:'20g',carb:'52g',cat:'Entrees',diet:'plant_based',diet_plan:'Plant-Based',qty:0,img:null,_imgPlan:'plant',_imgInitial:'C',allergen:null,desc:'Creamy plant-based butter curry with crispy tofu.',ingredients:'Tofu, coconut cream, basmati rice, garam masala',tags:['Vegetarian']},
+      {id:'s4',name:'Falafel Fusion Power Bowl',price:15.99,cal:540,protein:'26g',fat:'24g',carb:'50g',cat:'Entrees',diet:'plant_based',diet_plan:'Plant-Based',qty:0,img:null,_imgPlan:'plant',_imgInitial:'F',allergen:null,desc:'Herb-loaded falafel over quinoa tabbouleh.',ingredients:'Chickpeas, quinoa, parsley, tahini, lemon',tags:['Vegetarian']},
+      {id:'s5',name:'Southwest Breakfast Burrito',price:12.99,cal:420,protein:'28g',fat:'24g',carb:'22g',cat:'Breakfasts',diet:'omnivore',diet_plan:'Omnivore',qty:0,img:null,_imgPlan:'omni',_imgInitial:'S',allergen:'dairy',desc:'Scrambled eggs, black beans, peppers, and cheese.',ingredients:'Flour tortilla, eggs, black beans, cheddar cheese',tags:[]},
+      {id:'s6',name:'Protein Energy Bites',price:6.99,cal:220,protein:'14g',fat:'10g',carb:'22g',cat:'Snacks & Other',diet:'omnivore',diet_plan:'Omnivore',qty:0,img:null,_imgPlan:'omni',_imgInitial:'P',allergen:null,desc:'Peanut butter oat bites with dark chocolate chips.',ingredients:'Rolled oats, peanut butter, dark chocolate chips, honey',tags:[]},
+    ];
+  }
+
+  // Generate suggestion items from real data
+  generateSuggestionItems();
+
+  // DEV cart filler
+  if (typeof DEV_AUTO_FILL_CART !== 'undefined' && DEV_AUTO_FILL_CART) DEV_fillTestCart();
+
+  // Render everything
+  renderCompactCart();
+  renderSuggestions();
+  renderTimeline();
+}
+
+// ─── Generate suggestions from real meal data ────────────────────────
+function generateSuggestionItems() {
+  const withImg = allMeals.filter(m => m.img && m.price > 0);
+  const snacks = withImg.filter(m => m.cat === 'Breakfasts' || m.cat === 'Snacks & Other');
+  const entrees = withImg.filter(m => m.cat === 'Entrees');
+  suggestionItems = [
+    ...snacks.slice(0, 4).map(m => ({...m, badge:'best'})),
+    ...entrees.slice(-6).map(m => ({...m, badge:'new'})),
+  ];
+}
+
+// ╔════════════════════════════════════════════════════════════════════════════╗
+// ║  🚧 DEV CART FILLER — TEMPORARY TEST CODE                                ║
+// ║  🔍 Search "DEV-CART-FILLER" to find this block.                          ║
+// ║  🗑️  DELETE this entire block before shipping to production.              ║
+// ║  To DISABLE without deleting, set DEV_AUTO_FILL_CART = false below.       ║
+// ╚════════════════════════════════════════════════════════════════════════════╝
+const DEV_AUTO_FILL_CART = true;
+
+function DEV_fillTestCart() {
+  allMeals.forEach(m => m.qty = 0);
+  const meatEntrees = allMeals.filter(m => m.cat === 'Entrees' && m.diet !== 'plant_based');
+  meatEntrees.slice(0, 12).forEach(m => m.qty = 1);
+  const plantEntrees = allMeals.filter(m => m.cat === 'Entrees' && m.diet === 'plant_based');
+  plantEntrees.slice(0, 8).forEach(m => m.qty = 1);
+  allMeals.filter(m => m.cat === 'Breakfasts' || m.cat === 'Snacks & Other').forEach(m => m.qty = 1);
+  const total = allMeals.filter(m => m.qty > 0).reduce((s, m) => s + m.qty, 0);
+  console.log(`%c[DEV-CART-FILLER]%c ${total} meals loaded`, 'color:#22c55e;font-weight:bold', 'color:inherit');
+}
+// ╚════════════════════════════════════════════════════════════════════════════╝
 
 // ======= MENU CHANGES (auto-swaps from last week's cart) =======
-// Models dishes that were in the subscriber's cart last week but aren't on
-// this week's menu — they get auto-matched to close replacements.
-//   fromName/fromImg : frozen history (old dish may not exist this week)
-//   toId             : current meal in cart (lives in allMeals, qty > 0)
-//   qty              : how many got swapped (should match allMeals[toId].qty)
-//   userAdjusted     : set true after user manually re-swaps via the modal
-let menuChanges = [
-  {fromName:'Chicken Parm',         fromImg:'/conner/app/img/meal3.jpg', toId:3, qty:2, userAdjusted:false},
-  {fromName:'Greek Mediterranean Bowl', fromImg:'/conner/app/img/meal7.jpg', toId:8, qty:1, userAdjusted:false}
-];
+// TODO: populate from API — these are empty until the swap system is wired
+let menuChanges = [];
 let activeMenuChangeIndex = null;
 
 // upcomingDates models the weekly_cart_records concept:
@@ -3195,10 +3288,8 @@ function initAllPhoneInputs(){
 }
 
 // ======= INIT =======
-document.addEventListener('DOMContentLoaded',()=>{
-  renderCompactCart();
-  renderSuggestions();
-  renderTimeline();
+document.addEventListener('DOMContentLoaded',async()=>{
+  await loadAccountMeals();
   if(typeof updatePlanStatus==='function') updatePlanStatus();
   initSwapTabs();
   initAllPhoneInputs();
@@ -3261,10 +3352,10 @@ function renderCompactCart(){
     const cards = flatMeals.map(m => {
       const qtyBadge = m.qty > 1 ? `<span class="nd-card-qty">×${m.qty}</span>` : '';
       const safeName = (m.name||'').replace(/"/g,'&quot;');
-      return `<div class="nd-card" role="button" tabindex="0" onclick="ndCardClick(event,${m.id},this)" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();openMealDetail(${m.id})}" aria-label="Edit ${safeName}">
+      return `<div class="nd-card" role="button" tabindex="0" onclick="ndCardClick(event,'${m.id}',this)" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();openMealDetail('${m.id}')}" aria-label="Edit ${safeName}">
         <div class="nd-card-img-wrap">
-          <img src="${m.img}" alt="${safeName}">
-          <button type="button" class="nd-card-swap" title="Swap this meal" aria-label="Quick swap this meal" onclick="event.stopPropagation();openSwapPanel(${m.id})">${swapIconSvg}<span class="nd-card-swap-label"><span>Quick</span><span>Swap</span></span></button>
+          ${renderAccountImg(m,'nd-card-thumb')}
+          <button type="button" class="nd-card-swap" title="Swap this meal" aria-label="Quick swap this meal" onclick="event.stopPropagation();openSwapPanel('${m.id}')">${swapIconSvg}<span class="nd-card-swap-label"><span>Quick</span><span>Swap</span></span></button>
         </div>
         <div class="nd-card-name"><span>${safeName}</span></div>
         ${qtyBadge}
@@ -3280,7 +3371,7 @@ function renderCompactCart(){
     } else {
       thumbs = otherMeals.slice(0, 3);
     }
-    const thumbsHTML = thumbs.map(t => `<img class="nd-more-thumb" src="${t.img}" alt="">`).join('');
+    const thumbsHTML = thumbs.map(t => t.img ? `<img class="nd-more-thumb" src="${t.img}" alt="" onerror="swapToPlaceholder(this)">` : `<div class="nd-more-thumb meal-img-placeholder meal-img-placeholder--${t._imgPlan||'omni'}"><span>🍽️</span></div>`).join('');
     const mcCount=menuChanges.length;
     const mcLabel=mcCount===1?'1 dish<br>auto&#8209;swapped':`${mcCount} dishes<br>auto&#8209;swapped`;
     const noticeTile=mcCount>0?`<button type="button" class="nd-card-notice" onclick="openMenuChanges()" aria-label="${mcCount} ${mcCount===1?'dish':'dishes'} auto-swapped this week, tap to review">
@@ -3299,11 +3390,8 @@ function renderCompactCart(){
 
     container.innerHTML = `<div class="nd-grid">${cards}${moreTile}</div>`;
   }
-  // Subscriber discount from PERK_TIERS
-  let savingsPct = 0;
-  for (let i = PERK_TIERS.length - 1; i >= 0; i--) {
-    if (meals >= PERK_TIERS[i].meals) { savingsPct = PERK_TIERS[i].pct; break; }
-  }
+  // Subscriber discount — helper from subscription-config.js
+  const savingsPct = lookupSubscriberDiscountPct(meals);
   const subscriberPrice = price - price * (savingsPct / 100);
   const onetimeTotal = price; // one-time = full dish price
   const mealSavings = onetimeTotal - subscriberPrice;
@@ -3345,8 +3433,8 @@ function renderCartSummarySidebar({groups, meals, subscriberPrice, mealSavings, 
     </div>`;
   }).join('');
 
-  // GST 5% on subscriber subtotal (Canadian)
-  const gstRate = 0.05;
+  // GST on subscriber subtotal (Canadian) — rate from subscription-config.js
+  const gstRate = GST_RATE;
   const gst = subscriberPrice * gstRate;
   const deliveryFree = meals >= FREE_DELIVERY_MEALS;
   const deliveryCharge = deliveryFree ? 0 : DELIVERY_FEE;
@@ -3405,12 +3493,9 @@ function renderCartSummarySidebar({groups, meals, subscriberPrice, mealSavings, 
     </button>`;
 }
 
-const FREE_DELIVERY_MEALS = 8;
-const DELIVERY_FEE = 7.99;          // standard delivery fee
-const PERK_TIERS = [
-  {meals:4,pct:5},{meals:5,pct:8},{meals:7,pct:11},
-  {meals:9,pct:14},{meals:11,pct:17},{meals:13,pct:20},
-];
+// FREE_DELIVERY_MEALS, DELIVERY_FEE, PERK_TIERS, GST_RATE — loaded from
+// ../shared/subscription-config.js (single source of truth). Do NOT
+// re-declare them here.
 const MILESTONES = [
   [4,'5% off',false],[5,'8% off',false],[7,'11% off',false],
   [8,'Free Delivery',true],[9,'14% off',false],[11,'17% off',false],[13,'20% off',false],
@@ -3426,15 +3511,15 @@ function renderHubSavings(){
   const {meals:n, price}=getCartTotal();
   const cart=getCartMeals();
 
-  // One-time price calculation (sum of full retail prices)
-  const onetimeTotal=cart.reduce((s,m)=>s+(Math.floor(m.price*1.08)+0.99)*m.qty,0);
+  // One-time price = sum of full retail prices (meal.price is the retail price;
+  // subscribers get a %-off discount, one-time customers pay meal.price exactly)
+  const onetimeTotal=cart.reduce((s,m)=>s+m.price*m.qty,0);
   const deliveryEarned=n>=FREE_DELIVERY_MEALS;
   const dollarSaved=Math.max(0, onetimeTotal-price);
-  const totalSaved=dollarSaved+(deliveryEarned?7.99:0);
+  const totalSaved=dollarSaved+(deliveryEarned?DELIVERY_FEE:0);
 
   // Active subscriber tier
-  let savePct=0;
-  for(let i=PERK_TIERS.length-1;i>=0;i--){if(n>=PERK_TIERS[i].meals){savePct=PERK_TIERS[i].pct;break;}}
+  const savePct=lookupSubscriberDiscountPct(n);
 
   // Edge case — no meals in cart yet
   if(n===0){
@@ -3635,13 +3720,13 @@ function eoRenderGrid(){
 function eoRenderCard(m){
   const price = m.price;
   let badges='';
-  if(m.allergen==='dairy') badges+='<span class="eo-card-badge dairy">Dairy</span>';
+  if(m.allergen && m.allergen.includes('dairy')) badges+='<span class="eo-card-badge dairy">Dairy</span>';
   // Use tags if available (hub data may not have tags array)
-  const swapBtn = m.qty>0 ? `<button class="eo-swap-pill" onclick="event.stopPropagation();openSwapPanel(${m.id})"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M17 1l4 4-4 4"/><path d="M3 11V9a4 4 0 014-4h14"/><path d="M7 23l-4-4 4-4"/><path d="M21 13v2a4 4 0 01-4 4H3"/></svg>Swap</button>` : '';
+  const swapBtn = m.qty>0 ? `<button class="eo-swap-pill" onclick="event.stopPropagation();openSwapPanel('${m.id}')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M17 1l4 4-4 4"/><path d="M3 11V9a4 4 0 014-4h14"/><path d="M7 23l-4-4 4-4"/><path d="M21 13v2a4 4 0 01-4 4H3"/></svg>Swap</button>` : '';
   return `
-    <div class="eo-meal-card${m.qty>0?' in-cart':''}" data-id="${m.id}" onclick="openMealDetail(${m.id})">
+    <div class="eo-meal-card${m.qty>0?' in-cart':''}" data-id="${m.id}" onclick="openMealDetail('${m.id}')">
       <div class="eo-card-img-wrap">
-        <img class="eo-card-img" src="${m.img}" alt="${m.name}" loading="lazy">
+        ${renderAccountImg(m,'eo-card-img')}
         ${badges?`<div class="eo-card-badges">${badges}</div>`:''}
         ${swapBtn}
       </div>
@@ -3661,14 +3746,14 @@ function eoRenderCard(m){
 }
 
 function eoRenderAddBtn(id,price){
-  return `<button class="eo-add-btn" onclick="eoAddToCart(${id})"><span>ADD</span><span class="eo-add-btn-divider"></span><span class="eo-add-btn-price">$${price.toFixed(2)}</span></button>`;
+  return `<button class="eo-add-btn" onclick="eoAddToCart('${id}')"><span>ADD</span><span class="eo-add-btn-divider"></span><span class="eo-add-btn-price">$${price.toFixed(2)}</span></button>`;
 }
 
 function eoRenderQtyCtrl(id,qty){
   return `<div class="eo-qty-ctrl">
-    <button class="eo-qty-minus" onclick="eoChangeQty(${id},-1)">&minus;</button>
+    <button class="eo-qty-minus" onclick="eoChangeQty('${id}',-1)">&minus;</button>
     <div class="eo-qty-num">${qty}</div>
-    <button class="eo-qty-plus" onclick="eoChangeQty(${id},1)">+</button>
+    <button class="eo-qty-plus" onclick="eoChangeQty('${id}',1)">+</button>
   </div>`;
 }
 
@@ -3856,16 +3941,16 @@ function eoRenderCart(){
       const trashSvg='<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 011-1h4a1 1 0 011 1v2"/></svg>';
       const swapSvg='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M17 1l4 4-4 4"/><path d="M3 11V9a4 4 0 014-4h14"/><path d="M7 23l-4-4 4-4"/><path d="M21 13v2a4 4 0 01-4 4H3"/></svg>';
       const minusBtn = m.qty===1
-        ? `<button class="eo-cart-qty-btn remove" onclick="eoChangeQty(${m.id},-1)" title="Remove">${trashSvg}</button>`
-        : `<button class="eo-cart-qty-btn" onclick="eoChangeQty(${m.id},-1)" title="Decrease">&minus;</button>`;
+        ? `<button class="eo-cart-qty-btn remove" onclick="eoChangeQty('${m.id}',-1)" title="Remove">${trashSvg}</button>`
+        : `<button class="eo-cart-qty-btn" onclick="eoChangeQty('${m.id}',-1)" title="Decrease">&minus;</button>`;
       const priceDisplay = m.qty>1
         ? `<span class="eo-cart-item-unit">$${m.price.toFixed(2)} &times; ${m.qty}</span> <span class="eo-cart-item-total">$${(m.price*m.qty).toFixed(2)}</span>`
         : `$${m.price.toFixed(2)}`;
       const infoLabel='+ info';
       itemsHtml+=`
         <div class="eo-cart-item">
-          <div class="eo-cart-thumb-wrap" onclick="openMealDetail(${m.id})">
-            <img class="eo-cart-item-thumb" src="${m.img}" alt="${m.name}">
+          <div class="eo-cart-thumb-wrap" onclick="openMealDetail('${m.id}')">
+            ${renderAccountImg(m,'eo-cart-item-thumb')}
             <span class="eo-cart-info-icon">${infoLabel}</span>
           </div>
           <div class="eo-cart-item-info">
@@ -3876,9 +3961,9 @@ function eoRenderCart(){
             <div class="eo-cart-qty-ctrl">
               ${minusBtn}
               <div class="eo-cart-qty-num">${m.qty}</div>
-              <button class="eo-cart-qty-btn" onclick="eoChangeQty(${m.id},1)" title="Increase">+</button>
+              <button class="eo-cart-qty-btn" onclick="eoChangeQty('${m.id}',1)" title="Increase">+</button>
             </div>
-            <button class="eo-cart-swap-btn" onclick="openSwapPanel(${m.id})">${swapSvg}Swap</button>
+            <button class="eo-cart-swap-btn" onclick="openSwapPanel('${m.id}')">${swapSvg}Swap</button>
           </div>
         </div>`;
     });
@@ -3904,9 +3989,8 @@ function eoRenderRewards(){
   const price=getCartTotal().price;
   if(n===0){el.innerHTML='';return;}
 
-  // Subscriber discount from PERK_TIERS
-  let savePct=0;
-  for(let i=PERK_TIERS.length-1;i>=0;i--){if(n>=PERK_TIERS[i].meals){savePct=PERK_TIERS[i].pct;break;}}
+  // Subscriber discount — helper from subscription-config.js
+  const savePct=lookupSubscriberDiscountPct(n);
   const subscriberPrice=price-price*(savePct/100);
   const onetimeTotal=price; // one-time = full dish price
   const dollarSaved=onetimeTotal-subscriberPrice;
@@ -4030,7 +4114,7 @@ function eoGetFilteredMeals(){
     });
   }
   if(eoActiveAllergens.length>0){
-    meals=meals.filter(m=>!eoActiveAllergens.some(a=>m.allergen&&m.allergen.toLowerCase()===a.toLowerCase()));
+    meals=meals.filter(m=>!eoActiveAllergens.some(a=>m.allergen&&m.allergen.toLowerCase().includes(a.toLowerCase())));
   }
   if(eoActiveSort==='price-low') meals.sort((a,b)=>a.price-b.price);
   else if(eoActiveSort==='price-high') meals.sort((a,b)=>b.price-a.price);
@@ -4067,7 +4151,7 @@ function renderSuggestions(){
     //   - No NEW/POPULAR tag badge
     //   - Price badge in the top-right corner of the photo
     //   - Name takes the full info area, 2-line clamp with ellipsis
-    return `<div class="suggest-card" onclick="openMealDetail(${m.id})"><div class="sc-img"><img src="${m.img}" alt="${m.name}"><span class="sc-price">$${m.price.toFixed(2)}</span></div><div class="sc-info"><div class="sc-name">${m.name}</div><div class="sc-row"><button class="sc-add" data-price="${m.price.toFixed(2)}" data-id="${m.id}" onclick="event.stopPropagation();addSuggestionToCart(this,${m.id},'${m.name.replace(/'/g,"\\'")}')">Add to Plan</button></div></div></div>`;
+    return `<div class="suggest-card" onclick="openMealDetail('${m.id}')"><div class="sc-img">${renderAccountImg(m,'sc-thumb')}<span class="sc-price">$${m.price.toFixed(2)}</span></div><div class="sc-info"><div class="sc-name">${m.name}</div><div class="sc-row"><button class="sc-add" data-price="${m.price.toFixed(2)}" data-id="${m.id}" onclick="event.stopPropagation();addSuggestionToCart(this,'${m.id}','${m.name.replace(/'/g,"\\'")}')">Add to Plan</button></div></div></div>`;
   }).join('');
 }
 function addSuggestionToCart(btn,id,name){
@@ -4206,13 +4290,13 @@ function openSwapPanel(mealId){
   }
   area.innerHTML=`
     <div class="swap-current-img-wrap">
-      <img class="swap-current-img" src="${swapTarget.img}" alt="${swapTarget.name}">
-      <button class="swap-current-more" onclick="event.stopPropagation();openMealDetail(${swapTarget.id})">More Info</button>
+      ${renderAccountImg(swapTarget,'swap-current-img')}
+      <button class="swap-current-more" onclick="event.stopPropagation();openMealDetail('${swapTarget.id}')">More Info</button>
     </div>
     <div class="swap-current-info">
       <div class="swap-current-label">Swapping:</div>
       <div class="swap-current-name">${swapTarget.name}${swapTarget.qty>1?' <span style="font-weight:400;font-size:12px;color:rgba(0,49,65,0.5)">×'+swapTarget.qty+'</span>':''}</div>
-      <div class="swap-current-meta">$${swapTarget.price.toFixed(2)} · ${swapTarget.cal} cal · ${swapTarget.protein} pro · ${swapTarget.carb} carb · ${swapTarget.fat} fat</div>
+      <div class="swap-current-meta">$${swapTarget.price.toFixed(2)} · ${swapTarget.cal||'—'} cal · ${swapTarget.protein||'—'} pro · ${swapTarget.carb||'—'} carb · ${swapTarget.fat||'—'} fat</div>
     </div>
     ${modeHtml}`;
   swapMode='replaceAll';mixBasket={};
@@ -4243,15 +4327,15 @@ function renderSwapGrid(cat){
   grid.innerHTML=available.map(m=>{
     const btnHtml=swapMode==='mixMatch'&&swapTarget&&swapTarget.qty>1
       ?`<div class="swap-card-mix">
-          <button onclick="event.stopPropagation();adjustMix(${m.id},'${m.name.replace(/'/g,"\\'")}' ,-1)">&minus;</button>
+          <button onclick="event.stopPropagation();adjustMix('${m.id}','${m.name.replace(/'/g,"\\'")}' ,-1)">&minus;</button>
           <span class="mix-qty">${mixBasket[m.id]||0}</span>
-          <button onclick="event.stopPropagation();adjustMix(${m.id},'${m.name.replace(/'/g,"\\'")}',1)">+</button>
+          <button onclick="event.stopPropagation();adjustMix('${m.id}','${m.name.replace(/'/g,"\\'")}',1)">+</button>
         </div>`
-      :`<button class="swap-card-btn" onclick="event.stopPropagation();selectSwap(${m.id})">Select</button>`;
-    return `<div class="swap-card" onclick="openMealDetail(${m.id})">
+      :`<button class="swap-card-btn" onclick="event.stopPropagation();selectSwap('${m.id}')">Select</button>`;
+    return `<div class="swap-card" onclick="openMealDetail('${m.id}')">
       <div class="swap-card-img">
-        <img src="${m.img}" alt="${m.name}">
-        <button class="swap-card-info-pill" onclick="event.stopPropagation();openMealDetail(${m.id})">More Info</button>
+        ${renderAccountImg(m,'swap-card-thumb')}
+        <button class="swap-card-info-pill" onclick="event.stopPropagation();openMealDetail('${m.id}')">More Info</button>
       </div>
       <div class="swap-card-macros">
         <div class="eo-macro-cell"><span class="eo-macro-val">${m.cal||'—'}</span><span class="eo-macro-label">Cal</span></div>
@@ -4326,16 +4410,22 @@ function selectSwap(swapMealId){
 // ======= MEAL DETAIL =======
 function openMealDetail(id){
   const m=allMeals.find(x=>x.id===id);if(!m)return;mealDetailTarget=id;
-  document.getElementById('mealDetailImg').src=m.img;
+  const imgEl=document.getElementById('mealDetailImg');
+  if(m.img){
+    imgEl.style.display='';imgEl.src=m.img;imgEl.onerror=function(){swapToPlaceholder(this)};
+  } else {
+    imgEl.style.display='';imgEl.src='';imgEl.onerror=null;
+    swapToPlaceholder(imgEl);
+  }
   document.getElementById('mealDetailName').textContent=m.name;
   document.getElementById('mealDetailCat').textContent=m.cat;
   document.getElementById('mealDetailDesc').textContent=m.desc;
   // Macros as cell strip
   document.getElementById('mealDetailMacros').innerHTML=`
-    <div class="md-macro-cell"><div class="md-macro-val">${m.cal}</div><div class="md-macro-label">Cal</div></div>
-    <div class="md-macro-cell"><div class="md-macro-val">${m.protein}</div><div class="md-macro-label">Protein</div></div>
-    <div class="md-macro-cell"><div class="md-macro-val">${m.carb}</div><div class="md-macro-label">Carbs</div></div>
-    <div class="md-macro-cell"><div class="md-macro-val">${m.fat}</div><div class="md-macro-label">Fat</div></div>`;
+    <div class="md-macro-cell"><div class="md-macro-val">${m.cal||'—'}</div><div class="md-macro-label">Cal</div></div>
+    <div class="md-macro-cell"><div class="md-macro-val">${m.protein||'—'}</div><div class="md-macro-label">Protein</div></div>
+    <div class="md-macro-cell"><div class="md-macro-val">${m.carb||'—'}</div><div class="md-macro-label">Carbs</div></div>
+    <div class="md-macro-cell"><div class="md-macro-val">${m.fat||'—'}</div><div class="md-macro-label">Fat</div></div>`;
   // Ingredients
   if(m.ingredients){
     document.getElementById('mealDetailIngrLabel').textContent='Ingredients';
@@ -4362,14 +4452,14 @@ function openMealDetail(id){
       const curQty=mixBasket[m.id]||0;
       actionsEl.innerHTML=`
         <div class="meal-detail-qty">
-          <button onclick="adjustMix(${m.id},'${m.name.replace(/'/g,"\\'")}' ,-1);updateMdMixQty(${m.id})">&minus;</button>
+          <button onclick="adjustMix('${m.id}','${m.name.replace(/'/g,"\\'")}' ,-1);updateMdMixQty('${m.id}')">&minus;</button>
           <div class="mdq-num" id="mdMixQtyNum">${curQty}</div>
-          <button onclick="adjustMix(${m.id},'${m.name.replace(/'/g,"\\'")}',1);updateMdMixQty(${m.id})">+</button>
+          <button onclick="adjustMix('${m.id}','${m.name.replace(/'/g,"\\'")}',1);updateMdMixQty('${m.id}')">+</button>
         </div>`;
     } else {
       // Replace All: single swap button
       const swapQtyLabel = swapTarget && swapTarget.qty>1 ? ` all ${swapTarget.qty}` : '';
-      actionsEl.innerHTML=`<button class="meal-detail-add" style="background:#ffc600;color:#003141" onclick="closeMealDetail();selectSwap(${m.id})"><span style="font-weight:800">Swap${swapQtyLabel} to ${m.name}</span></button>`;
+      actionsEl.innerHTML=`<button class="meal-detail-add" style="background:#ffc600;color:#003141" onclick="closeMealDetail();selectSwap('${m.id}')"><span style="font-weight:800">Swap${swapQtyLabel} to ${m.name}</span></button>`;
     }
   } else if(fromSwap){
     // Opened from swap panel for the current dish (info only)
@@ -4385,19 +4475,19 @@ function openMealDetail(id){
       const fromHub = !document.getElementById('editOverlay').classList.contains('open');
       if(fromHub){
         actionsEl.innerHTML=`
-          <button class="md-action-quick-swap" onclick="closeMealDetail();openSwapPanel(${m.id})">${swapIcon}Quick Swap</button>
+          <button class="md-action-quick-swap" onclick="closeMealDetail();openSwapPanel('${m.id}')">${swapIcon}Quick Swap</button>
           <button class="md-action-browse-menu" onclick="closeMealDetail();openEditModal()">${gridIcon}Browse Full Menu</button>`;
       } else {
         actionsEl.innerHTML=`
           <div class="meal-detail-qty">
-            <button onclick="mdChangeQty(${m.id},-1)">&minus;</button>
+            <button onclick="mdChangeQty('${m.id}',-1)">&minus;</button>
             <div class="mdq-num" id="mdQtyNum">${m.qty}</div>
-            <button onclick="mdChangeQty(${m.id},1)">+</button>
+            <button onclick="mdChangeQty('${m.id}',1)">+</button>
           </div>
-          <button class="meal-detail-swap" onclick="closeMealDetail();openSwapPanel(${m.id})">${swapIcon}Swap</button>`;
+          <button class="meal-detail-swap" onclick="closeMealDetail();openSwapPanel('${m.id}')">${swapIcon}Swap</button>`;
       }
     } else {
-      actionsEl.innerHTML=`<button class="meal-detail-add" onclick="mdAddToCart(${m.id})"><span>ADD</span><span class="eo-add-btn-divider"></span><span class="eo-add-btn-price">$${m.price.toFixed(2)}</span></button>`;
+      actionsEl.innerHTML=`<button class="meal-detail-add" onclick="mdAddToCart('${m.id}')"><span>ADD</span><span class="eo-add-btn-divider"></span><span class="eo-add-btn-price">$${m.price.toFixed(2)}</span></button>`;
     }
   }
   document.getElementById('mealDetailOverlay').classList.add('open');
