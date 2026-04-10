@@ -191,9 +191,7 @@ export class CostEngineService {
       select: { sub_recipe_id: true },
     });
 
-    const subRecipeIds = [
-      ...new Set(affectedSubRecipes.map((r) => r.sub_recipe_id)),
-    ];
+    const subRecipeIds = Array.from(new Set(affectedSubRecipes.map((r) => r.sub_recipe_id))) as string[];
 
     await this.recalculateSubRecipes(subRecipeIds);
 
@@ -202,7 +200,7 @@ export class CostEngineService {
       select: { meal_id: true },
     });
 
-    const mealIds = [...new Set(affectedMeals.map((m) => m.meal_id))];
+    const mealIds = Array.from(new Set(affectedMeals.map((m) => m.meal_id))) as string[];
     await this.recalculateMeals(mealIds);
   }
 
@@ -223,9 +221,8 @@ export class CostEngineService {
       select: { sub_recipe_id: true },
     });
 
-    const parentIds = [
-      ...new Set(parentComponents.map((p) => p.sub_recipe_id)),
-    ].filter((id) => !subRecipeIds.includes(id));
+    const parentIds = (Array.from(new Set(parentComponents.map((p) => p.sub_recipe_id))) as string[])
+      .filter((id) => !subRecipeIds.includes(id));
 
     if (parentIds.length > 0) {
       await this.recalculateSubRecipes(parentIds);
@@ -236,7 +233,7 @@ export class CostEngineService {
       select: { meal_id: true },
     });
 
-    const mealIds = [...new Set(mealComponents.map((m) => m.meal_id))];
+    const mealIds = Array.from(new Set(mealComponents.map((m) => m.meal_id))) as string[];
     if (mealIds.length > 0) {
       await this.recalculateMeals(mealIds);
     }

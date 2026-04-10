@@ -133,6 +133,10 @@ export class CreateMealDto {
   linked_meal_id?: string | null;
 
   @IsOptional()
+  @IsString()
+  diet_plan_id?: string | null;
+
+  @IsOptional()
   @IsNumber()
   calories?: number;
 

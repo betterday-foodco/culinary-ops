@@ -94,7 +94,7 @@ takes us from "mocked" to "wired."
 | Meal detail | `menu/[meal-code].html` | 💭 planned |
 | Cart | `cart.html` | 💭 planned |
 | Checkout | `checkout.html` | 💭 planned |
-| Account hub | `account/index.html` | 💭 planned |
+| Account hub | `account/index.html` | ✅ built (2026-04-09) — port of `../app/subscriber-hub-2.0.html`, conservative copy + shell wiring; inline hex codes still need tokenizing |
 | Subscription manager | `account/subscription.html` | 💭 planned |
 | Order history | `account/orders.html` | 💭 planned |
 | About | `about.html` | 💭 planned |

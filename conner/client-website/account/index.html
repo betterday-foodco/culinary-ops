@@ -3,39 +3,54 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Subscriber Hub — BetterDay</title>
+<title>Your Account — BetterDay</title>
+<link rel="stylesheet" href="/brand/tokens.css">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
 <style>
+/*
+ * Ported from conner/app/subscriber-hub-2.0.html. Brand colors and fonts come
+ * from /brand/tokens.css linked above; the inline CSS in this file still uses
+ * literal hex codes from the prototype era. Tokenize incrementally — see the
+ * deferred-decisions entry "Subscriber Hub port: tokenize inline hex codes".
+ *
+ * The four @font-face declarations below duplicate ones already in tokens.css
+ * but use the family name "Sofia Pro" (no "Soft") that the page's CSS rules
+ * expect. Paths are absolute under /brand/fonts/ so they resolve regardless
+ * of where this page lives.
+ */
 @font-face {
   font-family: 'BDSupper';
-  src: url('fonts/BDSupperBold.otf') format('opentype');
+  src: url('/brand/fonts/BDSupperBold.otf') format('opentype');
   font-weight: 700; font-style: normal; font-display: swap;
 }
 @font-face {
   font-family: 'Gaya';
-  src: url('fonts/Gaya.otf') format('opentype');
+  src: url('/brand/fonts/Gaya.otf') format('opentype');
   font-weight: 400; font-style: normal; font-display: swap;
 }
 @font-face {
   font-family: 'Sofia Pro';
-  src: url('fonts/SofiaProSoftRegular.otf') format('opentype');
+  src: url('/brand/fonts/SofiaProSoftRegular.otf') format('opentype');
   font-weight: 400; font-style: normal; font-display: swap;
 }
 @font-face {
   font-family: 'Sofia Pro';
-  src: url('fonts/SofiaProSoftBold.otf') format('opentype');
+  src: url('/brand/fonts/SofiaProSoftBold.otf') format('opentype');
   font-weight: 700; font-style: normal; font-display: swap;
 }
 
 /* ======= RESET & BASE ======= */
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
-body{font-family:'Sofia Pro','Inter',-apple-system,sans-serif;background:#faebda;color:#1a1a1a;line-height:1.5;-webkit-font-smoothing:antialiased}
+/* padding-top:64px clears the fixed .main-nav from shared/marketing-header.html
+   (60px on mobile — see media query at the bottom of this <style> block) */
+body{font-family:'Sofia Pro','Inter',-apple-system,sans-serif;background:#faebda;color:#1a1a1a;line-height:1.5;-webkit-font-smoothing:antialiased;padding-top:64px}
+@media(max-width:768px){body{padding-top:60px}}
 button{font-family:inherit;cursor:pointer;border:none;background:none}
 img{display:block;max-width:100%}
 a{color:inherit;text-decoration:none}
 
 /* ======= ACCOUNT TABS BAR ======= */
-.account-tabs-bar{background:#faebda;border-bottom:1px solid #e0d0bc;padding:0 32px;display:flex;align-items:stretch;gap:0;position:sticky;top:0;z-index:99}
+.account-tabs-bar{background:#faebda;border-bottom:1px solid #e0d0bc;padding:0 32px;display:flex;align-items:stretch;gap:0;position:sticky;top:64px;z-index:99}
 .account-tab{padding:16px 24px;font-size:14px;font-weight:500;color:#8a7a6a;border-bottom:3px solid transparent;transition:all .2s;white-space:nowrap;background:none;border-left:none;border-right:none;border-top:none;cursor:pointer;font-family:inherit}
 .account-tab:hover{color:#003141}
 .account-tab.active{color:#003141;font-weight:700;border-bottom-color:#00465e}
@@ -1350,7 +1365,7 @@ a{color:inherit;text-decoration:none}
 /* ======= MOBILE (< 768px) ======= */
 @media(max-width:768px){
   /* --- Account tabs: horizontal scroll --- */
-  .account-tabs-bar{padding:0 0 0 12px;overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none;top:0}
+  .account-tabs-bar{padding:0 0 0 12px;overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none;top:60px}
   .account-tabs-bar::-webkit-scrollbar{display:none}
   .account-tab{padding:12px 16px;font-size:13px;flex-shrink:0}
 
@@ -1760,7 +1775,10 @@ select.acct-form-input{appearance:none;background-image:url("data:image/svg+xml,
 }
 </style>
 </head>
-<body>
+<body data-site="marketing">
+
+<!-- Header injected from shared/marketing-header.html by site-shell.js -->
+<div data-shell="header"></div>
 
 <!-- ACCOUNT TABS -->
 <div class="account-tabs-bar">
@@ -1983,7 +2001,7 @@ select.acct-form-input{appearance:none;background-image:url("data:image/svg+xml,
               <div class="perks-deal-card">
                 <!-- Photo wrap (dark green bg, ~45% width) with discount badge overlay -->
                 <div class="perks-deal-img-wrap">
-                  <img class="perks-deal-img" src="img/meal7.jpg" alt="Protein Energy Bites">
+                  <img class="perks-deal-img" src="/conner/app/img/meal7.jpg" alt="Protein Energy Bites">
                   <div class="perks-deal-discount-badge">-29%</div>
                 </div>
                 <!-- Right side: info column -->
@@ -2599,14 +2617,14 @@ select.acct-form-input{appearance:none;background-image:url("data:image/svg+xml,
       </div>
       <div class="eo-changes-detail" id="eoChangesDetail">
         <div class="eo-changes-row">
-          <div class="eo-changes-from"><img src="img/meal3.jpg" alt=""><span>Chicken Parm</span></div>
+          <div class="eo-changes-from"><img src="/conner/app/img/meal3.jpg" alt=""><span>Chicken Parm</span></div>
           <div class="eo-changes-arrow">&rarr;</div>
-          <div class="eo-changes-to"><img src="img/meal5.jpg" alt=""><span>Thai Lentil Stew</span></div>
+          <div class="eo-changes-to"><img src="/conner/app/img/meal5.jpg" alt=""><span>Thai Lentil Stew</span></div>
         </div>
         <div class="eo-changes-row">
-          <div class="eo-changes-from"><img src="img/meal7.jpg" alt=""><span>Greek Bowl</span></div>
+          <div class="eo-changes-from"><img src="/conner/app/img/meal7.jpg" alt=""><span>Greek Bowl</span></div>
           <div class="eo-changes-arrow">&rarr;</div>
-          <div class="eo-changes-to"><img src="img/meal5.jpg" alt=""><span>Thai Lentil Stew</span></div>
+          <div class="eo-changes-to"><img src="/conner/app/img/meal5.jpg" alt=""><span>Thai Lentil Stew</span></div>
         </div>
       </div>
 
@@ -2691,7 +2709,7 @@ select.acct-form-input{appearance:none;background-image:url("data:image/svg+xml,
   <div class="meal-detail-modal" id="mealDetailModal">
     <button class="meal-detail-close" onclick="closeMealDetail()">&times;</button>
     <div class="meal-detail-img-side">
-      <img class="meal-detail-img" id="mealDetailImg" src="img/meal1.jpg" alt="">
+      <img class="meal-detail-img" id="mealDetailImg" src="/conner/app/img/meal1.jpg" alt="">
     </div>
     <div class="meal-detail-body">
       <div class="meal-detail-cat" id="mealDetailCat"></div>
@@ -2950,18 +2968,18 @@ select.acct-form-input{appearance:none;background-image:url("data:image/svg+xml,
 
 <div class="toast-container" id="toastContainer"></div>
 
-<!-- ============================================================
-     PORT NOTE — site footer slot.
-     This prototype has no footer. When porting into client-website/account/,
-     drop conner/client-website/shared/marketing-footer.html in here.
-     ============================================================ -->
+<!-- Footer injected from shared/marketing-footer.html by site-shell.js -->
+<div data-shell="footer"></div>
 
 <script>
 // ============================================================
 // AUTH GATE — bounce to login.html if no active session
 // ============================================================
 const AUTH_SESSION_KEY = 'bd_session';
-const AUTH_LOGIN_URL = 'login.html';
+// login.html lives at conner/client-website/login.html (planned — see
+// client-website/README.md). From this page (account/index.html) that's ../login.html.
+// Until login.html exists, append ?preview=1 to the URL to bypass the gate.
+const AUTH_LOGIN_URL = '../login.html';
 
 (function authGate(){
   const qs = new URLSearchParams(location.search);
@@ -2997,41 +3015,41 @@ function logoutAndRedirect(){
 // ======= DATA =======
 const allMeals = [
   // In cart
-  {id:1,name:'Mediterranean Chicken',price:15.99,cal:580,protein:'42g',fat:'22g',carb:'38g',cat:'Entrees',qty:1,img:'img/meal1.jpg',allergen:null,desc:'Herb-marinated chicken breast with roasted peppers, kalamata olives, and feta over herbed rice.',ingredients:'Chicken breast, jasmine rice, roasted red peppers, kalamata olives, feta cheese, fresh herbs, lemon, olive oil, garlic'},
-  {id:2,name:'Sesame Steak',price:16.99,cal:520,protein:'44g',fat:'18g',carb:'40g',cat:'Entrees',qty:1,img:'img/meal2.jpg',allergen:null,desc:'Sesame-crusted sirloin steak with stir-fried vegetables and jasmine rice.',ingredients:'Sirloin steak, jasmine rice, sesame seeds, broccoli, bell pepper, snap peas, soy sauce, ginger, garlic, sesame oil'},
-  {id:3,name:'Beef Bulgogi',price:16.99,cal:620,protein:'43g',fat:'30g',carb:'28g',cat:'Entrees',qty:2,img:'img/meal3.jpg',allergen:null,desc:'Korean-style marinated beef with pickled daikon, steamed broccoli, and sticky rice.',ingredients:'Beef sirloin, sticky rice, gochujang, soy sauce, pickled daikon, broccoli, sesame seeds, green onion, garlic, pear'},
-  {id:4,name:'Chicken Risotto',price:14.99,cal:620,protein:'35g',fat:'24g',carb:'52g',cat:'Entrees',qty:1,img:'img/meal4.jpg',allergen:'dairy',desc:'Creamy parmesan risotto with tender roasted chicken, peas, and fresh herbs.',ingredients:'Chicken thigh, arborio rice, parmesan, peas, chicken broth, white wine, butter, shallots, fresh thyme, garlic'},
-  {id:6,name:'Bang Bang Salmon',price:17.99,cal:670,protein:'40g',fat:'26g',carb:'66g',cat:'Entrees',qty:1,img:'img/meal6.jpg',allergen:null,desc:'Crispy salmon with bang bang sauce, coconut rice, and charred broccoli.',ingredients:'Atlantic salmon, coconut rice, broccoli, bang bang sauce, sriracha, mayo, sweet chili sauce, garlic, lime, sesame seeds'},
-  {id:8,name:'Teriyaki Chicken',price:14.99,cal:550,protein:'36g',fat:'16g',carb:'60g',cat:'Entrees',qty:1,img:'img/meal8.jpg',allergen:null,desc:'Glazed teriyaki chicken with edamame, shredded carrots, and steamed brown rice.',ingredients:'Chicken breast, brown rice, edamame, carrots, teriyaki sauce, soy sauce, mirin, ginger, garlic, green onion'},
-  {id:5,name:'Southwest Breakfast Burrito',price:12.99,cal:420,protein:'28g',fat:'24g',carb:'22g',cat:'Breakfasts',qty:1,img:'img/meal5.jpg',allergen:'dairy',desc:'Scrambled eggs, black beans, peppers, cheese, and salsa verde in a flour tortilla.',ingredients:'Flour tortilla, eggs, black beans, cheddar cheese, bell peppers, salsa verde, onion, cumin, cilantro, sour cream'},
-  {id:9,name:'Overnight Protein Oats',price:8.99,cal:380,protein:'22g',fat:'12g',carb:'44g',cat:'Breakfasts',qty:1,img:'img/meal8.jpg',allergen:null,desc:'Vanilla protein oats topped with banana, almond butter, and granola.',ingredients:'Rolled oats, vanilla protein powder, almond milk, banana, almond butter, granola, chia seeds, honey, cinnamon'},
+  {id:1,name:'Mediterranean Chicken',price:15.99,cal:580,protein:'42g',fat:'22g',carb:'38g',cat:'Entrees',qty:1,img:'/conner/app/img/meal1.jpg',allergen:null,desc:'Herb-marinated chicken breast with roasted peppers, kalamata olives, and feta over herbed rice.',ingredients:'Chicken breast, jasmine rice, roasted red peppers, kalamata olives, feta cheese, fresh herbs, lemon, olive oil, garlic'},
+  {id:2,name:'Sesame Steak',price:16.99,cal:520,protein:'44g',fat:'18g',carb:'40g',cat:'Entrees',qty:1,img:'/conner/app/img/meal2.jpg',allergen:null,desc:'Sesame-crusted sirloin steak with stir-fried vegetables and jasmine rice.',ingredients:'Sirloin steak, jasmine rice, sesame seeds, broccoli, bell pepper, snap peas, soy sauce, ginger, garlic, sesame oil'},
+  {id:3,name:'Beef Bulgogi',price:16.99,cal:620,protein:'43g',fat:'30g',carb:'28g',cat:'Entrees',qty:2,img:'/conner/app/img/meal3.jpg',allergen:null,desc:'Korean-style marinated beef with pickled daikon, steamed broccoli, and sticky rice.',ingredients:'Beef sirloin, sticky rice, gochujang, soy sauce, pickled daikon, broccoli, sesame seeds, green onion, garlic, pear'},
+  {id:4,name:'Chicken Risotto',price:14.99,cal:620,protein:'35g',fat:'24g',carb:'52g',cat:'Entrees',qty:1,img:'/conner/app/img/meal4.jpg',allergen:'dairy',desc:'Creamy parmesan risotto with tender roasted chicken, peas, and fresh herbs.',ingredients:'Chicken thigh, arborio rice, parmesan, peas, chicken broth, white wine, butter, shallots, fresh thyme, garlic'},
+  {id:6,name:'Bang Bang Salmon',price:17.99,cal:670,protein:'40g',fat:'26g',carb:'66g',cat:'Entrees',qty:1,img:'/conner/app/img/meal6.jpg',allergen:null,desc:'Crispy salmon with bang bang sauce, coconut rice, and charred broccoli.',ingredients:'Atlantic salmon, coconut rice, broccoli, bang bang sauce, sriracha, mayo, sweet chili sauce, garlic, lime, sesame seeds'},
+  {id:8,name:'Teriyaki Chicken',price:14.99,cal:550,protein:'36g',fat:'16g',carb:'60g',cat:'Entrees',qty:1,img:'/conner/app/img/meal8.jpg',allergen:null,desc:'Glazed teriyaki chicken with edamame, shredded carrots, and steamed brown rice.',ingredients:'Chicken breast, brown rice, edamame, carrots, teriyaki sauce, soy sauce, mirin, ginger, garlic, green onion'},
+  {id:5,name:'Southwest Breakfast Burrito',price:12.99,cal:420,protein:'28g',fat:'24g',carb:'22g',cat:'Breakfasts',qty:1,img:'/conner/app/img/meal5.jpg',allergen:'dairy',desc:'Scrambled eggs, black beans, peppers, cheese, and salsa verde in a flour tortilla.',ingredients:'Flour tortilla, eggs, black beans, cheddar cheese, bell peppers, salsa verde, onion, cumin, cilantro, sour cream'},
+  {id:9,name:'Overnight Protein Oats',price:8.99,cal:380,protein:'22g',fat:'12g',carb:'44g',cat:'Breakfasts',qty:1,img:'/conner/app/img/meal8.jpg',allergen:null,desc:'Vanilla protein oats topped with banana, almond butter, and granola.',ingredients:'Rolled oats, vanilla protein powder, almond milk, banana, almond butter, granola, chia seeds, honey, cinnamon'},
   // Available (not in cart)
-  {id:101,name:'Grilled Lemon Chicken',price:14.99,cal:490,protein:'40g',fat:'14g',carb:'36g',cat:'Entrees',qty:0,img:'img/meal1.jpg',allergen:null,desc:'Bright lemon-herb grilled chicken with roasted potatoes.',ingredients:'Chicken breast, baby potatoes, lemon, fresh oregano, garlic, olive oil, green beans, cherry tomatoes, capers'},
-  {id:102,name:'Herb Roasted Chicken',price:15.49,cal:510,protein:'42g',fat:'16g',carb:'34g',cat:'Entrees',qty:0,img:'img/meal4.jpg',allergen:null,desc:'Slow-roasted chicken with garlic mashed potatoes.',ingredients:'Chicken thigh, Yukon gold potatoes, garlic, butter, rosemary, thyme, green beans, chicken jus, black pepper'},
-  {id:104,name:'BBQ Pulled Chicken',price:14.49,cal:530,protein:'36g',fat:'18g',carb:'48g',cat:'Entrees',qty:0,img:'img/meal1.jpg',allergen:null,desc:'Smoky pulled chicken with coleslaw and cornbread.',ingredients:'Chicken breast, BBQ sauce, coleslaw mix, cornbread, apple cider vinegar, smoked paprika, garlic powder, brown sugar, mayo'},
-  {id:105,name:'NY Strip Steak',price:18.99,cal:580,protein:'48g',fat:'24g',carb:'30g',cat:'Entrees',qty:0,img:'img/meal2.jpg',allergen:null,desc:'Center-cut NY strip with garlic butter and asparagus.',ingredients:'NY strip steak, asparagus, garlic butter, baby potatoes, rosemary, olive oil, sea salt, black pepper, shallot'},
-  {id:106,name:'Korean Beef Bowl',price:17.49,cal:600,protein:'44g',fat:'26g',carb:'36g',cat:'Entrees',qty:0,img:'img/meal3.jpg',allergen:null,desc:'Marinated beef with kimchi, pickled vegetables, and jasmine rice.',ingredients:'Beef sirloin, jasmine rice, kimchi, pickled cucumber, gochujang, soy sauce, sesame oil, rice vinegar, green onion, sesame seeds'},
-  {id:107,name:'Chicken Caesar Wrap',price:13.99,cal:520,protein:'36g',fat:'22g',carb:'38g',cat:'Sandwich & Wraps',qty:0,img:'img/meal6.jpg',allergen:null,desc:'Grilled chicken, romaine, parmesan, and Caesar dressing in a flour wrap.',ingredients:'Flour tortilla, grilled chicken, romaine lettuce, parmesan, Caesar dressing, croutons, lemon, black pepper'},
-  {id:108,name:'Turkey Club Wrap',price:14.49,cal:480,protein:'34g',fat:'18g',carb:'40g',cat:'Sandwich & Wraps',qty:0,img:'img/meal6.jpg',allergen:null,desc:'Sliced turkey, bacon, avocado, and ranch in a spinach tortilla.',ingredients:'Spinach tortilla, sliced turkey, bacon, avocado, ranch dressing, tomato, mixed greens, red onion'},
-  {id:109,name:'Steak & Cheese Panini',price:16.49,cal:580,protein:'42g',fat:'26g',carb:'36g',cat:'Sandwich & Wraps',qty:0,img:'img/meal7.jpg',allergen:'dairy',desc:'Shaved steak with provolone, peppers, and onions on pressed ciabatta.',ingredients:'Ciabatta bread, shaved steak, provolone cheese, bell peppers, caramelized onions, garlic aioli, olive oil'},
-  {id:110,name:'Egg White Veggie Cups',price:9.49,cal:280,protein:'22g',fat:'10g',carb:'18g',cat:'Breakfasts',qty:0,img:'img/meal5.jpg',allergen:null,desc:'Baked egg white cups with spinach, tomato, and feta.',ingredients:'Egg whites, spinach, cherry tomatoes, feta cheese, bell pepper, onion, fresh basil, garlic, olive oil'},
-  {id:111,name:'Banana Protein Pancakes',price:10.99,cal:420,protein:'28g',fat:'12g',carb:'48g',cat:'Breakfasts',qty:0,img:'img/meal4.jpg',allergen:'dairy',desc:'Fluffy protein pancakes with fresh banana and maple drizzle.',ingredients:'Oat flour, vanilla protein powder, banana, eggs, milk, baking powder, maple syrup, butter, cinnamon'},
-  {id:112,name:'Protein Energy Bites',price:6.99,cal:220,protein:'14g',fat:'10g',carb:'22g',cat:'Snacks & Other',qty:0,img:'img/meal7.jpg',allergen:null,desc:'Peanut butter oat bites with dark chocolate chips and honey.',ingredients:'Rolled oats, peanut butter, dark chocolate chips, honey, vanilla extract, chia seeds, flax meal'},
-  {id:113,name:'Greek Yogurt Parfait',price:7.49,cal:310,protein:'20g',fat:'8g',carb:'38g',cat:'Snacks & Other',qty:0,img:'img/meal8.jpg',allergen:'dairy',desc:'Thick Greek yogurt layered with granola, berries, and honey.',ingredients:'Greek yogurt, granola, mixed berries, honey, chia seeds, vanilla extract, sliced almonds'},
-  {id:114,name:'Mango Chili Shrimp',price:17.49,cal:480,protein:'36g',fat:'16g',carb:'44g',cat:'Entrees',qty:0,img:'img/meal6.jpg',allergen:null,desc:'Spicy mango-chili glazed shrimp with cilantro lime rice.',ingredients:'Shrimp, cilantro lime rice, mango, chili flakes, lime, garlic, soy sauce, honey, cilantro, red onion'},
+  {id:101,name:'Grilled Lemon Chicken',price:14.99,cal:490,protein:'40g',fat:'14g',carb:'36g',cat:'Entrees',qty:0,img:'/conner/app/img/meal1.jpg',allergen:null,desc:'Bright lemon-herb grilled chicken with roasted potatoes.',ingredients:'Chicken breast, baby potatoes, lemon, fresh oregano, garlic, olive oil, green beans, cherry tomatoes, capers'},
+  {id:102,name:'Herb Roasted Chicken',price:15.49,cal:510,protein:'42g',fat:'16g',carb:'34g',cat:'Entrees',qty:0,img:'/conner/app/img/meal4.jpg',allergen:null,desc:'Slow-roasted chicken with garlic mashed potatoes.',ingredients:'Chicken thigh, Yukon gold potatoes, garlic, butter, rosemary, thyme, green beans, chicken jus, black pepper'},
+  {id:104,name:'BBQ Pulled Chicken',price:14.49,cal:530,protein:'36g',fat:'18g',carb:'48g',cat:'Entrees',qty:0,img:'/conner/app/img/meal1.jpg',allergen:null,desc:'Smoky pulled chicken with coleslaw and cornbread.',ingredients:'Chicken breast, BBQ sauce, coleslaw mix, cornbread, apple cider vinegar, smoked paprika, garlic powder, brown sugar, mayo'},
+  {id:105,name:'NY Strip Steak',price:18.99,cal:580,protein:'48g',fat:'24g',carb:'30g',cat:'Entrees',qty:0,img:'/conner/app/img/meal2.jpg',allergen:null,desc:'Center-cut NY strip with garlic butter and asparagus.',ingredients:'NY strip steak, asparagus, garlic butter, baby potatoes, rosemary, olive oil, sea salt, black pepper, shallot'},
+  {id:106,name:'Korean Beef Bowl',price:17.49,cal:600,protein:'44g',fat:'26g',carb:'36g',cat:'Entrees',qty:0,img:'/conner/app/img/meal3.jpg',allergen:null,desc:'Marinated beef with kimchi, pickled vegetables, and jasmine rice.',ingredients:'Beef sirloin, jasmine rice, kimchi, pickled cucumber, gochujang, soy sauce, sesame oil, rice vinegar, green onion, sesame seeds'},
+  {id:107,name:'Chicken Caesar Wrap',price:13.99,cal:520,protein:'36g',fat:'22g',carb:'38g',cat:'Sandwich & Wraps',qty:0,img:'/conner/app/img/meal6.jpg',allergen:null,desc:'Grilled chicken, romaine, parmesan, and Caesar dressing in a flour wrap.',ingredients:'Flour tortilla, grilled chicken, romaine lettuce, parmesan, Caesar dressing, croutons, lemon, black pepper'},
+  {id:108,name:'Turkey Club Wrap',price:14.49,cal:480,protein:'34g',fat:'18g',carb:'40g',cat:'Sandwich & Wraps',qty:0,img:'/conner/app/img/meal6.jpg',allergen:null,desc:'Sliced turkey, bacon, avocado, and ranch in a spinach tortilla.',ingredients:'Spinach tortilla, sliced turkey, bacon, avocado, ranch dressing, tomato, mixed greens, red onion'},
+  {id:109,name:'Steak & Cheese Panini',price:16.49,cal:580,protein:'42g',fat:'26g',carb:'36g',cat:'Sandwich & Wraps',qty:0,img:'/conner/app/img/meal7.jpg',allergen:'dairy',desc:'Shaved steak with provolone, peppers, and onions on pressed ciabatta.',ingredients:'Ciabatta bread, shaved steak, provolone cheese, bell peppers, caramelized onions, garlic aioli, olive oil'},
+  {id:110,name:'Egg White Veggie Cups',price:9.49,cal:280,protein:'22g',fat:'10g',carb:'18g',cat:'Breakfasts',qty:0,img:'/conner/app/img/meal5.jpg',allergen:null,desc:'Baked egg white cups with spinach, tomato, and feta.',ingredients:'Egg whites, spinach, cherry tomatoes, feta cheese, bell pepper, onion, fresh basil, garlic, olive oil'},
+  {id:111,name:'Banana Protein Pancakes',price:10.99,cal:420,protein:'28g',fat:'12g',carb:'48g',cat:'Breakfasts',qty:0,img:'/conner/app/img/meal4.jpg',allergen:'dairy',desc:'Fluffy protein pancakes with fresh banana and maple drizzle.',ingredients:'Oat flour, vanilla protein powder, banana, eggs, milk, baking powder, maple syrup, butter, cinnamon'},
+  {id:112,name:'Protein Energy Bites',price:6.99,cal:220,protein:'14g',fat:'10g',carb:'22g',cat:'Snacks & Other',qty:0,img:'/conner/app/img/meal7.jpg',allergen:null,desc:'Peanut butter oat bites with dark chocolate chips and honey.',ingredients:'Rolled oats, peanut butter, dark chocolate chips, honey, vanilla extract, chia seeds, flax meal'},
+  {id:113,name:'Greek Yogurt Parfait',price:7.49,cal:310,protein:'20g',fat:'8g',carb:'38g',cat:'Snacks & Other',qty:0,img:'/conner/app/img/meal8.jpg',allergen:'dairy',desc:'Thick Greek yogurt layered with granola, berries, and honey.',ingredients:'Greek yogurt, granola, mixed berries, honey, chia seeds, vanilla extract, sliced almonds'},
+  {id:114,name:'Mango Chili Shrimp',price:17.49,cal:480,protein:'36g',fat:'16g',carb:'44g',cat:'Entrees',qty:0,img:'/conner/app/img/meal6.jpg',allergen:null,desc:'Spicy mango-chili glazed shrimp with cilantro lime rice.',ingredients:'Shrimp, cilantro lime rice, mango, chili flakes, lime, garlic, soy sauce, honey, cilantro, red onion'},
 ];
 
 const suggestionItems = [
-  {id:301,name:'Protein Energy Bites',price:6.99,img:'img/meal7.jpg',badge:'best'},
-  {id:302,name:'Overnight Oats',price:7.49,img:'img/meal4.jpg',badge:'best'},
-  {id:303,name:'Greek Yogurt Parfait',price:5.99,img:'img/meal5.jpg',badge:'best'},
-  {id:304,name:'Avocado Toast Cup',price:8.49,img:'img/meal1.jpg',badge:'best'},
-  {id:201,name:'Mango Chili Shrimp',price:17.49,img:'img/meal6.jpg',badge:'new'},
-  {id:202,name:'Truffle Mushroom Bowl',price:15.99,img:'img/meal7.jpg',badge:'new'},
-  {id:203,name:'Spicy Korean Tofu',price:13.49,img:'img/meal5.jpg',badge:'new'},
-  {id:204,name:'Chimichurri Steak',price:18.99,img:'img/meal2.jpg',badge:'new'},
-  {id:205,name:'Coconut Curry Chicken',price:15.49,img:'img/meal1.jpg',badge:'new'},
-  {id:206,name:'Pesto Salmon',price:18.49,img:'img/meal6.jpg',badge:'new'},
+  {id:301,name:'Protein Energy Bites',price:6.99,img:'/conner/app/img/meal7.jpg',badge:'best'},
+  {id:302,name:'Overnight Oats',price:7.49,img:'/conner/app/img/meal4.jpg',badge:'best'},
+  {id:303,name:'Greek Yogurt Parfait',price:5.99,img:'/conner/app/img/meal5.jpg',badge:'best'},
+  {id:304,name:'Avocado Toast Cup',price:8.49,img:'/conner/app/img/meal1.jpg',badge:'best'},
+  {id:201,name:'Mango Chili Shrimp',price:17.49,img:'/conner/app/img/meal6.jpg',badge:'new'},
+  {id:202,name:'Truffle Mushroom Bowl',price:15.99,img:'/conner/app/img/meal7.jpg',badge:'new'},
+  {id:203,name:'Spicy Korean Tofu',price:13.49,img:'/conner/app/img/meal5.jpg',badge:'new'},
+  {id:204,name:'Chimichurri Steak',price:18.99,img:'/conner/app/img/meal2.jpg',badge:'new'},
+  {id:205,name:'Coconut Curry Chicken',price:15.49,img:'/conner/app/img/meal1.jpg',badge:'new'},
+  {id:206,name:'Pesto Salmon',price:18.49,img:'/conner/app/img/meal6.jpg',badge:'new'},
 ];
 // Add suggestion items to allMeals so openMealDetail and addToCart work
 suggestionItems.forEach(s=>{
@@ -3048,8 +3066,8 @@ suggestionItems.forEach(s=>{
 //   qty              : how many got swapped (should match allMeals[toId].qty)
 //   userAdjusted     : set true after user manually re-swaps via the modal
 let menuChanges = [
-  {fromName:'Chicken Parm',         fromImg:'img/meal3.jpg', toId:3, qty:2, userAdjusted:false},
-  {fromName:'Greek Mediterranean Bowl', fromImg:'img/meal7.jpg', toId:8, qty:1, userAdjusted:false}
+  {fromName:'Chicken Parm',         fromImg:'/conner/app/img/meal3.jpg', toId:3, qty:2, userAdjusted:false},
+  {fromName:'Greek Mediterranean Bowl', fromImg:'/conner/app/img/meal7.jpg', toId:8, qty:1, userAdjusted:false}
 ];
 let activeMenuChangeIndex = null;
 
@@ -4723,11 +4741,11 @@ let paymentMethods = [
   {id:2,type:'mc',last4:'8888',expMonth:3,expYear:2026,isDefault:false,name:'Jose Ramirez'}
 ];
 const acctMealPhotos = [
-  'photos/Asian Chopped Salad.jpg','photos/Buffalo Cauliflower.jpg','photos/Green Thai Meatballs.jpg',
-  'photos/Prawn Khao Soi.jpg','photos/Salmon Soba.jpg','photos/Shawarma Chickpea.jpg',
-  'photos/Shrimp Stir Fry.jpg','photos/Thai Basil Beef.jpg','photos/Under the Tuscan Sun.jpg',
-  'photos/Veggie Caesar.jpg',"photos/Wok n Roll Ginger Bee'f.jpg",'photos/shawarma salad.jpg',
-  'img/meal1.jpg','img/meal2.jpg','img/meal3.jpg','img/meal4.jpg','img/meal5.jpg','img/meal6.jpg'
+  '/conner/app/photos/Asian Chopped Salad.jpg','/conner/app/photos/Buffalo Cauliflower.jpg','/conner/app/photos/Green Thai Meatballs.jpg',
+  '/conner/app/photos/Prawn Khao Soi.jpg','/conner/app/photos/Salmon Soba.jpg','/conner/app/photos/Shawarma Chickpea.jpg',
+  '/conner/app/photos/Shrimp Stir Fry.jpg','/conner/app/photos/Thai Basil Beef.jpg','/conner/app/photos/Under the Tuscan Sun.jpg',
+  '/conner/app/photos/Veggie Caesar.jpg',"/conner/app/photos/Wok n Roll Ginger Bee'f.jpg",'/conner/app/photos/shawarma salad.jpg',
+  '/conner/app/img/meal1.jpg','/conner/app/img/meal2.jpg','/conner/app/img/meal3.jpg','/conner/app/img/meal4.jpg','/conner/app/img/meal5.jpg','/conner/app/img/meal6.jpg'
 ];
 const acctMealNames = [
   'Blackened Caesar Salad','Mojo Chicken','The Buttermilk Pancakes','Cashew Chicken',
@@ -4738,19 +4756,19 @@ const acctMealNames = [
 ];
 const detailedOrders = [
   {id:'648045',date:'Mar 5, 2026',dateSort:20260305,status:'processing',addr:'128 Boulder Hill Pass, Montgomery, IL 60538',
-   items:[{name:'Blackened Caesar Salad',qty:2,price:27.98,img:'img/meal1.jpg',avail:true},{name:'Mojo Chicken',qty:1,price:15.99,img:'img/meal2.jpg',avail:true},{name:'The Buttermilk Pancakes',qty:2,price:25.98,img:'img/meal3.jpg',avail:true},{name:'Cashew Chicken',qty:2,price:31.98,img:'img/meal4.jpg',avail:true},{name:'Chilaquiles Verdes',qty:1,price:13.99,img:'img/meal5.jpg',avail:false}],
+   items:[{name:'Blackened Caesar Salad',qty:2,price:27.98,img:'/conner/app/img/meal1.jpg',avail:true},{name:'Mojo Chicken',qty:1,price:15.99,img:'/conner/app/img/meal2.jpg',avail:true},{name:'The Buttermilk Pancakes',qty:2,price:25.98,img:'/conner/app/img/meal3.jpg',avail:true},{name:'Cashew Chicken',qty:2,price:31.98,img:'/conner/app/img/meal4.jpg',avail:true},{name:'Chilaquiles Verdes',qty:1,price:13.99,img:'/conner/app/img/meal5.jpg',avail:false}],
    subtotal:115.92,shipping:16.00,tax:11.88,total:147.86,pts:108},
   {id:'635393',date:'Feb 25, 2026',dateSort:20260225,status:'processing',addr:'459 N Union St, Aurora, IL 60505',
-   items:[{name:'Asian Chopped Salad',qty:2,price:27.98,img:'photos/Asian Chopped Salad.jpg',avail:true},{name:'Green Thai Meatballs',qty:2,price:29.98,img:'photos/Green Thai Meatballs.jpg',avail:true},{name:'Salmon Soba',qty:2,price:33.98,img:'photos/Salmon Soba.jpg',avail:true},{name:'Shawarma Chickpea Bowl',qty:2,price:27.98,img:'photos/Shawarma Chickpea.jpg',avail:true}],
+   items:[{name:'Asian Chopped Salad',qty:2,price:27.98,img:'/conner/app/photos/Asian Chopped Salad.jpg',avail:true},{name:'Green Thai Meatballs',qty:2,price:29.98,img:'/conner/app/photos/Green Thai Meatballs.jpg',avail:true},{name:'Salmon Soba',qty:2,price:33.98,img:'/conner/app/photos/Salmon Soba.jpg',avail:true},{name:'Shawarma Chickpea Bowl',qty:2,price:27.98,img:'/conner/app/photos/Shawarma Chickpea.jpg',avail:true}],
    subtotal:119.92,shipping:12.00,tax:11.88,total:147.86,pts:108},
   {id:'623227',date:'Feb 17, 2026',dateSort:20260217,status:'processing',addr:'459 N Union St, Aurora, IL 60505',
-   items:[{name:'Thai Basil Beef',qty:2,price:29.98,img:'photos/Thai Basil Beef.jpg',avail:true},{name:'Under the Tuscan Sun',qty:2,price:27.98,img:'photos/Under the Tuscan Sun.jpg',avail:true},{name:'Prawn Khao Soi',qty:2,price:31.98,img:'photos/Prawn Khao Soi.jpg',avail:true},{name:'Veggie Caesar',qty:2,price:25.98,img:'photos/Veggie Caesar.jpg',avail:true}],
+   items:[{name:'Thai Basil Beef',qty:2,price:29.98,img:'/conner/app/photos/Thai Basil Beef.jpg',avail:true},{name:'Under the Tuscan Sun',qty:2,price:27.98,img:'/conner/app/photos/Under the Tuscan Sun.jpg',avail:true},{name:'Prawn Khao Soi',qty:2,price:31.98,img:'/conner/app/photos/Prawn Khao Soi.jpg',avail:true},{name:'Veggie Caesar',qty:2,price:25.98,img:'/conner/app/photos/Veggie Caesar.jpg',avail:true}],
    subtotal:115.92,shipping:16.00,tax:9.61,total:145.59,pts:106},
   {id:'616871',date:'Feb 11, 2026',dateSort:20260211,status:'delivered',addr:'128 Boulder Hill Pass, Montgomery, IL 60538',
-   items:[{name:'Shrimp Stir Fry',qty:2,price:29.98,img:'photos/Shrimp Stir Fry.jpg',avail:true},{name:'Buffalo Cauliflower',qty:2,price:23.98,img:'photos/Buffalo Cauliflower.jpg',avail:true},{name:'Mojo Chicken',qty:2,price:31.98,img:'img/meal2.jpg',avail:true},{name:'Wok n Roll Ginger Beef',qty:2,price:29.98,img:"photos/Wok n Roll Ginger Bee'f.jpg",avail:false}],
+   items:[{name:'Shrimp Stir Fry',qty:2,price:29.98,img:'/conner/app/photos/Shrimp Stir Fry.jpg',avail:true},{name:'Buffalo Cauliflower',qty:2,price:23.98,img:'/conner/app/photos/Buffalo Cauliflower.jpg',avail:true},{name:'Mojo Chicken',qty:2,price:31.98,img:'/conner/app/img/meal2.jpg',avail:true},{name:'Wok n Roll Ginger Beef',qty:2,price:29.98,img:"/conner/app/photos/Wok n Roll Ginger Bee'f.jpg",avail:false}],
    subtotal:115.92,shipping:16.00,tax:9.61,total:145.59,pts:106},
   {id:'615703',date:'Feb 4, 2026',dateSort:20260204,status:'delivered',addr:'459 N Union St, Aurora, IL 60505',
-   items:[{name:'Mediterranean Chicken',qty:2,price:31.98,img:'img/meal1.jpg',avail:true},{name:'The Buttermilk Pancakes',qty:2,price:25.98,img:'img/meal3.jpg',avail:true},{name:'Cashew Chicken',qty:2,price:31.98,img:'img/meal4.jpg',avail:true},{name:'Blackened Caesar Salad',qty:2,price:27.98,img:'img/meal5.jpg',avail:true}],
+   items:[{name:'Mediterranean Chicken',qty:2,price:31.98,img:'/conner/app/img/meal1.jpg',avail:true},{name:'The Buttermilk Pancakes',qty:2,price:25.98,img:'/conner/app/img/meal3.jpg',avail:true},{name:'Cashew Chicken',qty:2,price:31.98,img:'/conner/app/img/meal4.jpg',avail:true},{name:'Blackened Caesar Salad',qty:2,price:27.98,img:'/conner/app/img/meal5.jpg',avail:true}],
    subtotal:117.92,shipping:16.00,tax:9.61,total:145.59,pts:106}
 ];
 const allAcctOrders = [...detailedOrders];
@@ -5307,5 +5325,10 @@ function closeAllAcctModals(){
 function showToast(msg,type='success'){const c=document.getElementById('toastContainer');const icons={success:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M20 6L9 17l-5-5"/></svg>',info:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>',warning:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>'};const t=document.createElement('div');t.className=`toast ${type}`;t.innerHTML=`${icons[type]||icons.info}<span>${msg}</span>`;c.appendChild(t);setTimeout(()=>{t.style.animation='toastOut .3s ease forwards';setTimeout(()=>t.remove(),300)},3000);}
 
 </script>
+
+<!-- Site shell loader: injects shared marketing-header.html + marketing-footer.html
+     into the data-shell placeholders above and substitutes {{contact.email}}-style
+     tokens from brand/site-info.seed.json. -->
+<script src="../shared/site-shell.js" defer></script>
 </body>
 </html>

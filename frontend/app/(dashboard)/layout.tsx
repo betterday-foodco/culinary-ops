@@ -33,6 +33,10 @@ const OTHER_NAV = [
   { href: '/reports/cooking',       label: 'Cooking Report',     icon: '👨‍🍳' },
   { href: '/reports/sub-recipes',   label: 'Sub-Recipes Report', icon: '📊' },
   { href: '/reports/shopping-list', label: 'Shopping List',      icon: '🛒' },
+  { href: '/reports/delivery',      label: 'Delivery Report',    icon: '🚚' },
+  { href: '/reports/labels',        label: 'Labels Report',      icon: '🏷️' },
+  { href: '/reports/picklists',     label: 'Picklist Report',    icon: '📋' },
+  { href: '/reports/production-bd', label: 'Production (BD)',    icon: '🏭' },
 ];
 
 export default function DashboardLayout({

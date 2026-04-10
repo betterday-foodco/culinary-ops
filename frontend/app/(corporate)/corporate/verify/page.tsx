@@ -1,10 +1,10 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { corpAuth, setCorpToken } from '../../../lib/corp-api';
 
-export default function CorporateVerifyPage() {
+function VerifyContent() {
   const router  = useRouter();
   const params  = useSearchParams();
   const [status, setStatus] = useState<'loading' | 'error'>('loading');
@@ -68,5 +68,13 @@ export default function CorporateVerifyPage() {
         )}
       </div>
     </div>
+  );
+}
+
+export default function CorporateVerifyPage() {
+  return (
+    <Suspense fallback={<div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>Verifying...</div>}>
+      <VerifyContent />
+    </Suspense>
   );
 }

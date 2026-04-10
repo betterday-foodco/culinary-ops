@@ -62,6 +62,15 @@ export interface TierPricingConfig {
   tier1: { meals: number; employeePrice: number; bdSubsidy: number; companySubsidy: number };
   tier2: { meals: number; employeePrice: number; bdSubsidy: number; companySubsidy: number };
   tier3: { meals: number; employeePrice: number; bdSubsidy: number; companySubsidy: number };
+  allow_extra?: boolean;
+  full_price: number;
+}
+
+export interface WeekMenu {
+  week: string | null;
+  week_start: string | null;
+  plan_id: string | null;
+  meals: CorpMeal[];
 }
 
 export interface CorpOrder {
@@ -128,6 +137,12 @@ export const corpAuth = {
       { method: 'POST', body: JSON.stringify({ company_id, pin }) },
     ),
 
+  employeePinLogin: (company_id: string, email: string, pin: string) =>
+    request<{ access_token: string; user: CorpUser }>(
+      '/corp-auth/employee-pin-login',
+      { method: 'POST', body: JSON.stringify({ company_id, email, pin }) },
+    ),
+
   requestMagicLink: (email: string, company_id: string) =>
     request<{ ok: boolean; message: string; dev_token?: string; dev_link?: string }>(
       '/corp-auth/magic-link',
@@ -138,18 +153,29 @@ export const corpAuth = {
     request<{ access_token: string; user: CorpUser }>(
       `/corp-auth/verify?token=${encodeURIComponent(token)}`,
     ),
+
+  getCompany: (company_id: string) =>
+    request<{ ok: boolean; company: { id: string; name: string; allowed_email_domain?: string } }>(
+      `/corp-auth/company/${encodeURIComponent(company_id)}`,
+    ),
+
+  registerEmployee: (data: { company_id: string; name: string; email: string; pin?: string }) =>
+    request<{ access_token: string; user: CorpUser }>(
+      '/corp-auth/register-employee',
+      { method: 'POST', body: JSON.stringify(data) },
+    ),
 };
 
 // ── Portal endpoints (corp_employee or corp_manager JWT required) ─────────────
 
 export const corpPortal = {
   getMenu: () =>
-    request<{ ok: boolean; week: string | null; week_start: string | null; plan_id: string | null; meals: CorpMeal[] }>(
+    request<{ ok: boolean; week: string | null; week_start: string | null; plan_id: string | null; meals: CorpMeal[]; weeks?: WeekMenu[]; pricing?: TierPricingConfig | null; company?: any }>(
       '/corp-portal/menu',
     ),
 
-  placeOrder: (items: Array<{ meal_id: string; tier: string }>, delivery_date?: string) =>
-    request<{ ok: boolean; order_code: string; order: CorpOrder }>(
+  placeOrder: (items: Array<{ meal_id: string; tier?: string }>, delivery_date?: string) =>
+    request<{ ok: boolean; order_code: string; order: CorpOrder; summary?: any }>(
       '/corp-portal/orders',
       { method: 'POST', body: JSON.stringify({ items, delivery_date }) },
     ),
@@ -159,6 +185,17 @@ export const corpPortal = {
 
   getProfile: () =>
     request<{ ok: boolean; type: string; employee?: any; company?: any }>('/corp-portal/profile'),
+
+  getWeekOrderCount: (delivery_date?: string) =>
+    request<{ ok: boolean; count: number }>(`/corp-portal/week-order-count${delivery_date ? `?delivery_date=${delivery_date}` : ''}`),
+
+  updateMyEmail: (email: string) =>
+    request<any>('/corp-portal/update-email', { method: 'PATCH', body: JSON.stringify({ email }) }),
+
+  swapOrderItem: (orderId: string, itemId: string, newMealId: string) =>
+    request<any>(`/corp-portal/orders/${orderId}/swap`, {
+      method: 'POST', body: JSON.stringify({ item_id: itemId, new_meal_id: newMealId }),
+    }),
 };
 
 // ── Manager endpoints (corp_manager JWT required) ─────────────────────────────
@@ -166,6 +203,9 @@ export const corpPortal = {
 export const corpManager = {
   getDashboard: () =>
     request<any>('/corp-manager/dashboard'),
+
+  getCompany: () =>
+    request<{ ok: boolean; company: any }>('/corp-manager/account'),
 
   getEmployees: () =>
     request<{ ok: boolean; employees: any[] }>('/corp-manager/employees'),
@@ -175,4 +215,68 @@ export const corpManager = {
 
   getInvoices: () =>
     request<{ ok: boolean; invoices: any[] }>('/corp-manager/invoices'),
+
+  getInvoiceDetail: (id: string) =>
+    request<any>(`/corp-manager/invoices/${id}`),
+
+  getMonthlyReport: (month?: string) =>
+    request<any>(`/corp-manager/monthly-report${month ? `?month=${month}` : ''}`),
+
+  getParLevels: () =>
+    request<{ ok: boolean; par_levels: any[] }>('/corp-manager/par-levels'),
+
+  getBenefitLevels: () =>
+    request<{ ok: boolean; benefit_levels: any[] }>('/corp-manager/benefit-levels'),
+
+  getAccount: () =>
+    request<{ ok: boolean; company: any }>('/corp-manager/account'),
+
+  updateAccount: (data: any) =>
+    request<{ ok: boolean; company: any }>('/corp-manager/account', {
+      method: 'PATCH', body: JSON.stringify(data),
+    }),
+
+  bulkEmployeeAction: (action: string, employee_ids: string[], params?: any) =>
+    request<any>('/corp-manager/employees/bulk-action', {
+      method: 'POST', body: JSON.stringify({ action, employee_ids, params }),
+    }),
+
+  setEmployeePin: (employee_id: string, pin: string) =>
+    request<{ ok: boolean }>(`/corp-manager/employees/${employee_id}/pin`, {
+      method: 'PATCH', body: JSON.stringify({ pin }),
+    }),
+
+  updateEmployee: (employee_id: string, data: any) =>
+    request<any>(`/corp-manager/employees/${employee_id}`, {
+      method: 'PATCH', body: JSON.stringify(data),
+    }),
+
+  resendMagicLink: (employee_id: string) =>
+    request<any>(`/corp-manager/employees/${employee_id}/resend-link`, { method: 'POST' }),
+
+  deactivateEmployee: (employee_id: string) =>
+    request<any>(`/corp-manager/employees/${employee_id}/deactivate`, { method: 'POST' }),
+
+  updateBenefitLevelAllowances: (level_id: string, tier_config: any) =>
+    request<any>(`/corp-manager/benefit-levels/${level_id}`, {
+      method: 'PATCH', body: JSON.stringify({ tier_config }),
+    }),
+
+  saveParLevels: (levels: any[]) =>
+    request<any>('/corp-manager/par-levels', {
+      method: 'POST', body: JSON.stringify({ levels }),
+    }),
+
+  updateCompany: (data: any) =>
+    request<any>('/corp-manager/account', {
+      method: 'PATCH', body: JSON.stringify(data),
+    }),
+
+  updatePin: (pin: string) =>
+    request<any>('/corp-manager/pin', {
+      method: 'PATCH', body: JSON.stringify({ pin }),
+    }),
+
+  sendReminders: () =>
+    request<any>('/corp-manager/send-reminders', { method: 'POST' }),
 };
