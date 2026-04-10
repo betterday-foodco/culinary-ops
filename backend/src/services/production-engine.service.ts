@@ -120,7 +120,7 @@ export class ProductionEngineService {
       where: { id: { in: mealIds } },
     });
 
-    const mealMap = new Map(meals.map((m) => [m.id, m]));
+    const mealMap = new Map<string, typeof meals[number]>(meals.map((m) => [m.id, m]));
 
     return orders.map((o) => ({
       meal_id: o.meal_id,

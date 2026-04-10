@@ -15,7 +15,7 @@ import { FileInterceptor } from '@nestjs/platform-express';
 import { diskStorage } from 'multer';
 import * as path from 'path';
 import * as fs from 'fs';
-import type { File as MulterFile } from 'multer';
+type MulterFile = Express.Multer.File;
 import { PortionSpecsService } from './portion-specs.service';
 import { CreatePortionSpecDto, UpdatePortionSpecDto } from './dto/portion-spec.dto';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';

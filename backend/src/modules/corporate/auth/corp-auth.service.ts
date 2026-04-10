@@ -10,7 +10,7 @@ import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../../../prisma/prisma.service';
 import * as bcrypt from 'bcrypt';
 import * as crypto from 'crypto';
-import { Resend } from 'resend';
+import * as nodemailer from 'nodemailer';
 
 @Injectable()
 export class CorpAuthService {
@@ -38,27 +38,140 @@ export class CorpAuthService {
     if (!pinRecord) throw new UnauthorizedException('Manager PIN not configured');
 
     // Support both bcrypt hashes and plain: prefixed (legacy migration)
-    const isValid = await this.verifyPin(pin, pinRecord.pin_hash, company.id);
+    const isValid = await this.verifyPin(pin, pinRecord.pin_hash, company.id, 'company');
     if (!isValid) throw new UnauthorizedException('Incorrect PIN');
 
     return this.signManagerToken(company.id, company.name);
   }
 
-  private async verifyPin(plainPin: string, storedHash: string, company_id: string): Promise<boolean> {
+  private async verifyPin(plainPin: string, storedHash: string, entityId: string, entityType: 'company' | 'employee' = 'company'): Promise<boolean> {
     if (storedHash.startsWith('plain:')) {
       const plain = storedHash.slice(6);
       const match = plain === plainPin;
       if (match) {
         // Upgrade to bcrypt on first successful login
         const hashed = await bcrypt.hash(plainPin, 12);
-        await this.prisma.corporateCompanyPIN.update({
-          where: { company_id },
-          data:  { pin_hash: hashed },
-        });
+        if (entityType === 'company') {
+          await this.prisma.corporateCompanyPIN.update({
+            where: { company_id: entityId },
+            data:  { pin_hash: hashed },
+          });
+        } else {
+          await this.prisma.corporateEmployee.update({
+            where: { id: entityId },
+            data:  { pin_hash: hashed },
+          });
+        }
       }
       return match;
     }
     return bcrypt.compare(plainPin, storedHash);
+  }
+
+  // ── Employee PIN login ─────────────────────────────────────────────────────
+
+  private readonly failedAttempts = new Map<string, { count: number; lockedUntil: number }>();
+
+  private checkRateLimit(key: string): void {
+    const record = this.failedAttempts.get(key);
+    if (record && record.lockedUntil > Date.now()) {
+      const mins = Math.ceil((record.lockedUntil - Date.now()) / 60000);
+      throw new UnauthorizedException(`Too many failed attempts. Try again in ${mins} minute${mins > 1 ? 's' : ''}.`);
+    }
+  }
+
+  private recordFailedAttempt(key: string): void {
+    const record = this.failedAttempts.get(key) ?? { count: 0, lockedUntil: 0 };
+    if (record.lockedUntil < Date.now()) record.count = 0; // reset after lockout expires
+    record.count++;
+    if (record.count >= 5) {
+      record.lockedUntil = Date.now() + 15 * 60 * 1000; // 15 min lockout
+      this.logger.warn(`[RATE LIMIT] Locked ${key} for 15 minutes after ${record.count} failed attempts`);
+    }
+    this.failedAttempts.set(key, record);
+  }
+
+  private clearFailedAttempts(key: string): void {
+    this.failedAttempts.delete(key);
+  }
+
+  async employeePinLogin(company_id: string, email: string, pin: string) {
+    const normalEmail = email.trim().toLowerCase();
+    const rateLimitKey = `${company_id.toUpperCase()}:${normalEmail}`;
+
+    this.checkRateLimit(rateLimitKey);
+
+    const company = await this.prisma.corporateCompany.findUnique({
+      where: { id: company_id.toUpperCase() },
+    });
+    if (!company || !company.is_active) {
+      this.recordFailedAttempt(rateLimitKey);
+      throw new UnauthorizedException('Invalid credentials');
+    }
+
+    const employee = await this.prisma.corporateEmployee.findFirst({
+      where: { email: normalEmail, company_id: company.id, is_active: true },
+    });
+    if (!employee) {
+      this.recordFailedAttempt(rateLimitKey);
+      throw new UnauthorizedException('Invalid credentials');
+    }
+
+    if (!employee.pin_hash) {
+      throw new BadRequestException('PIN not set — use magic link or contact your manager to set your PIN.');
+    }
+
+    const isValid = await this.verifyPin(pin, employee.pin_hash, employee.id, 'employee');
+    if (!isValid) {
+      this.recordFailedAttempt(rateLimitKey);
+      throw new UnauthorizedException('Invalid credentials');
+    }
+
+    this.clearFailedAttempts(rateLimitKey);
+    this.logger.log(`[PIN LOGIN] ${employee.name} <${normalEmail}> logged in via PIN`);
+    return this.signEmployeeToken(employee);
+  }
+
+  // ── Public company lookup ──────────────────────────────────────────────────
+
+  async getCompanyPublic(company_id: string) {
+    const company = await this.prisma.corporateCompany.findUnique({
+      where: { id: company_id.toUpperCase() },
+    });
+    if (!company || !company.is_active) throw new NotFoundException('Company not found');
+    return { ok: true, company: { id: company.id, name: company.name, allowed_email_domain: (company as any).allowed_email_domain ?? null } };
+  }
+
+  // ── Self-registration ─────────────────────────────────────────────────────
+
+  async registerEmployee(company_id: string, name: string, email: string, pin?: string) {
+    const normalEmail = email.trim().toLowerCase();
+    const company = await this.prisma.corporateCompany.findUnique({
+      where: { id: company_id.toUpperCase() },
+    });
+    if (!company || !company.is_active) throw new NotFoundException('Company not found');
+
+    const existing = await this.prisma.corporateEmployee.findFirst({
+      where: { email: normalEmail, company_id: company.id },
+    });
+    if (existing) {
+      if (!existing.is_active) throw new BadRequestException('Account is inactive — contact your manager');
+      return this.signEmployeeToken(existing);
+    }
+
+    const pinHash = pin ? await bcrypt.hash(pin, 12) : null;
+    const emp = await this.prisma.corporateEmployee.create({
+      data: {
+        employee_code: `EMP${Date.now()}`,
+        name: name.trim(),
+        email: normalEmail,
+        company_id: company.id,
+        pin_hash: pinHash,
+        is_active: true,
+      },
+    });
+    this.logger.log(`[REGISTER] New employee: ${emp.name} <${normalEmail}> @ ${company.name}`);
+    return this.signEmployeeToken(emp);
   }
 
   // ── Employee magic-link flow ───────────────────────────────────────────────
@@ -180,7 +293,7 @@ export class CorpAuthService {
     };
   }
 
-  // ── Email sending via Resend ───────────────────────────────────────────────
+  // ── Email sending via Gmail SMTP (same approach as Conner's Flask app) ────
 
   private async sendMagicLinkEmail(
     to: string,
@@ -188,34 +301,32 @@ export class CorpAuthService {
     link: string,
     company_name: string,
   ) {
-    const apiKey = this.config.get<string>('RESEND_API_KEY');
-    if (!apiKey) {
-      this.logger.warn('[EMAIL] RESEND_API_KEY not set — skipping email send (dev mode)');
+    const smtpEmail = this.config.get<string>('SMTP_EMAIL');
+    const smtpPassword = this.config.get<string>('SMTP_PASSWORD');
+
+    if (!smtpEmail || !smtpPassword) {
+      this.logger.warn('[EMAIL] SMTP_EMAIL/SMTP_PASSWORD not set — skipping email send (dev mode)');
       return;
     }
 
-    const fromDomain = this.config.get<string>('RESEND_FROM_EMAIL') ?? 'noreply@betterday.com.au';
-    const resend = new Resend(apiKey);
+    const transporter = nodemailer.createTransport({
+      host: 'smtp.gmail.com',
+      port: 587,
+      secure: false,
+      auth: { user: smtpEmail, pass: smtpPassword },
+    });
 
-    try {
-      const { error } = await resend.emails.send({
-        from:    `BetterDay Meals <${fromDomain}>`,
-        to:      [to],
-        subject: `Your ${company_name} meal portal login link`,
-        html: `
-<!DOCTYPE html>
+    const html = `<!DOCTYPE html>
 <html>
 <head><meta charset="utf-8"></head>
 <body style="margin:0;padding:0;background:#f9f9f9;font-family:Arial,sans-serif">
   <table width="100%" cellpadding="0" cellspacing="0" style="background:#f9f9f9;padding:40px 0">
     <tr><td align="center">
       <table width="540" cellpadding="0" cellspacing="0" style="background:#fff;border-radius:12px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,.08)">
-        <!-- Header -->
         <tr><td style="background:#00465e;padding:32px 40px">
           <p style="margin:0;color:#fff;font-size:22px;font-weight:700">BetterDay Meals</p>
           <p style="margin:6px 0 0;color:#a3c8d8;font-size:14px">${company_name} Employee Portal</p>
         </td></tr>
-        <!-- Body -->
         <tr><td style="padding:40px">
           <p style="margin:0 0 16px;color:#222;font-size:16px">Hi ${name},</p>
           <p style="margin:0 0 28px;color:#555;font-size:15px;line-height:1.6">
@@ -224,34 +335,35 @@ export class CorpAuthService {
           </p>
           <table cellpadding="0" cellspacing="0"><tr><td>
             <a href="${link}" style="display:inline-block;background:#00465e;color:#fff;text-decoration:none;font-size:15px;font-weight:600;padding:14px 32px;border-radius:8px">
-              Sign in to ${company_name} Portal →
+              Sign in to ${company_name} Portal &rarr;
             </a>
           </td></tr></table>
           <p style="margin:28px 0 0;color:#999;font-size:13px">
             If you didn't request this, you can safely ignore this email.
           </p>
         </td></tr>
-        <!-- Footer -->
         <tr><td style="background:#f5f5f5;padding:20px 40px;border-top:1px solid #e8e8e8">
           <p style="margin:0;color:#aaa;font-size:12px">
-            © ${new Date().getFullYear()} BetterDay Meals · This is an automated email, please do not reply.
+            &copy; ${new Date().getFullYear()} BetterDay Meals &middot; This is an automated email, please do not reply.
           </p>
         </td></tr>
       </table>
     </td></tr>
   </table>
 </body>
-</html>`,
-      });
+</html>`;
 
-      if (error) {
-        this.logger.error(`[EMAIL] Resend error: ${JSON.stringify(error)}`);
-      } else {
-        this.logger.log(`[EMAIL] Magic link sent to ${to} via Resend`);
-      }
+    try {
+      await transporter.sendMail({
+        from: `BetterDay Meals <${smtpEmail}>`,
+        to,
+        subject: `Your ${company_name} meal portal login link`,
+        text: `Hi ${name}, sign in to your ${company_name} portal: ${link} (expires in 15 minutes)`,
+        html,
+      });
+      this.logger.log(`[EMAIL] Magic link sent to ${to} via Gmail SMTP`);
     } catch (err) {
-      // Don't fail the request if email fails — token was already saved
-      this.logger.error(`[EMAIL] Resend send failed: ${String(err)}`);
+      this.logger.error(`[EMAIL] SMTP send failed: ${String(err)}`);
     }
   }
 }

@@ -18,7 +18,7 @@ import {
 import { Response } from 'express';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { diskStorage } from 'multer';
-import type { File as MulterFile } from 'multer';
+type MulterFile = Express.Multer.File;
 import * as path from 'path';
 import * as fs from 'fs';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';

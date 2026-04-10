@@ -137,7 +137,7 @@ export class CorpPortalService {
     const meals = await this.prisma.mealRecipe.findMany({
       where: { id: { in: mealIds } },
     });
-    const mealMap = new Map(meals.map(m => [m.id, m]));
+    const mealMap = new Map<string, typeof meals[number]>(meals.map(m => [m.id, m]));
 
     const tierConfig = await this.getEmployeeTierConfig(user);
 
@@ -239,5 +239,43 @@ export class CorpPortalService {
       include: { company: { select: { id: true, name: true, delivery_day: true } } },
     });
     return { ok: true, type: 'employee', employee: emp };
+  }
+
+  /** Count orders placed this week by the employee */
+  async getWeekOrderCount(user: any, deliveryDate?: string) {
+    const now = new Date();
+    const sun = new Date(now); sun.setDate(now.getDate() - now.getDay()); sun.setHours(0, 0, 0, 0);
+    const sat = new Date(sun); sat.setDate(sun.getDate() + 7);
+    const count = await this.prisma.corporateOrder.count({
+      where: { employee_id: user.id, created_at: { gte: sun, lt: sat } },
+    });
+    return { ok: true, count };
+  }
+
+  /** Update employee email */
+  async updateMyEmail(user: any, email: string) {
+    await this.prisma.corporateEmployee.update({
+      where: { id: user.id },
+      data: { email: email.trim().toLowerCase() },
+    });
+    return { ok: true };
+  }
+
+  /** Swap a meal item in an existing order */
+  async swapOrderItem(user: any, orderId: string, itemId: string, newMealId: string) {
+    const order = await this.prisma.corporateOrder.findFirst({
+      where: { id: orderId, employee_id: user.id },
+      include: { items: true },
+    });
+    if (!order) throw new NotFoundException('Order not found');
+
+    const newMeal = await this.prisma.mealRecipe.findUnique({ where: { id: newMealId } });
+    if (!newMeal) throw new NotFoundException('Meal not found');
+
+    await this.prisma.corporateOrderItem.update({
+      where: { id: itemId },
+      data: { meal_recipe_id: newMealId, meal_name: newMeal.display_name },
+    });
+    return { ok: true };
   }
 }
