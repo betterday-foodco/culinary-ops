@@ -1544,6 +1544,56 @@ select.acct-form-input{appearance:none;background-image:url("data:image/svg+xml,
 .acct-chip.active-green{background:#16a34a;color:#fff;border-color:#16a34a}
 .acct-chip.active-blue{background:#4EA2FD;color:#fff;border-color:#4EA2FD}
 
+/* Diet Plan radio card (commit #3 wiring) — two big pill buttons for the
+   customer's diet plan choice (Meat & Plants vs Plants Only). Clicking
+   a pill writes Customer.diet_plan_id via PATCH /me/preferences — no
+   explicit Save button, matches the onboarding picker's click-to-commit
+   pattern. Customer-facing labels pull from DIET_LABELS so rebrands are
+   a one-line edit to brand/site-info.seed.json. */
+.diet-plan-row{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:4px}
+@media(max-width:640px){.diet-plan-row{grid-template-columns:1fr}}
+.diet-plan-pill{
+  position:relative;
+  display:flex;align-items:center;justify-content:center;gap:10px;
+  padding:18px 20px;
+  background:#fff;
+  border:2px solid #e0d0bc;border-radius:16px;
+  font-family:inherit;font-size:15px;font-weight:700;color:#003141;
+  cursor:pointer;
+  transition:all .18s;
+  text-align:left;
+}
+.diet-plan-pill:hover:not(.selected):not(:disabled){
+  border-color:#4EA2FD;
+  background:rgba(78,162,253,.04);
+  transform:translateY(-1px);
+}
+.diet-plan-pill.selected{
+  border-color:#003141;
+  background:linear-gradient(135deg,rgba(0,49,65,.04),rgba(78,162,253,.06));
+  box-shadow:0 0 0 3px rgba(0,49,65,.08),0 2px 8px rgba(0,49,65,.08);
+}
+.diet-plan-pill.selected.vegan{
+  border-color:#16a34a;
+  background:linear-gradient(135deg,rgba(22,163,74,.05),rgba(22,163,74,.1));
+  box-shadow:0 0 0 3px rgba(22,163,74,.12),0 2px 8px rgba(22,163,74,.1);
+}
+.diet-plan-pill:disabled{opacity:.55;cursor:wait}
+.diet-plan-emoji{font-size:28px;line-height:1;flex-shrink:0}
+.diet-plan-text{display:flex;flex-direction:column;gap:2px;flex:1}
+.diet-plan-label{font-size:15px;font-weight:800;color:#003141;line-height:1.2}
+.diet-plan-sub{font-size:11px;font-weight:500;color:#8a7a6a;line-height:1.3}
+.diet-plan-pill.selected .diet-plan-sub{color:#5a4a3a}
+.diet-plan-check{
+  position:absolute;top:10px;right:12px;
+  width:20px;height:20px;border-radius:50%;
+  background:#003141;color:#fff;
+  display:none;align-items:center;justify-content:center;
+}
+.diet-plan-pill.selected.vegan .diet-plan-check{background:#16a34a}
+.diet-plan-pill.selected .diet-plan-check{display:flex}
+.diet-plan-check svg{width:12px;height:12px}
+
 /* Address/payment cards grid */
 .acct-cards-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:16px;margin-top:16px}
 .acct-addr-card,.acct-pay-card{background:#fff;border-radius:14px;border:1.5px solid #e0d0bc;padding:18px;position:relative;transition:all .18s;cursor:default}
@@ -2158,6 +2208,34 @@ select.acct-form-input{appearance:none;background-image:url("data:image/svg+xml,
     </div>
   </div>
 
+  <!-- Diet Plan (commit #3 wiring) — writes Customer.diet_plan_id on click -->
+  <div class="acct-card">
+    <div class="acct-card-header acct-card-hero lightgreen">
+      <div>
+        <div class="acct-card-title">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v20M2 12h20"/></svg>
+          Diet Plan
+        </div>
+        <div class="acct-card-subtitle">Filters the whole menu — pick what you eat, we hide the rest</div>
+      </div>
+    </div>
+    <div class="diet-plan-row" id="dietPlanRow">
+      <!-- Populated by renderDietPlanCards() on load. Shape:
+           <button class="diet-plan-pill [selected] [vegan]" onclick="selectDietPlan('omnivore')">
+             <span class="diet-plan-emoji">🍽️</span>
+             <div class="diet-plan-text">
+               <span class="diet-plan-label">Meat &amp; Plants</span>
+               <span class="diet-plan-sub">All meals, no restrictions</span>
+             </div>
+             <span class="diet-plan-check">✓</span>
+           </button>
+      -->
+    </div>
+    <div style="margin-top:14px;padding:10px 14px;background:rgba(22,163,74,.06);border-radius:10px;font-size:12px;color:#5a4a3a;line-height:1.45">
+      <strong style="color:#003141">Plants Only</strong> hides every meat dish from your menu — we never show meat to a customer on this plan, and we never let a meat meal slip into your cart or checkout. Safety-locked.
+    </div>
+  </div>
+
   <!-- Allergies & Preferences -->
   <div class="acct-card">
     <div class="acct-card-header acct-card-hero green">
@@ -2180,19 +2258,29 @@ select.acct-form-input{appearance:none;background-image:url("data:image/svg+xml,
       </div>
       When our menu rotates each week, your saved cart is checked against the tags below. If any dish in your upcoming order contains something you've flagged, the system <strong>automatically swaps</strong> it for a similar alternative that fits your profile and notifies you of the change. You can always review and adjust swaps before your order locks.
     </div>
+    <!-- Split into two sub-sections per the canonical data model:
+         • allergens[]  → things to AVOID (red active state)
+         • diet_tags[]  → preferences to PREFER (blue active state)
+         The Vegan chip was removed (it's the Diet Plan radio above).
+         The Vegetarian chip was removed (it'll be computed by the
+         rule-based tag generator on the menu side — customer doesn't
+         choose it manually). See commit 5cca53e rename sweep. -->
     <div class="acct-chips-group">
-      <div class="acct-chips-label">Allergens & Diet Tags</div>
-      <div class="acct-chips-wrap">
-        <button class="acct-chip" onclick="toggleChip(this,'tag')" data-val="Gluten-Free">Gluten-Free</button>
-        <button class="acct-chip" onclick="toggleChip(this,'tag')" data-val="Dairy-Free">Dairy-Free</button>
-        <button class="acct-chip" onclick="toggleChip(this,'tag')" data-val="Nut-Free">Nut-Free</button>
-        <button class="acct-chip active-red" onclick="toggleChip(this,'tag')" data-val="Shellfish-Free">Shellfish-Free</button>
-        <button class="acct-chip" onclick="toggleChip(this,'tag')" data-val="Soy-Free">Soy-Free</button>
-        <button class="acct-chip" onclick="toggleChip(this,'tag')" data-val="Egg-Free">Egg-Free</button>
-        <button class="acct-chip" onclick="toggleChip(this,'tag')" data-val="Vegan">Vegan</button>
-        <button class="acct-chip" onclick="toggleChip(this,'tag')" data-val="Vegetarian">Vegetarian</button>
-        <button class="acct-chip" onclick="toggleChip(this,'tag')" data-val="Keto">Keto</button>
-        <button class="acct-chip active-red" onclick="toggleChip(this,'tag')" data-val="High Protein">High Protein</button>
+      <div class="acct-chips-label">Avoid these allergens</div>
+      <div class="acct-chips-wrap" id="allergenChipsWrap">
+        <button type="button" class="acct-chip" onclick="toggleChip(this,'allergen')" data-val="Gluten-Free">Gluten-Free</button>
+        <button type="button" class="acct-chip" onclick="toggleChip(this,'allergen')" data-val="Dairy-Free">Dairy-Free</button>
+        <button type="button" class="acct-chip" onclick="toggleChip(this,'allergen')" data-val="Nut-Free">Nut-Free</button>
+        <button type="button" class="acct-chip" onclick="toggleChip(this,'allergen')" data-val="Shellfish-Free">Shellfish-Free</button>
+        <button type="button" class="acct-chip" onclick="toggleChip(this,'allergen')" data-val="Soy-Free">Soy-Free</button>
+        <button type="button" class="acct-chip" onclick="toggleChip(this,'allergen')" data-val="Egg-Free">Egg-Free</button>
+      </div>
+    </div>
+    <div class="acct-chips-group" style="margin-top:16px">
+      <div class="acct-chips-label">Diet tags</div>
+      <div class="acct-chips-wrap" id="dietTagChipsWrap">
+        <button type="button" class="acct-chip" onclick="toggleChip(this,'tag')" data-val="Keto">Keto</button>
+        <button type="button" class="acct-chip" onclick="toggleChip(this,'tag')" data-val="High Protein">High Protein</button>
       </div>
     </div>
   </div>
@@ -3019,6 +3107,313 @@ function logoutAndRedirect(){
   setTimeout(() => window.location.replace(AUTH_LOGIN_URL + '?logout=1'), 450);
 }
 
+// ============================================================
+// COMMERCE API WIRING (commit 1 of 8: read profile)
+// ============================================================
+// This section bridges the ported subscriber-hub-2.0 prototype to the
+// real commerce-customers backend endpoints at /api/commerce/customers/me.
+//
+// Commit 1 (this one): loadProfile() populates Personal Information +
+// Contact Details cards from GET /me. No save wiring yet — the existing
+// saveProfile() / saveContact() / savePreferences() / saveAddress()
+// stubs are unchanged and still toast-and-forget. Subsequent commits
+// wire them one at a time.
+//
+// Auth: sends x-dev-customer-id header with a hardcoded dev UUID that
+// matches backend's @CurrentCustomer() decorator dev stub. Replaced by
+// real passwordless auth when that lands — see deferred-decisions.
+//
+// API base: window.BETTERDAY_API_BASE if set, else http://localhost:3001/api
+// for local dev. Set the window var in a <script> tag before this one
+// to point at staging/production.
+const API_BASE = window.BETTERDAY_API_BASE || 'http://localhost:3001/api';
+const DEV_CUSTOMER_ID = window.BETTERDAY_DEV_CUSTOMER_ID
+  || '00000000-0000-4000-a000-000000000001'; // Jose Ramirez seed row
+
+async function api(path, opts = {}) {
+  const res = await fetch(API_BASE + path, {
+    ...opts,
+    headers: {
+      'Content-Type': 'application/json',
+      'x-dev-customer-id': DEV_CUSTOMER_ID,
+      ...(opts.headers || {}),
+    },
+  });
+  if (!res.ok) {
+    let msg = res.status + ' ' + res.statusText;
+    try {
+      const body = await res.json();
+      if (body && body.message) {
+        msg += ' — ' + (Array.isArray(body.message) ? body.message.join(', ') : body.message);
+      }
+    } catch (_) { /* ignore parse errors */ }
+    throw new Error(msg);
+  }
+  if (res.status === 204) return null;
+  return res.json();
+}
+
+// Customer-facing diet plan labels + SystemTag UUIDs. Backend uses the
+// canonical identifiers 'Omnivore' and 'Vegan' internally; customers see
+// "Meat & Plants" and "Plants Only." Loaded from brand/site-info.seed.json
+// in loadProfile() with a fallback so the page renders correctly when
+// the seed fetch fails. Same pattern as DIET_LABELS in menu/index.html.
+const DIET_PLAN_STATE = {
+  omnivoreId: null,   // UUID of the Omnivore SystemTag row — set by loadProfile()
+  veganId:    null,   // UUID of the Vegan SystemTag row
+  labels: { Omnivore: 'Meat & Plants', Vegan: 'Plants Only' },
+  current:    null,   // 'omnivore' | 'vegan' | null — the customer's active choice
+};
+
+// Populate the Customer Info tab (Personal Information + Contact Details
+// cards, plus the Diet Plan radio card) with real data from
+// GET /api/commerce/customers/me. Called from DOMContentLoaded — the
+// hardcoded "Jose Ramirez" values in the HTML act as a silent fallback
+// if the fetch fails, so the page is still usable offline during dev.
+// Errors log to console but do NOT toast (it would be noisy on every
+// page load when the dev backend is down).
+//
+// Fields updated:
+//   • Personal card:  firstName, lastName, birthday, profileFullName, avatar
+//   • Contact card:   email, phone, SMS opt-in toggle state
+//   • Diet Plan card: two pill-buttons with the current selection highlighted
+//   • userData:       all of the above (keeps the existing edit/cancel
+//                     flow functional — saveProfile reverts from userData
+//                     when the user clicks Cancel during edit)
+//   • DIET_PLAN_STATE: omnivoreId, veganId, labels, current (feeds the
+//                      Diet Plan radio card render + click handlers)
+//
+// Birthday handling: /me returns birthday as an ISO datetime string like
+// "1989-03-15T00:00:00.000Z". The .field-edit input is type="date" which
+// wants "YYYY-MM-DD". The .field-display shows "March 15, 1989". Both are
+// derived from the same ISO string via setField().
+async function loadProfile() {
+  try {
+    // Load /me and brand seed in parallel. The brand seed gives us the
+    // SystemTag UUIDs + customer-facing labels for the Diet Plan radio.
+    const [me, siteInfo] = await Promise.all([
+      api('/commerce/customers/me'),
+      fetch('../../../brand/site-info.seed.json').then(r => r.ok ? r.json() : {}).catch(() => ({})),
+    ]);
+    if (!me) return;
+
+    // Populate DIET_PLAN_STATE from the brand seed (UUIDs + labels) and
+    // the /me response (customer's current selection).
+    DIET_PLAN_STATE.omnivoreId = siteInfo['public.diet.omnivoreId'] || null;
+    DIET_PLAN_STATE.veganId    = siteInfo['public.diet.veganId']    || null;
+    if (siteInfo['public.diet.labels.omnivore']) DIET_PLAN_STATE.labels.Omnivore = siteInfo['public.diet.labels.omnivore'];
+    if (siteInfo['public.diet.labels.vegan'])    DIET_PLAN_STATE.labels.Vegan    = siteInfo['public.diet.labels.vegan'];
+    if (me.diet_plan_id && me.diet_plan_id === DIET_PLAN_STATE.omnivoreId) {
+      DIET_PLAN_STATE.current = 'omnivore';
+    } else if (me.diet_plan_id && me.diet_plan_id === DIET_PLAN_STATE.veganId) {
+      DIET_PLAN_STATE.current = 'vegan';
+    } else {
+      DIET_PLAN_STATE.current = null;
+    }
+    renderDietPlanCards();
+
+    // Chip group initial state (commit #4). The server is authoritative
+    // for which allergens and diet tags are active. userData is kept in
+    // sync so future reads stay consistent.
+    userData.allergens = Array.isArray(me.allergens) ? me.allergens.slice() : [];
+    userData.dietTags  = Array.isArray(me.diet_tags) ? me.diet_tags.slice() : [];
+    applyChipState();
+
+    // Update the in-memory userData so edit/cancel flow reads fresh values.
+    // The existing cancelEditProfile() function reverts from userData, so
+    // syncing it here keeps the cancel behavior honest.
+    userData.firstName = me.first_name || '';
+    userData.lastName  = me.last_name  || '';
+    userData.email     = me.email      || '';
+    userData.phone     = me.phone      || '';
+    userData.smsOptIn  = Boolean(me.sms_opt_in);
+    if (me.birthday) {
+      userData.birthday = String(me.birthday).slice(0, 10); // YYYY-MM-DD
+    }
+
+    // Personal Information header (full name + avatar initials)
+    const fullName = (userData.firstName + ' ' + userData.lastName).trim();
+    document.getElementById('profileFullName').textContent = fullName || 'Your account';
+    const initials = ((userData.firstName[0] || '') + (userData.lastName[0] || '')).toUpperCase() || '??';
+    document.getElementById('profileAvatar').textContent = initials;
+
+    // Field display + edit value pairs. The prototype stores both a text
+    // display element and a hidden input for each field, keyed by
+    // data-field. Update both so Edit mode and Display mode both show
+    // the real values.
+    setField('firstName', userData.firstName);
+    setField('lastName',  userData.lastName);
+    setField('email',     userData.email);
+    setField('phone',     userData.phone);
+
+    // Birthday needs a formatted display ("March 15, 1989") separate from
+    // the raw YYYY-MM-DD value used by the date input.
+    if (userData.birthday) {
+      const d = new Date(userData.birthday + 'T12:00:00');
+      const display = d.toLocaleDateString('en', { month: 'long', day: 'numeric', year: 'numeric' });
+      setField('birthday', userData.birthday, display);
+    } else {
+      setField('birthday', '', '—');
+    }
+
+    // SMS toggle — the prototype uses a classList-based toggle switch
+    // (not a native checkbox). Set .active based on userData.smsOptIn.
+    // The toggle is identified by its onclick handler calling toggleSms.
+    const smsToggle = document.querySelector('.acct-toggle-switch[onclick*="toggleSms"]');
+    if (smsToggle) {
+      smsToggle.classList.toggle('active', userData.smsOptIn);
+    }
+  } catch (err) {
+    console.warn('[account] loadProfile failed; keeping hardcoded fallback values.', err);
+    // Intentionally silent in the UI — the hardcoded DOM values remain
+    // visible so the page stays functional during dev when the backend
+    // is down. A toast on every page load would be noisy.
+  }
+}
+
+// Helper: update both the display text and the edit input value for a
+// named field. `displayValue` overrides the text content if provided
+// (used by birthday which has a different display format than input format).
+function setField(name, inputValue, displayValue) {
+  const disp = document.querySelector('.field-display[data-field="' + name + '"]');
+  const edit = document.querySelector('.field-edit[data-field="' + name + '"]');
+  if (disp) disp.textContent = displayValue !== undefined ? displayValue : (inputValue || '—');
+  if (edit) edit.value = inputValue || '';
+}
+
+// ============================================================
+// DIET PLAN RADIO (commit 3 of 8)
+// ============================================================
+// Two big pill-buttons in the Customer Info tab that let the customer
+// pick their diet plan. Saves on click (no explicit Save button) via
+// PATCH /me/preferences with { diet_plan_id: <uuid> }.
+//
+// Customer-facing labels pull from DIET_PLAN_STATE.labels, which is
+// seeded from brand/site-info.seed.json in loadProfile() above. Backend
+// identifiers stay as the canonical 'Omnivore' / 'Vegan' strings —
+// see the DIET_LABELS pattern in menu/index.html for the same split.
+
+// Render the Diet Plan radio pills into #dietPlanRow. Called from
+// loadProfile() after DIET_PLAN_STATE is populated. Re-renders on every
+// click (via selectDietPlan) so the selected state always matches state.
+function renderDietPlanCards() {
+  const row = document.getElementById('dietPlanRow');
+  if (!row) return;
+  const current = DIET_PLAN_STATE.current; // 'omnivore' | 'vegan' | null
+  const omniLabel = DIET_PLAN_STATE.labels.Omnivore;
+  const veganLabel = DIET_PLAN_STATE.labels.Vegan;
+  const checkSvg = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>';
+  row.innerHTML = `
+    <button type="button" class="diet-plan-pill${current === 'omnivore' ? ' selected' : ''}" onclick="selectDietPlan('omnivore')">
+      <span class="diet-plan-emoji">🍽️</span>
+      <div class="diet-plan-text">
+        <span class="diet-plan-label">${escapeHtml(omniLabel)}</span>
+        <span class="diet-plan-sub">Every meal — meat + plant options in your mix</span>
+      </div>
+      <span class="diet-plan-check">${checkSvg}</span>
+    </button>
+    <button type="button" class="diet-plan-pill${current === 'vegan' ? ' selected vegan' : ''}" onclick="selectDietPlan('vegan')">
+      <span class="diet-plan-emoji">🌱</span>
+      <div class="diet-plan-text">
+        <span class="diet-plan-label">${escapeHtml(veganLabel)}</span>
+        <span class="diet-plan-sub">Meat dishes are hidden from your menu</span>
+      </div>
+      <span class="diet-plan-check">${checkSvg}</span>
+    </button>
+  `;
+}
+
+// Handle a diet plan pill click. Optimistic update: re-render with the
+// new selection immediately, then PATCH /me/preferences. If the PATCH
+// fails, revert the selection and show a warning toast. Same pattern
+// as toggleSms() in commit #2.
+async function selectDietPlan(planKey) {
+  // Guard against clicking the pill for the already-active plan (no-op)
+  if (DIET_PLAN_STATE.current === planKey) return;
+
+  // Resolve the UUID for this plan from the brand seed state
+  const uuid = planKey === 'omnivore'
+    ? DIET_PLAN_STATE.omnivoreId
+    : planKey === 'vegan'
+      ? DIET_PLAN_STATE.veganId
+      : null;
+  if (!uuid) {
+    showToast("Couldn't find the diet plan ID — brand seed may be stale", 'warning');
+    return;
+  }
+
+  // Optimistic UI: update state + re-render + disable pills during PATCH
+  const previous = DIET_PLAN_STATE.current;
+  DIET_PLAN_STATE.current = planKey;
+  renderDietPlanCards();
+  document.querySelectorAll('#dietPlanRow .diet-plan-pill').forEach(p => p.disabled = true);
+
+  try {
+    await api('/commerce/customers/me/preferences', {
+      method: 'PATCH',
+      body: JSON.stringify({ diet_plan_id: uuid }),
+    });
+    const label = planKey === 'omnivore'
+      ? DIET_PLAN_STATE.labels.Omnivore
+      : DIET_PLAN_STATE.labels.Vegan;
+    showToast('Diet plan updated to ' + label, 'success');
+  } catch (err) {
+    // Revert on error
+    DIET_PLAN_STATE.current = previous;
+    renderDietPlanCards();
+    console.error('[account] selectDietPlan failed', err);
+    showToast("Couldn't update diet plan: " + (err.message || 'unknown error'), 'warning');
+  } finally {
+    document.querySelectorAll('#dietPlanRow .diet-plan-pill').forEach(p => p.disabled = false);
+  }
+}
+
+// Tiny HTML escaper — used only by renderDietPlanCards() above so the
+// DIET_PLAN_STATE.labels values can't inject arbitrary HTML if the
+// brand seed is ever edited by someone who puts < or " in a label.
+function escapeHtml(s) {
+  return String(s || '').replace(/[&<>"']/g, function (c) {
+    return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+  });
+}
+
+// ============================================================
+// CHIP GROUPS — allergens[] + diet_tags[] (commit 4 of 8)
+// ============================================================
+// Two chip sub-groups in the Allergies & Preferences card, each saving
+// to a different column on Customer:
+//   • #allergenChipsWrap → userData.allergens → Customer.allergens[]
+//   • #dietTagChipsWrap  → userData.dietTags  → Customer.diet_tags[]
+//
+// Active-state colour differs by type so customers can see the two
+// data categories at a glance:
+//   • allergens: active-red   (warning tone — things to avoid)
+//   • diet_tags: active-blue  (neutral tone — preferences to prefer)
+//
+// Save model is "Save Preferences button" — the toggle is local until
+// the customer clicks Save, at which point we PATCH both arrays in one
+// request. This matches the prototype's Save button UX (the customer
+// expects the button to mean something) and also lets us batch multiple
+// toggle changes into one round-trip. The dirty flag below gates the
+// Save button colour: grey when no unsaved changes, yellow when dirty.
+
+// Read userData.allergens + userData.dietTags and stamp each chip's
+// active class accordingly. Called from loadProfile() on initial load
+// and from savePreferences() after a successful PATCH to re-render
+// from the server response.
+function applyChipState() {
+  const allergens = (userData.allergens || []).map(String);
+  const dietTags  = (userData.dietTags  || []).map(String);
+  document.querySelectorAll('#allergenChipsWrap .acct-chip').forEach(el => {
+    const val = el.getAttribute('data-val');
+    el.className = 'acct-chip' + (allergens.includes(val) ? ' active-red' : '');
+  });
+  document.querySelectorAll('#dietTagChipsWrap .acct-chip').forEach(el => {
+    const val = el.getAttribute('data-val');
+    el.className = 'acct-chip' + (dietTags.includes(val) ? ' active-blue' : '');
+  });
+}
+
 // ======= DATA =======
 // Meals are loaded from meals.seed.json (152 real meals from the database).
 // normalizeForAccount() maps DB field names to the format account templates expect.
@@ -3289,7 +3684,14 @@ function initAllPhoneInputs(){
 
 // ======= INIT =======
 document.addEventListener('DOMContentLoaded',async()=>{
+  // Fire the /me fetch immediately — it's async and doesn't block the
+  // rest of init. The hardcoded DOM values stay visible while the fetch
+  // is in flight; loadProfile() swaps them out when the response lands.
+  loadProfile();
   await loadAccountMeals();
+  renderCompactCart();
+  renderSuggestions();
+  renderTimeline();
   if(typeof updatePlanStatus==='function') updatePlanStatus();
   initSwapTabs();
   initAllPhoneInputs();
@@ -4945,21 +5347,71 @@ function cancelEditProfile(){
   document.getElementById('editProfileBtn').textContent='Edit';
   document.getElementById('editProfileBtn').onclick=()=>toggleEditProfile();
 }
-function saveProfile(){
+// WIRED (commit 2): Personal Information save → PATCH /api/commerce/customers/me
+//
+// Reads the three editable fields from the card (firstName, lastName,
+// birthday), builds a DTO matching UpdateProfileDto on the backend,
+// and PATCHes /me. On success, re-renders from the server's response
+// (authoritative — catches any backend normalization) and calls
+// cancelEditProfile() to exit edit mode. On error, the card stays in
+// edit mode so the user can fix their input and retry.
+//
+// Email + phone do NOT belong in this save — email is in the Contact
+// Details card (and gated behind verification via saveContact), and
+// phone is also in the Contact card. This card is firstName/lastName/
+// birthday only.
+async function saveProfile(){
   const card = document.getElementById('editProfileBtn').closest('.acct-card');
+  const saveBtn = document.querySelector('#profileActions button.acct-btn-primary-sm');
+
+  // Collect the three editable values from the card's .field-edit inputs
+  const edits = {};
   card.querySelectorAll('.field-edit').forEach(el=>{
-    const f=el.getAttribute('data-field');
-    userData[f]=el.value;
-    const disp=card.querySelector('.field-display[data-field="'+f+'"]');
-    if(f==='birthday'){
-      const d=new Date(el.value+'T12:00:00');
-      disp.textContent=d.toLocaleDateString('en',{month:'long',day:'numeric',year:'numeric'});
-    } else disp.textContent=el.value;
+    edits[el.getAttribute('data-field')] = el.value;
   });
-  document.getElementById('profileFullName').textContent=userData.firstName+' '+userData.lastName;
-  document.getElementById('profileAvatar').textContent=userData.firstName[0]+userData.lastName[0];
-  cancelEditProfile();
-  showToast('Profile updated!','success');
+
+  // Build DTO matching backend UpdateProfileDto. Empty strings become
+  // null (backend expects string or null, not empty). Birthday is a
+  // date string the backend parses with new Date().
+  const dto = {};
+  if(edits.firstName !== undefined) dto.first_name = edits.firstName || null;
+  if(edits.lastName  !== undefined) dto.last_name  = edits.lastName  || null;
+  if(edits.birthday  !== undefined && edits.birthday !== '') dto.birthday = edits.birthday;
+
+  if(saveBtn) saveBtn.disabled = true;
+  try {
+    const saved = await api('/commerce/customers/me', {
+      method: 'PATCH',
+      body: JSON.stringify(dto),
+    });
+
+    // Re-render from the server's authoritative response
+    userData.firstName = saved.first_name || '';
+    userData.lastName  = saved.last_name  || '';
+    if(saved.birthday) userData.birthday = String(saved.birthday).slice(0, 10);
+
+    setField('firstName', userData.firstName);
+    setField('lastName',  userData.lastName);
+    if(userData.birthday){
+      const d = new Date(userData.birthday + 'T12:00:00');
+      setField('birthday', userData.birthday,
+        d.toLocaleDateString('en',{month:'long',day:'numeric',year:'numeric'}));
+    }
+
+    document.getElementById('profileFullName').textContent =
+      (userData.firstName + ' ' + userData.lastName).trim() || 'Your account';
+    document.getElementById('profileAvatar').textContent =
+      ((userData.firstName[0] || '') + (userData.lastName[0] || '')).toUpperCase() || '??';
+
+    cancelEditProfile();
+    showToast('Profile updated!','success');
+  } catch(err) {
+    console.error('[account] saveProfile failed', err);
+    showToast("Couldn't save: " + (err.message || 'unknown error'), 'warning');
+    // Leave the card in edit mode so the user can retry or cancel
+  } finally {
+    if(saveBtn) saveBtn.disabled = false;
+  }
 }
 
 // ======= CONTACT EDIT =======
@@ -4979,40 +5431,163 @@ function cancelEditContact(){
   document.getElementById('contactActions').style.display='none';
   document.getElementById('editContactBtn').textContent='Edit';
 }
-function saveContact(){
-  const card=document.getElementById('editContactBtn').closest('.acct-card');
+// WIRED (commit 2): Contact Details save → PATCH /api/commerce/customers/me
+//
+// Sends only `phone` in the PATCH body. Email is deliberately NOT sent
+// because the backend's UpdateProfileDto doesn't accept it — email
+// changes require a verification round-trip (magic link to the new
+// address) which is a separate flow, tracked in deferred-decisions
+// under "Phone + email change flows for the account hub."
+//
+// If the user edited the email field in place, we show a warning toast
+// explaining it's coming soon and revert the input to the original
+// value so the displayed state matches what's actually saved.
+async function saveContact(){
+  const card = document.getElementById('editContactBtn').closest('.acct-card');
+  const saveBtn = document.querySelector('#contactActions button.acct-btn-primary-sm');
+
+  // Collect the two editable values (email, phone)
+  const edits = {};
   card.querySelectorAll('.field-edit').forEach(el=>{
-    const f=el.getAttribute('data-field');
-    let v = el.value;
-    if(f === 'phone') v = formatPhoneNumber(v);
-    userData[f]=v;
-    el.value = v;
-    card.querySelector('.field-display[data-field="'+f+'"]').textContent=v;
+    edits[el.getAttribute('data-field')] = el.value;
   });
-  cancelEditContact();
-  showToast('Contact info updated!','success');
+
+  // Check whether the user actually tried to change their email.
+  // If yes, show a "coming soon" toast and revert the input.
+  const emailChanged = edits.email !== undefined
+    && edits.email !== userData.email
+    && edits.email.trim() !== '';
+  if(emailChanged){
+    showToast('Email changes need verification — coming soon','info');
+    const emailEdit = card.querySelector('.field-edit[data-field="email"]');
+    if(emailEdit) emailEdit.value = userData.email || '';
+  }
+
+  // Build DTO: phone only. Format it via the existing helper first so
+  // the server receives the canonical format, not whatever the user
+  // happened to type.
+  const dto = {};
+  if(edits.phone !== undefined){
+    const formattedPhone = (typeof formatPhoneNumber === 'function')
+      ? formatPhoneNumber(edits.phone)
+      : edits.phone;
+    dto.phone = formattedPhone || null;
+  }
+
+  if(saveBtn) saveBtn.disabled = true;
+  try {
+    const saved = await api('/commerce/customers/me', {
+      method: 'PATCH',
+      body: JSON.stringify(dto),
+    });
+
+    // Re-render from server response (authoritative)
+    userData.phone = saved.phone || '';
+    setField('phone', userData.phone);
+
+    cancelEditContact();
+    showToast('Contact info updated!','success');
+  } catch(err) {
+    console.error('[account] saveContact failed', err);
+    showToast("Couldn't save: " + (err.message || 'unknown error'), 'warning');
+  } finally {
+    if(saveBtn) saveBtn.disabled = false;
+  }
 }
-function toggleSms(el){el.classList.toggle('active');userData.smsOptIn=el.classList.contains('active');showToast(userData.smsOptIn?'SMS notifications enabled':'SMS notifications disabled','success')}
-function toggleChip(el,type){
-  const isAllergen=type==='allergen';
-  const activeClass=isAllergen?'active-red':el.getAttribute('data-val')==='High Protein'?'active-blue':el.getAttribute('data-val')==='Vegan'?'active-green':'active';
-  if(el.classList.contains(activeClass)){el.classList.remove(activeClass)}
-  else{el.className='acct-chip '+activeClass}
+// WIRED (commit 2): SMS Order Updates toggle → PATCH /me/notifications
+//
+// Optimistic update: flip the .active class on the toggle element
+// IMMEDIATELY so the customer sees instant feedback, then fire the
+// PATCH in the background. If the PATCH fails, revert the class and
+// show a warning toast. Keeping the optimistic flip feels much faster
+// than waiting for the request to round-trip before moving the toggle.
+async function toggleSms(el){
+  const newValue = !el.classList.contains('active');
+  // Optimistic UI flip
+  el.classList.toggle('active', newValue);
+  try {
+    await api('/commerce/customers/me/notifications', {
+      method: 'PATCH',
+      body: JSON.stringify({ sms_opt_in: newValue }),
+    });
+    userData.smsOptIn = newValue;
+    showToast(newValue ? 'SMS notifications enabled' : 'SMS notifications disabled','success');
+  } catch(err) {
+    // Revert the optimistic flip
+    el.classList.toggle('active', !newValue);
+    console.error('[account] toggleSms failed', err);
+    showToast("Couldn't update SMS preference",'warning');
+  }
 }
-function savePreferences(){
-  showToast('Preferences saved!','success');
-  const icon=document.getElementById('savePrefsIcon');
-  const label=document.getElementById('savePrefsLabel');
-  if(!icon||!label)return;
-  icon.outerHTML='<svg id="savePrefsIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px"><polyline points="20 6 9 17 4 12"/></svg>';
-  label.textContent='Saved';
-  clearTimeout(window._savePrefsResetT);
-  window._savePrefsResetT=setTimeout(()=>{
-    const i=document.getElementById('savePrefsIcon');
-    const l=document.getElementById('savePrefsLabel');
-    if(i)i.outerHTML='<svg id="savePrefsIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px"><path d="M19 21H5a2 2 0 01-2-2V5a2 2 0 012-2h11l5 5v11a2 2 0 01-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>';
-    if(l)l.textContent='Save Preferences';
-  },2200);
+// WIRED (commit 4): chip toggle — local-only, no server call here.
+// Flips the active-red / active-blue class based on the type parameter
+// passed from the onclick handler in the HTML ('allergen' or 'tag').
+// The change is purely visual until the customer clicks Save Preferences.
+function toggleChip(el, type){
+  const activeClass = type === 'allergen' ? 'active-red' : 'active-blue';
+  if (el.classList.contains(activeClass)) {
+    el.classList.remove(activeClass);
+  } else {
+    el.className = 'acct-chip ' + activeClass;
+  }
+}
+
+// WIRED (commit 4): Save Preferences → PATCH /me/preferences
+//
+// Collects the currently-active chips from both sub-groups and sends
+// { allergens, diet_tags } in one PATCH. Array fields REPLACE (not
+// merge) on the backend — this matches UpdatePreferencesDto semantics.
+//
+// On success: re-renders userData + chip state from the server response
+// (authoritative), shows a success toast, and briefly morphs the Save
+// button icon to a check mark + "Saved" text for 2.2 seconds (keeps
+// the prototype's delightful save-confirmation UX). On failure: logs
+// to console.error, warning toast, chip classes stay where they are
+// so the customer can retry.
+async function savePreferences(){
+  const saveBtn = document.getElementById('savePrefsBtn');
+
+  // Collect active chips from both sub-groups
+  const allergens = Array.from(document.querySelectorAll('#allergenChipsWrap .acct-chip.active-red'))
+    .map(el => el.getAttribute('data-val'));
+  const dietTags  = Array.from(document.querySelectorAll('#dietTagChipsWrap  .acct-chip.active-blue'))
+    .map(el => el.getAttribute('data-val'));
+
+  if (saveBtn) saveBtn.disabled = true;
+  try {
+    const saved = await api('/commerce/customers/me/preferences', {
+      method: 'PATCH',
+      body: JSON.stringify({ allergens, diet_tags: dietTags }),
+    });
+
+    // Re-render from server response (authoritative — catches any
+    // backend normalization like whitespace trimming or dedup).
+    userData.allergens = Array.isArray(saved.allergens) ? saved.allergens.slice() : [];
+    userData.dietTags  = Array.isArray(saved.diet_tags) ? saved.diet_tags.slice()  : [];
+    applyChipState();
+
+    showToast('Preferences saved!','success');
+
+    // Button morph animation — preserves the prototype's UX flourish
+    const icon  = document.getElementById('savePrefsIcon');
+    const label = document.getElementById('savePrefsLabel');
+    if (icon && label) {
+      icon.outerHTML = '<svg id="savePrefsIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px"><polyline points="20 6 9 17 4 12"/></svg>';
+      label.textContent = 'Saved';
+      clearTimeout(window._savePrefsResetT);
+      window._savePrefsResetT = setTimeout(() => {
+        const i = document.getElementById('savePrefsIcon');
+        const l = document.getElementById('savePrefsLabel');
+        if (i) i.outerHTML = '<svg id="savePrefsIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px"><path d="M19 21H5a2 2 0 01-2-2V5a2 2 0 012-2h11l5 5v11a2 2 0 01-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>';
+        if (l) l.textContent = 'Save Preferences';
+      }, 2200);
+    }
+  } catch (err) {
+    console.error('[account] savePreferences failed', err);
+    showToast("Couldn't save: " + (err.message || 'unknown error'), 'warning');
+  } finally {
+    if (saveBtn) saveBtn.disabled = false;
+  }
 }
 
 // ======= ADDRESSES =======

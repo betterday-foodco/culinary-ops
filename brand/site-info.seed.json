@@ -21,6 +21,11 @@
   "public.delivery.areas":      "Calgary & surrounding",
   "public.delivery.schedule":   "Every Sunday",
 
+  "public.diet.omnivoreId":     "fc0a70f3-644b-4248-b9c1-65882cc503de",
+  "public.diet.veganId":        "9c68ba40-f59d-40a8-8210-bdc1f3cd3973",
+  "public.diet.labels.omnivore": "Meat & Plants",
+  "public.diet.labels.vegan":    "Plants Only",
+
   "public.legal.copyrightYear": "2026",
   "public.legal.copyrightText": "© 2026 BetterDay Food Co.",
   "public.legal.termsUrl":      "/legal/terms",
