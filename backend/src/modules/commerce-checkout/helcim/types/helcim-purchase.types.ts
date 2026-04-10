@@ -1,7 +1,7 @@
 /**
  * Types for POST https://api.helcim.com/v2/payment/purchase
  *
- * The Thursday cutoff cron's load-bearing call. Charges a saved card
+ * The weekly cutoff cron's load-bearing call. Charges a saved card
  * token for a customer's current cart total. Requires the
  * `idempotency-key` header.
  *

@@ -273,7 +273,7 @@ html, body {
 .meal-img-placeholder span { font-size: clamp(28px, 6vw, 64px); line-height: 1; }
 .cart-item-thumb.meal-img-placeholder span { font-size: 20px; }
 .meal-img-placeholder--omni  { background: linear-gradient(135deg, var(--brand-primary), var(--brand-navy)); }
-.meal-img-placeholder--plant { background: linear-gradient(135deg, var(--brand-green), var(--brand-green-dark)); }
+.meal-img-placeholder--vegan { background: linear-gradient(135deg, var(--brand-green), var(--brand-green-dark)); }
 .card-badges {
   position: absolute; bottom: 8px; left: 8px;
   display: flex; flex-wrap: wrap; gap: 4px; z-index: 2;
@@ -290,6 +290,7 @@ html, body {
 .card-badge.dairy { background: rgba(217,119,6,.85); color: #fff; }
 .card-badge.new { background: rgba(255,198,0,.95); color: var(--brand-navy); }
 .card-badge.popular { background: rgba(0,70,94,.85); color: #fff; }
+.card-badge.freezer-friendly { background: rgba(255,218,194,.92); color: #7c2d12; }
 .card-btn-area { margin-top: 10px; height: 36px; position: relative; }
 
 /* ADD button */
@@ -1019,6 +1020,101 @@ body.sheet-open #cartSidebar { visibility: hidden; pointer-events: none; }
 .modal-btn-area .qty-minus, .modal-btn-area .qty-plus { width: 44px; font-size: 20px; }
 .modal-btn-area .qty-num { font-size: 16px; }
 
+/* ── PLAN-MISMATCH (read-only meal detail for Vegan + meat dish) ── */
+/* Replaces the Add-to-cart button when a Vegan customer deep-links to a
+   meat meal. The customer can still see the dish (image, name, ingredients,
+   macros — all rendered above) but the action area becomes informational
+   + two CTAs that lead them somewhere helpful. NEVER a 404.
+   Customer-facing text uses the label "Plants Only" (see DIET_LABELS map). */
+.plan-mismatch {
+  background: rgba(107, 189, 82, 0.08); /* brand-green wash */
+  border: 1.5px solid rgba(107, 189, 82, 0.35);
+  border-radius: 16px;
+  padding: 16px 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.plan-mismatch-msg {
+  font-family: var(--font-body);
+  font-size: 14px;
+  font-weight: var(--fw-bold);
+  color: var(--brand-green-dark);
+  line-height: 1.4;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.plan-mismatch-msg .pm-leaf { font-size: 18px; line-height: 1; }
+.plan-mismatch-sub {
+  font-size: 12px;
+  color: var(--text-secondary);
+  font-weight: var(--fw-regular);
+  line-height: 1.45;
+}
+.plan-mismatch-ctas {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.plan-mismatch-btn {
+  flex: 1;
+  min-width: 140px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 11px 16px;
+  border-radius: 100px;
+  font-family: var(--font-body);
+  font-size: 13px;
+  font-weight: var(--fw-bold);
+  text-decoration: none;
+  cursor: pointer;
+  border: 1.5px solid transparent;
+  transition: transform .1s, box-shadow .15s, background .15s;
+}
+.plan-mismatch-btn.primary {
+  background: var(--brand-yellow);
+  color: var(--brand-navy-dark);
+}
+.plan-mismatch-btn.primary:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 14px rgba(255, 198, 0, .4);
+}
+.plan-mismatch-btn.ghost {
+  background: transparent;
+  color: var(--brand-navy-dark);
+  border-color: rgba(0, 49, 65, 0.25);
+}
+.plan-mismatch-btn.ghost:hover {
+  border-color: var(--brand-navy-dark);
+}
+
+/* Sibling-swap state (will activate once meals.seed.json includes
+   linked_meal_id — currently the data is missing so this branch never
+   fires; the read-only view above is the active fallback). Same warm
+   green wash as the read-only state for visual continuity. */
+.plan-swap {
+  background: rgba(78, 162, 253, 0.08); /* brand-primary wash */
+  border: 1.5px solid rgba(78, 162, 253, 0.35);
+  border-radius: 16px;
+  padding: 16px 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.plan-swap-msg {
+  font-family: var(--font-body);
+  font-size: 14px;
+  font-weight: var(--fw-bold);
+  color: var(--brand-navy-dark);
+  line-height: 1.4;
+}
+.plan-swap-msg em {
+  color: var(--brand-primary);
+  font-style: normal;
+}
+
 /* ── MOBILE BOTTOM BAR ── */
 .mobile-bottom-bar {
   display: none;
@@ -1474,7 +1570,7 @@ body.sheet-open #cartSidebar { visibility: hidden; pointer-events: none; }
       <div class="filter-group">
         <div class="filter-group-label">Diet</div>
         <div class="filter-chips">
-          <button class="filter-chip" data-diet="Plant-Based" onclick="toggleFilter(this)">Plant-Based</button>
+          <button class="filter-chip" data-diet="Vegan" onclick="toggleFilter(this)">Plants Only</button>
           <button class="filter-chip" data-filter="Vegetarian" onclick="toggleFilter(this)">Vegetarian</button>
           <button class="filter-chip" data-filter="Pescatarian" onclick="toggleFilter(this)">Pescatarian</button>
         </div>
@@ -1615,12 +1711,164 @@ body.sheet-open #cartSidebar { visibility: hidden; pointer-events: none; }
 //   - dietary_tags normalized (Freezer Friendly → Freezable,
 //     Gluten Friendly → Gluten Free)
 //   - Bulk Prep / Bulk Sauce excluded
+//   - linked_meal_id added 2026-04-09 — pairs each Omnivore meal with its
+//     Vegan sibling (one-directional, set only on the omnivore side).
+//     44 of 88 omnivore meals have a sibling; the other 41 are unlinked
+//     and the openModal() diet-routing falls back to the read-only state
+//     for those. See conner/deferred-decisions.md for the backfill TODO.
 // When the commerce API is live, swap loadMealsFromSeed() for a fetch to
 // GET /api/meals. normalizeMeal() is the ONLY place that knows about the
 // raw DB field names — every other piece of JS below reads the prototype's
 // established shape (m.cat, m.img, m.tags, m.cal, m.protein, etc.).
 let allMeals = [];
 let mealsLoaded = false;
+
+// ══════════════════════════════════════════════════════════════════════════
+// DIET LOCK — SAFETY-CRITICAL FAIL-CLOSED FILTER
+// ══════════════════════════════════════════════════════════════════════════
+// A Vegan customer must NEVER be shown a meat dish under any circumstance.
+// This is not a preference filter — it's a trust gate.
+//
+// TERMINOLOGY NOTE (2026-04-09): the backend + data layer uses the canonical
+// identifier 'Vegan' (short, obvious, matches BoH team speak and the
+// SystemTag row name in culinary DB). The customer-facing label is
+// "Plants Only" and lives in the DIET_LABELS map below — change it there
+// if marketing copy shifts. Never hardcode "Plants Only" in customer-facing
+// strings; always go through DIET_LABELS so the map stays the single seam.
+//
+// Resolution order (first match wins):
+//   1. ?diet=<slug> URL param — set by the onboarding picker redirect.
+//      Accepted slugs: 'plants' (primary), 'vegan' (backend alias for
+//      developer/test URLs).
+//   2. GET /api/commerce/customers/me → .diet_plan_id compared to the
+//      Vegan SystemTag UUID from brand/site-info.seed.json.
+//   3. Neither resolvable → redirect to the onboarding picker. We
+//      NEVER fall back to "show everything" because that would leak
+//      meat to a Vegan customer if the API is unreachable.
+//
+// Invariants enforced below:
+//   - getFilteredMeals() applies the lock BEFORE any user filter.
+//   - clearAllFilters() explicitly preserves the lock.
+//   - The value is either null (no lock, unknown/omnivore) or the
+//     exact string 'Vegan' (matched against m.diet_plan).
+//   - Unknown diet_plan string on a meal row is treated as NOT safe
+//     for Vegan customers (fail-closed).
+//
+// Values:
+//   null       → omnivore or unknown — no lock, show everything
+//   'Vegan'    → only meals where m.diet_plan === 'Vegan'
+let dietLock = null;
+let dietLockResolved = false; // Gates renderAll() until lock is determined.
+
+// Customer-facing diet plan labels. Backend uses the canonical identifier
+// ('Omnivore' | 'Vegan'); customers see warmer copy ("Meat & Plants" /
+// "Plants Only"). The map is overwritten at load time from
+// brand/site-info.seed.json if custom labels are configured — the fallback
+// below is the current brand values so the page renders correctly even
+// when the seed fetch fails. To change what customers see, either edit
+// this fallback OR edit the seed values (public.diet.labels.omnivore /
+// public.diet.labels.vegan).
+let DIET_LABELS = {
+  Omnivore: 'Meat & Plants',
+  Vegan: 'Plants Only',
+};
+
+// Dev stub — same header the commerce backend's @CurrentCustomer() decorator
+// reads. Removed when real passwordless auth lands (see deferred-decisions).
+const DEV_CUSTOMER_ID = window.BETTERDAY_DEV_CUSTOMER_ID
+  || '00000000-0000-4000-a000-000000000001';
+const API_BASE = window.BETTERDAY_API_BASE || 'http://localhost:3001/api';
+
+async function resolveDietLock() {
+  // Load the customer-facing labels from the brand seed in parallel with
+  // the rest of the resolver. This runs regardless of which branch matches
+  // below so DIET_LABELS is always populated from the seed if available.
+  // Fire-and-forget; fallback values already work without it.
+  const siteInfoPromise = fetch('../../../brand/site-info.seed.json')
+    .then(r => r.ok ? r.json() : {})
+    .then(site => {
+      if (site['public.diet.labels.omnivore']) DIET_LABELS.Omnivore = site['public.diet.labels.omnivore'];
+      if (site['public.diet.labels.vegan'])    DIET_LABELS.Vegan    = site['public.diet.labels.vegan'];
+      return site;
+    })
+    .catch(() => ({}));
+
+  // ─── 1. URL param (picker redirect handoff) ─────────────────────────
+  const urlDiet = new URLSearchParams(location.search).get('diet');
+  if (urlDiet) {
+    const slug = urlDiet.toLowerCase();
+    // Primary customer-facing slug: 'plants'. Backend alias 'vegan' is
+    // accepted for developer/test URLs (matches the internal term).
+    if (slug === 'plants' || slug === 'vegan') {
+      dietLock = 'Vegan';
+    }
+    // Anything else (omnivore, unknown) → no lock, show all.
+    // Persist the choice client-side so a direct link without param works next time.
+    try { localStorage.setItem('betterday.dietSlug', slug); } catch (_) {}
+    dietLockResolved = true;
+    await siteInfoPromise; // ensure labels are loaded before first render
+    return;
+  }
+
+  // ─── 2. localStorage (repeat guest visit) ───────────────────────────
+  try {
+    const saved = localStorage.getItem('betterday.dietSlug');
+    if (saved === 'plants' || saved === 'vegan') {
+      dietLock = 'Vegan';
+      dietLockResolved = true;
+      await siteInfoPromise;
+      return;
+    }
+    if (saved === 'omnivore') {
+      dietLock = null;
+      dietLockResolved = true;
+      await siteInfoPromise;
+      return;
+    }
+  } catch (_) {}
+
+  // ─── 3. Logged-in customer profile ──────────────────────────────────
+  // Best-effort: if the backend is reachable and the customer has a
+  // diet_plan_id set, use it. If we can't determine, fall through to
+  // the picker redirect (safest default).
+  try {
+    // Await the site-info we already started fetching to get the Vegan
+    // SystemTag UUID. Same seed file site-shell.js uses, so the dev loop
+    // stays consistent whether the API is up or not.
+    const siteJson = await siteInfoPromise;
+    const veganId = siteJson['public.diet.veganId'];
+
+    const meRes = await fetch(API_BASE + '/commerce/customers/me', {
+      headers: { 'x-dev-customer-id': DEV_CUSTOMER_ID },
+    });
+    if (meRes.ok) {
+      const me = await meRes.json();
+      if (me.diet_plan_id && veganId && me.diet_plan_id === veganId) {
+        dietLock = 'Vegan';
+      } else {
+        // diet_plan_id is either omnivore or explicitly null/undefined.
+        // If it's null, the customer hasn't chosen yet — force the picker.
+        if (!me.diet_plan_id) {
+          redirectToPicker();
+          return;
+        }
+        dietLock = null;
+      }
+      dietLockResolved = true;
+      return;
+    }
+  } catch (_) { /* API unreachable, fall through to picker */ }
+
+  // ─── 4. Last resort: force the picker gate ──────────────────────────
+  redirectToPicker();
+}
+
+function redirectToPicker() {
+  // Keep the current URL as a return destination so the picker can send
+  // them back here after they choose (future wiring — not required now).
+  const returnTo = encodeURIComponent(location.pathname + location.search);
+  location.href = '../onboarding/?returnTo=' + returnTo;
+}
 
 // Customer-facing tab order. The labels below match MealRecipe.menu_category
 // exactly so setCategory() can filter on a string equal. Sandwich & Wraps
@@ -1638,7 +1886,7 @@ function deriveBadges(row) {
   const tags = row.dietary_tags || [];
   const allergens = row.allergen_tags || [];
   const proteins = row.protein_types || [];
-  const isPlantBased = row.diet_plan === 'Plant-Based';
+  const isVegan = row.diet_plan === 'Vegan';
 
   // Stored tags (already normalized in the DB — no legacy aliases needed)
   if (tags.includes('Freezable')) out.push('Freezable');
@@ -1649,11 +1897,13 @@ function deriveBadges(row) {
   // Computed rules (from admin file)
   // High Protein — rule: protein >= 35g
   if ((row.protein_g ?? 0) >= 35) out.push('High Protein');
-  // Vegetarian — rule: diet=="veg" AND no dairy
-  if (isPlantBased && !allergens.includes('Dairy')) out.push('Vegetarian');
+  // Vegetarian — rule: Vegan diet plan AND no dairy. Vegetarian is a
+  // computed badge, not a customer preference — it'll eventually be
+  // auto-applied by the rule-based tag generator in culinary admin.
+  if (isVegan && !allergens.includes('Dairy')) out.push('Vegetarian');
   // Pescatarian — rule: no chicken/beef/turkey/pork in protein_types
   const landMeat = ['Chicken', 'Beef', 'Turkey', 'Pork'];
-  if (!isPlantBased && proteins.length > 0 && !proteins.some(p => landMeat.includes(p))) {
+  if (!isVegan && proteins.length > 0 && !proteins.some(p => landMeat.includes(p))) {
     out.push('Pescatarian');
   }
   return out;
@@ -1666,7 +1916,7 @@ function deriveBadges(row) {
 // with the placeholder div in-place, using data-* attrs for the state it
 // needs (diet_plan + name initial).
 function renderMealImg(m, className) {
-  const plan = m.diet_plan === 'Plant-Based' ? 'plant' : 'omni';
+  const plan = m.diet_plan === 'Vegan' ? 'vegan' : 'omni';
   const initial = (m.name || '?').charAt(0).toUpperCase();
   if (!m.img) {
     return `<div class="${className} meal-img-placeholder meal-img-placeholder--${plan}" aria-label="${m.name}"><span>${initial}</span></div>`;
@@ -1707,7 +1957,8 @@ function normalizeMeal(row) {
     fat: row.fat_g,
     fiber: row.fiber_g,
     cat: row.menu_category,          // Entree / Breakfast / Snack / Sandwich & Wraps / Protein Pack
-    diet_plan: row.diet_plan,        // Omnivore / Plant-Based
+    diet_plan: row.diet_plan,        // Omnivore / Vegan (customer-facing label comes from DIET_LABELS)
+    linked_meal_id: row.linked_meal_id || null, // Vegan sibling UUID, set ONLY on the omnivore side (one-directional). 44 of 88 omnivore meals have a sibling — drives the gentle-swap UX in openModal() when a Vegan customer deep-links to a meat meal.
     qty: 0,
     img: row.image_url || null,
     allergens: row.allergen_tags || [],
@@ -1737,14 +1988,38 @@ async function loadMealsFromSeed() {
   }
 }
 
+// SAFETY: returns the subset of allMeals that the customer's diet plan
+// allows. Every cart-counting, category-counting, and totaling function
+// below MUST use this helper instead of allMeals directly so a Vegan
+// customer never sees, counts, or is charged for a meat meal anywhere in
+// the UI — not in the grid, not in the cart, not in category tab counts,
+// not in the subtotal, not in the order.
+//
+// This is the SECOND layer of the safety story. Layer one (the grid
+// filter inside getFilteredMeals + renderGrid) hides meat from the
+// visible browse list. Layer two (this helper) ensures every numeric
+// rollup of "meals" honors the same lock — preventing the case where a
+// meat meal slipped into qty>0 from a prior session and would show in
+// the cart sidebar / get charged at checkout.
+function getDietSafeMeals() {
+  if (dietLock === 'Vegan') {
+    return allMeals.filter(m => m.diet_plan === 'Vegan');
+  }
+  return allMeals;
+}
+
 // Auto-hide category tabs whose count is 0 (Sandwich & Wraps, Protein Pack
 // are kept in the HTML ready for launch but stay hidden until they have
-// meals). Called after the seed loads.
+// meals). Called after the seed loads. Uses getDietSafeMeals() so a
+// Vegan customer doesn't see a category tab that's empty under their
+// lock (e.g. an "Entrees" tab where every entree happens to be
+// omnivore-only).
 function hideEmptyCategoryTabs() {
+  const safe = getDietSafeMeals();
   document.querySelectorAll('.tab-pill[data-cat]').forEach(tab => {
     const cat = tab.dataset.cat;
     if (cat === 'All') return;
-    const count = allMeals.filter(m => m.cat === cat).length;
+    const count = safe.filter(m => m.cat === cat).length;
     tab.style.display = count > 0 ? '' : 'none';
   });
 }
@@ -1770,13 +2045,20 @@ function getPrice(meal) {
 function fmtPrice(n) { return '$' + n.toFixed(2); }
 
 // ── CART CALCULATIONS ──
-function getCartMeals() { return allMeals.filter(m => m.qty > 0); }
-function getTotalItems() { return allMeals.reduce((s, m) => s + m.qty, 0); }
+// SAFETY: all three functions below drive the cart sidebar, the item
+// counter, and the subtotal. They MUST iterate getDietSafeMeals() rather
+// than the raw allMeals so a Vegan customer can never see, count, or
+// be charged for a meat meal that slipped into qty>0 from a prior
+// session or a mid-session diet switch. This is layer two of the
+// fail-closed diet lock — layer one (renderGrid) hides meat from the
+// browse grid; layer two (here) hides it from every numeric rollup.
+function getCartMeals() { return getDietSafeMeals().filter(m => m.qty > 0); }
+function getTotalItems() { return getDietSafeMeals().reduce((s, m) => s + m.qty, 0); }
 
 function getSubtotal(mode) {
   let prev = subscribeMode;
   subscribeMode = mode;
-  let t = allMeals.reduce((s, m) => s + getPrice(m) * m.qty, 0);
+  let t = getDietSafeMeals().reduce((s, m) => s + getPrice(m) * m.qty, 0);
   subscribeMode = prev;
   return t;
 }
@@ -1827,7 +2109,16 @@ function getTagClass(tag) {
 // ── RENDER GRID ──
 function renderGrid() {
   const area = document.getElementById('gridArea');
-  let base = (activeFilters.length > 0 || activeAllergens.length > 0 || activeDiets.length > 0 || activeProteins.length > 0 || activeSort) ? getFilteredMeals() : allMeals;
+  // SAFETY: dietLock is checked here too. The original conditional below
+  // was a micro-optimization that skipped getFilteredMeals() when no user
+  // filters were active — but the diet lock lives INSIDE getFilteredMeals(),
+  // so skipping the call also skipped the safety filter and meat dishes
+  // leaked through to Vegan customers who hadn't toggled any other filter
+  // yet. dietLock is now part of the "must call getFilteredMeals()"
+  // condition so the lock cannot be bypassed by the optimization path.
+  const hasUserFilters = activeFilters.length > 0 || activeAllergens.length > 0 || activeDiets.length > 0 || activeProteins.length > 0 || activeSort;
+  const hasDietLock = dietLock !== null;
+  let base = (hasUserFilters || hasDietLock) ? getFilteredMeals() : allMeals;
   let filtered = base.filter(m => {
     if (currentCat !== 'All' && m.cat !== currentCat) return false;
     if (searchQuery) {
@@ -1861,7 +2152,7 @@ function renderCard(m) {
   const price = getPrice(m);
   let badges = '';
   // Card badges — diet plan is its own thing, the rest come from m.tags
-  if (m.diet_plan === 'Plant-Based') badges += '<span class="card-badge vegan">Plant-Based</span>';
+  if (m.diet_plan === 'Vegan') badges += '<span class="card-badge vegan">' + DIET_LABELS.Vegan + '</span>';
   if (m.tags) {
     if (m.tags.includes('High Protein')) badges += '<span class="card-badge protein">High Protein</span>';
     if (m.tags.includes('Freezable'))    badges += '<span class="card-badge freezer-friendly">Freezable</span>';
@@ -2229,19 +2520,101 @@ function openModal(id) {
   }
   document.getElementById('modalInstructions').innerHTML = instrHtml;
 
+  // ─── DIET-PLAN ROUTING ─────────────────────────────────────────────
+  // Three states the action area can be in:
+  //   State 1 (normal):  meal matches the customer's diet plan -> render
+  //                      Add-to-cart / qty-ctrl as before.
+  //   State 2 (gentle swap): Vegan customer hit a meat meal AND that meal
+  //                      has a linked_meal_id pointing to its Vegan sibling
+  //                      -> show a "We have a [Plants Only] version..."
+  //                      banner + a CTA that opens the sibling instead.
+  //                      Uses the existing 1:1 omnivore -> vegan pair data
+  //                      on MealRecipe.linked_meal_id (44 of 88 omnivore
+  //                      meals have a sibling as of 2026-04-09).
+  //   State 3 (read-only): Vegan customer hit a meat meal that has NO
+  //                      sibling -> show the meal in read-only mode
+  //                      (image, name, ingredients, macros all rendered
+  //                      above) with the Add-to-cart button replaced by
+  //                      "This dish isn't part of your [Plants Only] plan"
+  //                      + buttons to (a) browse the [Plants Only] menu,
+  //                      (b) change diet. NEVER a 404 -- a real meal +
+  //                      a real customer with a plan mismatch is a
+  //                      product state, not an error.
+  //
+  // Most Vegan customers never reach states 2 or 3 because the grid filter
+  // hides meat meals before they can click. These states exist for direct
+  // deep-links (?meal=BD-XXX), bookmarks, and marketing emails.
+  //
+  // The customer-facing label ("Plants Only" today) is pulled from
+  // DIET_LABELS so a rebrand is a one-line edit.
+  const planMismatch = (dietLock === 'Vegan' && m.diet_plan !== 'Vegan');
+  const sibling = planMismatch && m.linked_meal_id
+    ? allMeals.find(x => x.id === m.linked_meal_id)
+    : null;
+  const veganLabel = DIET_LABELS.Vegan;
+
   const btnArea = document.getElementById('modalBtnArea');
-  if (m.qty > 0) {
+  if (planMismatch && sibling) {
+    // State 2 — gentle swap to the linked Vegan sibling.
+    btnArea.innerHTML = `
+      <div class="plan-swap">
+        <div class="plan-swap-msg">
+          🌱 We have a <em>${escapeAttr(veganLabel)}</em> version of this dish:
+          <strong>${escapeAttr(sibling.name)}</strong>
+        </div>
+        <div class="plan-mismatch-ctas">
+          <button class="plan-mismatch-btn primary" onclick="openModal('${sibling.id}')">
+            Take me to ${escapeAttr(sibling.name)}
+          </button>
+          <a class="plan-mismatch-btn ghost" href="../onboarding/">Change diet</a>
+        </div>
+      </div>
+    `;
+  } else if (planMismatch) {
+    // State 3 — read-only fallback. The meal renders in full above; only
+    // the action area becomes informational.
+    btnArea.innerHTML = `
+      <div class="plan-mismatch">
+        <div class="plan-mismatch-msg">
+          <span class="pm-leaf">🌱</span>
+          This dish isn't part of your ${escapeAttr(veganLabel)} plan
+        </div>
+        <div class="plan-mismatch-sub">
+          We don't have a ${escapeAttr(veganLabel)} version of this one.
+          Browse the rest of the ${escapeAttr(veganLabel)} menu, or switch
+          your diet if you've changed your mind.
+        </div>
+        <div class="plan-mismatch-ctas">
+          <button class="plan-mismatch-btn primary" onclick="closeModal()">
+            Browse ${escapeAttr(veganLabel)} menu
+          </button>
+          <a class="plan-mismatch-btn ghost" href="../onboarding/">Change diet</a>
+        </div>
+      </div>
+    `;
+  } else if (m.qty > 0) {
+    // State 1a — already in cart, show qty controls.
     btnArea.innerHTML = `<div class="qty-ctrl">
       <button class="qty-minus" onclick="changeQty('${m.id}', -1); updateModalBtn('${m.id}')">&minus;</button>
       <div class="qty-num">${m.qty}</div>
       <button class="qty-plus" onclick="changeQty('${m.id}', 1); updateModalBtn('${m.id}')">+</button>
     </div>`;
   } else {
+    // State 1b — not in cart, show Add button.
     btnArea.innerHTML = `<button class="add-btn" onclick="addToCart('${m.id}'); updateModalBtn('${m.id}')"><span>ADD</span><span class="add-btn-divider"></span><span class="add-btn-price">${fmtPrice(price)}</span></button>`;
   }
 
   document.getElementById('modalOverlay').classList.add('open');
   document.body.style.overflow = 'hidden';
+}
+
+// Tiny attribute escaper for inline button labels — prevents XSS via meal
+// names containing quotes / angle brackets. Used by the diet-mismatch
+// branches in openModal() above.
+function escapeAttr(s) {
+  return String(s || '').replace(/[&<>"']/g, function (c) {
+    return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+  });
 }
 
 function updateModalBtn(id) {
@@ -2379,6 +2752,9 @@ function toggleFilter(el) {
 }
 
 function clearAllFilters() {
+  // SAFETY: dietLock is NOT touched here. A Vegan customer clicking
+  // "Clear all filters" must not suddenly see meat. The lock lives outside
+  // the user-clearable filter set by design.
   document.querySelectorAll('.filter-chip').forEach(c => c.classList.remove('active'));
   activeFilters = [];
   activeAllergens = [];
@@ -2417,6 +2793,13 @@ function updateFilterBadge() {
 
 function getFilteredMeals() {
   let meals = [...allMeals];
+  // ─── SAFETY-CRITICAL: diet lock runs BEFORE any user filter ────────
+  // This is the fail-closed gate for Vegan customers. Any meal whose
+  // m.diet_plan is not the exact string 'Vegan' is hidden. Unknown /
+  // null / typo'd values are treated as NOT safe for Vegan customers.
+  if (dietLock === 'Vegan') {
+    meals = meals.filter(m => m.diet_plan === 'Vegan');
+  }
   // Badge filters — meal must have ALL selected badges
   if (activeFilters.length > 0) {
     meals = meals.filter(m => activeFilters.every(f => m.tags && m.tags.includes(f)));
@@ -2465,8 +2848,76 @@ document.getElementById('cartItems').addEventListener('scroll', function() {
 // populates allMeals, hides empty category tabs, then calls renderGrid() +
 // renderCart() once the data is in memory. Render an empty shell in the
 // meantime so the layout doesn't jump.
-renderAll();
-loadMealsFromSeed();
+//
+// IMPORTANT: we resolve the diet lock BEFORE loading meals — if the lock
+// resolver decides to redirect to the onboarding picker (no diet chosen,
+// backend unreachable for logged-in check, etc.), we don't want to flash
+// the full menu before the redirect happens. The await also guarantees
+// dietLockResolved=true before the first getFilteredMeals() call.
+(async () => {
+  await resolveDietLock();
+  // Render a dismissible-but-not-clearable banner if the lock is active
+  // so the customer can see the filter is working.
+  if (dietLock === 'Vegan') {
+    injectDietLockBanner();
+  }
+  renderAll();
+  await loadMealsFromSeed();
+  // ── DEEP-LINK AUTO-OPEN ──
+  // After meals load, honor a ?meal=<meal_code> URL param by auto-opening
+  // the meal detail modal. This is how marketing emails / shared links /
+  // bookmarks land on a specific dish. The modal itself enforces the
+  // diet-mismatch state machine (state 1 / 2 / 3), so deep-linking a meat
+  // meal as a Vegan customer triggers the gentle swap or read-only
+  // fallback automatically — no special handling needed here.
+  //
+  // Lookup uses meal_code (BD-369) because URLs are friendlier with the
+  // human-readable code than with a UUID. Falls back to id-by-meal-code
+  // search against the FULL allMeals (not the diet-filtered grid) so
+  // direct deep-links can resolve even when the meal would otherwise be
+  // hidden.
+  const targetCode = new URLSearchParams(location.search).get('meal');
+  if (targetCode && Array.isArray(allMeals) && allMeals.length) {
+    const target = allMeals.find(x => x.code === targetCode);
+    if (target) {
+      openModal(target.id);
+    } else {
+      console.warn('[menu] ?meal=' + targetCode + ' did not match any meal in the seed');
+    }
+  }
+})();
+
+// Inject a persistent banner at the top of the menu so a Vegan customer
+// knows the lock is active and how to change it. The "Change diet" link
+// sends them back to the onboarding picker — that's the ONLY way to lift
+// the lock, which matches the safety invariant. Banner text pulls from
+// DIET_LABELS so rebranding doesn't require touching this function.
+function injectDietLockBanner() {
+  const banner = document.createElement('div');
+  banner.id = 'dietLockBanner';
+  banner.setAttribute('role', 'status');
+  banner.style.cssText = [
+    'background:var(--brand-green)',
+    'color:#fff',
+    'padding:10px 20px',
+    'text-align:center',
+    'font-family:var(--font-body)',
+    'font-size:14px',
+    'font-weight:700',
+    'position:sticky',
+    'top:64px', // below the fixed marketing-header
+    'z-index:50',
+    'display:flex',
+    'align-items:center',
+    'justify-content:center',
+    'gap:12px',
+  ].join(';');
+  banner.innerHTML =
+    '🌱 You\'re on ' + DIET_LABELS.Vegan + ' — meat dishes are hidden for your plan. ' +
+    '<a href="../onboarding/" style="color:#fff;text-decoration:underline;font-weight:800;">Change diet</a>';
+  // Place it inside the body at the very top so sticky positioning works.
+  document.body.insertBefore(banner, document.body.firstChild);
+}
 
 // ── MEMBER POPUP ──
 function openMemberPopup() {

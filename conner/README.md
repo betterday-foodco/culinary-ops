@@ -206,17 +206,19 @@ the same storage.
 
 ```
 culinary-ops/ (or any sibling worktree)
-├── backend/              ← NestJS + Prisma (shared with Gurleen)
-├── frontend/             ← Next.js (Gurleen's territory — don't modify)
-├── brand/                ← universal design tokens, fonts, logos, site facts
-├── conner/               ← your workspace
-│   ├── README.md         ← you are here
-│   ├── data-model/       ← entity specs, flows, ADRs
-│   ├── client-website/   ← the clean, final customer-facing site
-│   ├── app/              ← OLD prototypes — reference only, do not edit
-│   ├── prototypes/       ← HTML mockups, UI experiments
-│   └── ecommerce/        ← reserved for future e-commerce work
-└── PROJECT_SCOPE.md      ← the architectural source of truth
+├── backend/                  ← NestJS + Prisma (shared with Gurleen)
+├── frontend/                 ← Next.js (Gurleen's territory — don't modify)
+├── brand/                    ← universal design tokens, fonts, logos, site facts
+├── conner/                   ← your workspace
+│   ├── README.md             ← you are here
+│   ├── deferred-decisions.md ← tracked living list of edge cases + TODOs
+│   ├── data-model/           ← entity specs, flows, ADRs, analysis docs
+│   ├── client-website/       ← the clean, final customer-facing site
+│   ├── prototypes/           ← HTML mockups and UI experiments
+│   ├── archive/              ← legacy SPRWT-era prototypes, reference only, do not edit
+│   ├── session-summaries/    ← per-session notes from past chats
+│   └── ecommerce/            ← reserved for future e-commerce work
+└── PROJECT_SCOPE.md          ← the architectural source of truth
 ```
 
 ---

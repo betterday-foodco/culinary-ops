@@ -1,0 +1,812 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Worktree flow — how commits, pushes, and merges travel</title>
+  <link rel="stylesheet" href="../brand/tokens.css">
+  <style>
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      padding: 40px 24px 80px;
+      background: var(--bg-page);
+      color: var(--text-primary);
+      font-family: var(--font-body);
+    }
+
+    .page { max-width: 1280px; margin: 0 auto; }
+
+    /* ─── Header ─────────────────────────────────────────────────────── */
+
+    header.page-header {
+      text-align: center;
+      margin-bottom: 28px;
+    }
+    header.page-header h1 {
+      font-family: var(--font-display);
+      font-size: var(--fs-display);
+      margin: 0 0 6px;
+      color: var(--brand-navy-dark);
+    }
+    header.page-header p {
+      margin: 0;
+      color: var(--text-secondary);
+      font-size: var(--fs-body-lg);
+      max-width: 760px;
+      margin: 0 auto;
+    }
+
+    /* ─── Main stage ─────────────────────────────────────────────────── */
+
+    main.stage {
+      display: grid;
+      grid-template-columns: 1fr 300px;
+      gap: 20px;
+      margin-bottom: 20px;
+      align-items: start;
+    }
+    @media (max-width: 1100px) {
+      main.stage { grid-template-columns: 1fr; }
+    }
+
+    /* ─── Worktree grid ──────────────────────────────────────────────── */
+
+    .worktrees-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 12px;
+    }
+    @media (max-width: 900px) {
+      .worktrees-grid { grid-template-columns: repeat(2, 1fr); }
+    }
+
+    .worktree-card {
+      background: var(--bg-card);
+      border: 2px solid transparent;
+      border-radius: 14px;
+      padding: 12px 14px;
+      box-shadow: var(--shadow-card);
+      transition: transform 0.25s ease, border-color 0.25s ease,
+                  box-shadow 0.25s ease, background 0.25s ease;
+      position: relative;
+      min-height: 132px;
+    }
+    .worktree-card.integration {
+      border-color: var(--brand-primary);
+    }
+    .worktree-card.active {
+      border-color: var(--brand-yellow);
+      box-shadow: 0 0 0 4px rgba(255, 198, 0, 0.25),
+                  0 6px 16px rgba(0, 49, 65, 0.18);
+      transform: translateY(-2px);
+    }
+    .worktree-card.error {
+      border-color: var(--brand-red);
+      background: rgba(217, 48, 37, 0.04);
+    }
+    .worktree-card.just-updated::after {
+      content: '';
+      position: absolute;
+      inset: -2px;
+      border-radius: 14px;
+      border: 2px solid var(--brand-green);
+      pointer-events: none;
+      animation: pulseGreen 1.2s ease-out;
+    }
+    @keyframes pulseGreen {
+      0%   { opacity: 1; transform: scale(1); }
+      100% { opacity: 0; transform: scale(1.06); }
+    }
+
+    .worktree-card .folder-label {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      margin-bottom: 4px;
+    }
+    .worktree-card .folder-icon {
+      width: 16px;
+      height: 12px;
+      background: var(--brand-yellow);
+      border-radius: 1px 4px 1px 1px;
+      flex-shrink: 0;
+      position: relative;
+    }
+    .worktree-card .folder-icon::before {
+      content: '';
+      position: absolute;
+      top: -3px; left: 0;
+      width: 7px;
+      height: 3px;
+      background: var(--brand-yellow);
+      border-radius: 1px 1px 0 0;
+    }
+    .worktree-card.integration .folder-icon {
+      background: var(--brand-primary);
+    }
+    .worktree-card.integration .folder-icon::before {
+      background: var(--brand-primary);
+    }
+    .worktree-card .path {
+      font-family: ui-monospace, 'SF Mono', Menlo, monospace;
+      font-size: 10px;
+      color: var(--text-secondary);
+      word-break: break-all;
+      line-height: 1.2;
+    }
+    .worktree-card .branch {
+      font-family: ui-monospace, 'SF Mono', Menlo, monospace;
+      font-size: 11px;
+      font-weight: 700;
+      color: var(--brand-navy-dark);
+      margin: 6px 0 8px;
+      word-break: break-all;
+      line-height: 1.3;
+    }
+    .worktree-card .head-row {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      flex-wrap: wrap;
+    }
+    .worktree-card .head-hash {
+      font-family: ui-monospace, 'SF Mono', Menlo, monospace;
+      font-size: 10px;
+      background: var(--bg-page);
+      color: var(--brand-navy-dark);
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-weight: 600;
+    }
+    .worktree-card .head-hash.new {
+      background: var(--brand-green);
+      color: white;
+      animation: flashHash 0.8s ease-out;
+    }
+    @keyframes flashHash {
+      0%   { transform: scale(1.2); }
+      100% { transform: scale(1); }
+    }
+    .worktree-card .integration-badge {
+      position: absolute;
+      top: -10px; right: 10px;
+      background: var(--brand-primary);
+      color: white;
+      font-size: 9px;
+      font-weight: 700;
+      padding: 3px 8px;
+      border-radius: 8px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .worktree-card .error-bubble {
+      position: absolute;
+      top: -30px; left: 50%;
+      transform: translateX(-50%);
+      background: var(--brand-red);
+      color: white;
+      font-size: 10px;
+      padding: 4px 10px;
+      border-radius: 12px;
+      white-space: nowrap;
+      font-weight: 600;
+      box-shadow: 0 4px 10px rgba(217, 48, 37, 0.3);
+    }
+    .worktree-card .error-bubble::after {
+      content: '';
+      position: absolute;
+      bottom: -4px; left: 50%;
+      transform: translateX(-50%);
+      border: 4px solid transparent;
+      border-top-color: var(--brand-red);
+    }
+
+    /* ─── GitHub cloud panel ─────────────────────────────────────────── */
+
+    .github-cloud {
+      background: var(--brand-navy);
+      color: var(--text-on-dark);
+      border-radius: 14px;
+      padding: 18px 20px;
+      box-shadow: var(--shadow-card);
+      height: fit-content;
+      position: sticky;
+      top: 20px;
+    }
+    .github-cloud h3 {
+      font-family: var(--font-heading);
+      font-size: var(--fs-heading-sm);
+      color: var(--brand-yellow);
+      margin: 0 0 4px;
+    }
+    .github-cloud .subtitle {
+      font-size: 10px;
+      opacity: 0.65;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 14px;
+    }
+    .remote-branch {
+      padding: 8px 10px;
+      background: rgba(255, 255, 255, 0.06);
+      border-radius: 8px;
+      margin-bottom: 6px;
+      transition: all 0.3s ease;
+      border: 1px solid transparent;
+    }
+    .remote-branch.just-updated {
+      background: rgba(255, 198, 0, 0.18);
+      border-color: var(--brand-yellow);
+      animation: pulseYellow 1.2s ease-out;
+    }
+    @keyframes pulseYellow {
+      0%   { transform: scale(1.02); }
+      100% { transform: scale(1); }
+    }
+    .remote-branch .branch-name {
+      font-family: ui-monospace, 'SF Mono', Menlo, monospace;
+      font-size: 10px;
+      color: var(--brand-cream);
+      word-break: break-all;
+      line-height: 1.3;
+    }
+    .remote-branch .head-hash {
+      font-family: ui-monospace, 'SF Mono', Menlo, monospace;
+      font-size: 10px;
+      color: var(--brand-yellow);
+      margin-top: 3px;
+      font-weight: 700;
+    }
+    .remote-branch.missing .head-hash {
+      color: rgba(255, 255, 255, 0.3);
+      font-style: italic;
+    }
+
+    /* ─── Narration panel ────────────────────────────────────────────── */
+
+    .narration {
+      background: var(--bg-card);
+      border-radius: 14px;
+      padding: 22px 26px;
+      box-shadow: var(--shadow-card);
+      margin-bottom: 18px;
+      min-height: 220px;
+    }
+    .narration .step-number {
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      color: var(--text-muted);
+      margin-bottom: 6px;
+      font-weight: 600;
+    }
+    .narration .step-title {
+      font-family: var(--font-heading);
+      font-size: var(--fs-heading-lg);
+      color: var(--brand-navy-dark);
+      margin: 0 0 12px;
+      line-height: 1.25;
+    }
+    .narration .step-description {
+      font-size: var(--fs-body-lg);
+      line-height: 1.65;
+      color: var(--text-primary);
+      margin-bottom: 14px;
+    }
+    .narration .step-description strong {
+      background: rgba(255, 198, 0, 0.28);
+      padding: 1px 4px;
+      border-radius: 3px;
+      font-weight: 600;
+    }
+    .narration .step-description code {
+      background: var(--bg-page);
+      padding: 1px 6px;
+      border-radius: 4px;
+      font-family: ui-monospace, 'SF Mono', Menlo, monospace;
+      font-size: 13px;
+      color: var(--brand-navy-dark);
+    }
+    .narration .step-command {
+      background: var(--brand-navy-dark);
+      color: var(--brand-yellow);
+      font-family: ui-monospace, 'SF Mono', Menlo, monospace;
+      font-size: 13px;
+      padding: 10px 14px;
+      border-radius: 6px;
+      margin-bottom: 12px;
+      overflow-x: auto;
+    }
+    .narration .step-command .cwd {
+      color: rgba(255, 255, 255, 0.45);
+      font-size: 10px;
+      display: block;
+      margin-bottom: 4px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    .narration .step-note {
+      background: rgba(78, 162, 253, 0.08);
+      border-left: 3px solid var(--brand-primary);
+      padding: 10px 14px;
+      border-radius: 0 8px 8px 0;
+      font-size: 13px;
+      color: var(--text-secondary);
+      line-height: 1.55;
+    }
+    .narration .step-note strong {
+      color: var(--brand-navy-dark);
+    }
+    .narration .step-error {
+      background: rgba(217, 48, 37, 0.06);
+      border-left: 3px solid var(--brand-red);
+      padding: 10px 14px;
+      border-radius: 0 8px 8px 0;
+      font-family: ui-monospace, 'SF Mono', Menlo, monospace;
+      font-size: 12px;
+      color: var(--brand-red-dark);
+      white-space: pre-wrap;
+      margin-bottom: 10px;
+    }
+
+    /* ─── Controls ───────────────────────────────────────────────────── */
+
+    .controls {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      justify-content: center;
+      margin-top: 18px;
+      flex-wrap: wrap;
+    }
+    .controls button {
+      background: var(--brand-navy);
+      color: var(--text-on-dark);
+      border: none;
+      padding: 11px 22px;
+      font-family: var(--font-body);
+      font-size: var(--fs-body);
+      font-weight: 600;
+      border-radius: var(--radius-button);
+      cursor: pointer;
+      transition: transform 0.15s ease, background 0.15s ease;
+    }
+    .controls button:hover:not(:disabled) {
+      background: var(--brand-navy-dark);
+      transform: translateY(-1px);
+    }
+    .controls button:disabled {
+      opacity: 0.35;
+      cursor: not-allowed;
+    }
+    .controls button.primary {
+      background: var(--brand-yellow);
+      color: var(--brand-navy-dark);
+    }
+    .controls button.primary:hover:not(:disabled) {
+      background: var(--brand-yellow-dark);
+    }
+    .controls button.ghost {
+      background: transparent;
+      color: var(--brand-navy);
+      border: 2px solid rgba(0, 49, 65, 0.2);
+      padding: 9px 18px;
+    }
+    .controls button.ghost:hover:not(:disabled) {
+      background: rgba(0, 49, 65, 0.06);
+    }
+
+    .step-dots {
+      display: flex;
+      gap: 7px;
+      align-items: center;
+    }
+    .step-dots .dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: rgba(0, 49, 65, 0.2);
+      cursor: pointer;
+      transition: transform 0.15s ease, background 0.15s ease;
+      border: none;
+      padding: 0;
+    }
+    .step-dots .dot:hover { transform: scale(1.3); }
+    .step-dots .dot.visited { background: var(--brand-navy); }
+    .step-dots .dot.current {
+      background: var(--brand-yellow);
+      transform: scale(1.35);
+    }
+
+    .kbd-hint {
+      text-align: center;
+      font-size: 11px;
+      color: var(--text-muted);
+      margin-top: 14px;
+    }
+    .kbd-hint kbd {
+      font-family: ui-monospace, 'SF Mono', Menlo, monospace;
+      font-size: 10px;
+      background: var(--bg-card);
+      padding: 1px 5px;
+      border-radius: 3px;
+      border: 1px solid rgba(0, 49, 65, 0.15);
+    }
+  </style>
+</head>
+<body>
+
+<div class="page">
+
+  <header class="page-header">
+    <h1>Worktree flow</h1>
+    <p>How a commit in one folder travels across 8 worktrees, up to GitHub, and back into your integration branch. Click <strong>Next</strong> (or press →) to step through.</p>
+  </header>
+
+  <main class="stage">
+    <section class="worktrees-grid" id="worktreesGrid"></section>
+
+    <aside class="github-cloud">
+      <h3>GitHub origin</h3>
+      <div class="subtitle">github.com/betterday-foodco/culinary-ops</div>
+      <div id="remoteBranches"></div>
+    </aside>
+  </main>
+
+  <section class="narration">
+    <div class="step-number" id="stepNumber"></div>
+    <h2 class="step-title" id="stepTitle"></h2>
+    <p class="step-description" id="stepDescription"></p>
+    <pre class="step-command" id="stepCommand" hidden></pre>
+    <div class="step-error" id="stepError" hidden></div>
+    <div class="step-note" id="stepNote" hidden></div>
+  </section>
+
+  <div class="controls">
+    <button id="prevBtn" class="ghost">← Previous</button>
+    <div class="step-dots" id="stepDots"></div>
+    <button id="nextBtn" class="primary">Next →</button>
+    <button id="resetBtn" class="ghost">Reset</button>
+  </div>
+
+  <p class="kbd-hint">Keyboard: <kbd>←</kbd> <kbd>→</kbd> to navigate, <kbd>R</kbd> to reset</p>
+
+</div>
+
+<script>
+// ─── Worktree list (mirrors `git worktree list` from 2026-04-09) ────────────
+const WORKTREES = [
+  { id: 'main',           path: 'culinary-ops',                     branch: 'conner/universal-brand-folder',            isIntegration: true },
+  { id: 'checkout',       path: 'culinary-ops-checkout-page',       branch: 'conner/2026-04-09-checkout-page',          isIntegration: false },
+  { id: 'client-profile', path: 'culinary-ops-client-profile',      branch: 'conner/2026-04-09-client-profile-data-model', isIntegration: false },
+  { id: 'coupons',        path: 'culinary-ops-coupons',             branch: 'conner/2026-04-09-coupons',                isIntegration: false },
+  { id: 'helcim',         path: 'culinary-ops-helcim-integration',  branch: 'conner/2026-04-09-helcim-integration',     isIntegration: false },
+  { id: 'scratch-a',      path: 'culinary-ops-scratch-a',           branch: 'conner/2026-04-09-scratch-a',              isIntegration: false },
+  { id: 'scratch-b',      path: 'culinary-ops-scratch-b',           branch: 'conner/2026-04-09-scratch-b',              isIntegration: false },
+  { id: 'sub-hub',        path: 'culinary-ops-subscriber-hub-v2',   branch: 'conner/2026-04-09-subscriber-hub-v2',      isIntegration: false },
+];
+
+// ─── Starting state ─────────────────────────────────────────────────────────
+// Matches the actual hashes captured at the start of today's session, before
+// the coupons commit landed.
+const INITIAL_LOCAL_HEADS = {
+  'conner/universal-brand-folder':              '917ed31',
+  'conner/2026-04-09-checkout-page':            '127a885',
+  'conner/2026-04-09-client-profile-data-model':'a82c803',
+  'conner/2026-04-09-coupons':                  '917ed31',
+  'conner/2026-04-09-helcim-integration':       '127a885',
+  'conner/2026-04-09-scratch-a':                '127a885',
+  'conner/2026-04-09-scratch-b':                '127a885',
+  'conner/2026-04-09-subscriber-hub-v2':        'afe537a',
+};
+
+const INITIAL_REMOTE_HEADS = {
+  'origin/conner/universal-brand-folder':              '917ed31',
+  'origin/conner/2026-04-09-client-profile-data-model':'a82c803',
+  'origin/conner/2026-04-09-subscriber-hub-v2':        'afe537a',
+  'origin/conner/2026-04-09-coupons':                  null,
+  'origin/conner/2026-04-09-checkout-page':            null,
+  'origin/conner/2026-04-09-helcim-integration':       null,
+  'origin/conner/2026-04-09-scratch-a':                null,
+  'origin/conner/2026-04-09-scratch-b':                null,
+};
+
+// ─── Steps — the narrative ──────────────────────────────────────────────────
+// Each step is a pure override on top of INITIAL state. The renderer merges
+// each step's `localHeads` / `remoteHeads` with the initial values, so a step
+// only has to declare what CHANGED since the start.
+
+const STEPS = [
+  {
+    title: 'Your 8 worktrees',
+    description: 'You have eight folders in <code>~/Downloads/</code>, each checked out to a different feature branch. All eight share ONE set of commits on your laptop — the <code>.git/objects</code> storage inside the main folder. What\'s unique per folder is just the <strong>HEAD pointer</strong>: the file that says "this folder is currently on branch X."',
+    activeWorktree: null,
+    note: 'The main folder <code>culinary-ops</code> is the "primary" worktree, parked on <code>conner/universal-brand-folder</code> — your integration branch. Every other worktree is a feature branch waiting to merge back in. Each has its own <code>node_modules</code>, its own uncommitted changes, and its own HEAD.',
+  },
+  {
+    title: 'Shared storage, separate HEADs',
+    description: 'Think of worktrees like multiple browser tabs open to different Google Docs. The documents all live in one Google account (the shared <code>.git/objects</code> storage), but each tab is looking at a different document. When you type in one tab, the other tabs don\'t care. Your changes eventually save into the shared account so every tab can see them via history — but each tab\'s <em>current view</em> is independent.',
+    activeWorktree: null,
+    note: 'This is the feature that makes parallel Claude chats safe. Before worktrees, every chat shared a single HEAD pointer and would silently overwrite each other\'s branches. With worktrees, git literally refuses to check out the same branch in two folders at once.',
+  },
+  {
+    title: 'Start working in the coupons worktree',
+    description: 'You open a Claude chat that\'s <code>cd</code>\'d into <code>~/Downloads/culinary-ops-coupons</code>. Every git command from that chat now affects only <strong>this worktree\'s HEAD</strong>. The other 7 worktrees are untouched, even though they all share the same storage underneath.',
+    activeWorktree: 'coupons',
+    note: 'The chat could write files all day long without ever making a commit. Until you run <code>git commit</code>, nothing is saved into git history — the changes are just sitting in this folder\'s working tree.',
+  },
+  {
+    title: 'Commit your work',
+    description: 'You run <code>git commit</code>. A new commit <strong>cc751da</strong> is created and stored in the shared <code>.git/objects</code>. The <em>coupons worktree\'s</em> branch pointer moves from 917ed31 to cc751da. Every OTHER worktree on your laptop can now see cc751da exists via <code>git log</code> — but none of their branch pointers have moved.',
+    activeWorktree: 'coupons',
+    command: 'git commit -m "feat(commerce-coupons): add CouponValidationService ..."',
+    commandCwd: '~/Downloads/culinary-ops-coupons',
+    localHeads: { 'conner/2026-04-09-coupons': 'cc751da' },
+    pulseWorktrees: ['coupons'],
+    note: 'The commit is now on your laptop only. Close the laptop lid, come back later, it\'s still there. But if the laptop dies or the disk corrupts, the commit is gone. That\'s what the next step fixes.',
+  },
+  {
+    title: 'Push to origin',
+    description: '<code>git push</code> sends the commit from your laptop\'s shared storage up to GitHub. The feature branch on <em>origin</em> now has a copy. The work is safe off-laptop — even if you throw your MacBook in a river, you can re-clone and pick up where you left off.',
+    activeWorktree: 'coupons',
+    command: 'git push -u origin conner/2026-04-09-coupons',
+    commandCwd: '~/Downloads/culinary-ops-coupons',
+    localHeads: { 'conner/2026-04-09-coupons': 'cc751da' },
+    remoteHeads: { 'origin/conner/2026-04-09-coupons': 'cc751da' },
+    note: 'The <code>-u</code> flag means "set upstream." From now on, git knows this local branch belongs to this remote branch, so future <code>git push</code> and <code>git pull</code> commands don\'t need the remote name.',
+  },
+  {
+    title: 'Try to merge from the coupons worktree',
+    description: 'Natural instinct: we\'re already in the coupons folder, let\'s just merge right here. You try to <code>git checkout</code> the integration branch so you can merge into it. <strong>Git refuses.</strong>',
+    activeWorktree: 'coupons',
+    command: 'git checkout conner/universal-brand-folder',
+    commandCwd: '~/Downloads/culinary-ops-coupons',
+    error: "fatal: 'conner/universal-brand-folder' is already checked out\n       at '/Users/us/Downloads/culinary-ops'",
+    errorWorktree: 'coupons',
+    localHeads: { 'conner/2026-04-09-coupons': 'cc751da' },
+    remoteHeads: { 'origin/conner/2026-04-09-coupons': 'cc751da' },
+    note: 'This is the <strong>safety net</strong>. Git enforces "one branch, one worktree" at the filesystem level. Two parallel chats physically cannot check out the same branch — which is exactly what prevents the cross-contamination incidents that kept happening before the worktree switch.',
+  },
+  {
+    title: 'Switch to the main worktree',
+    description: 'Because <code>conner/universal-brand-folder</code> is already checked out in <code>culinary-ops/</code>, that\'s where the merge has to happen. In practice: open a different terminal tab (or a different Claude chat) that\'s <code>cd</code>\'d into the main folder. The coupons worktree stays completely untouched during the entire merge.',
+    activeWorktree: 'main',
+    command: 'cd ~/Downloads/culinary-ops',
+    localHeads: { 'conner/2026-04-09-coupons': 'cc751da' },
+    remoteHeads: { 'origin/conner/2026-04-09-coupons': 'cc751da' },
+    note: 'The coupons worktree continues sitting on its own branch the whole time. If another Claude chat was actively editing files there, it wouldn\'t even notice the merge happening over in the main folder.',
+  },
+  {
+    title: 'Fetch any remote changes',
+    description: '<code>git fetch origin</code> downloads any commits that appeared on GitHub since we last looked. Fetching writes new commits into the shared <code>.git/objects</code> but does NOT touch any worktree\'s HEAD. It\'s a safe, read-only-from-your-perspective operation.',
+    activeWorktree: 'main',
+    command: 'git fetch origin',
+    commandCwd: '~/Downloads/culinary-ops',
+    localHeads: { 'conner/2026-04-09-coupons': 'cc751da' },
+    remoteHeads: { 'origin/conner/2026-04-09-coupons': 'cc751da' },
+    note: 'Fetch vs pull: <code>git fetch</code> just downloads; <code>git pull</code> fetches AND merges into your current branch. In a multi-chat workflow, fetching first and then deciding what to do is safer — pull can surprise you with a fast-forward you didn\'t expect.',
+  },
+  {
+    title: 'Merge into universal-brand-folder',
+    description: '<code>git merge --no-ff</code> creates a new commit <strong>8161d3e</strong> with <em>two parents</em>: the previous tip of <code>universal-brand-folder</code> (917ed31) AND the coupons commit (cc751da). That Y-shaped link IS the merge — it literally tells git "these two histories join here."',
+    activeWorktree: 'main',
+    command: 'git merge --no-ff conner/2026-04-09-coupons',
+    commandCwd: '~/Downloads/culinary-ops',
+    localHeads: {
+      'conner/2026-04-09-coupons': 'cc751da',
+      'conner/universal-brand-folder': '8161d3e',
+    },
+    remoteHeads: { 'origin/conner/2026-04-09-coupons': 'cc751da' },
+    pulseWorktrees: ['main'],
+    note: 'The <code>--no-ff</code> flag forces a merge commit even when a fast-forward would work. That preserves the "this work came from a feature branch" marker. Without it, git would just slide the integration branch\'s pointer straight to cc751da and the feature branch\'s existence would be erased from history.',
+  },
+  {
+    title: 'Push the merge to origin',
+    description: 'One last push uploads the merge commit to GitHub. Now <code>origin/conner/universal-brand-folder</code> has it too. The round trip is complete: code you wrote in the coupons worktree is now permanently part of the integration branch everybody\'s chats branch off of.',
+    activeWorktree: 'main',
+    command: 'git push origin conner/universal-brand-folder',
+    commandCwd: '~/Downloads/culinary-ops',
+    localHeads: {
+      'conner/2026-04-09-coupons': 'cc751da',
+      'conner/universal-brand-folder': '8161d3e',
+    },
+    remoteHeads: {
+      'origin/conner/2026-04-09-coupons': 'cc751da',
+      'origin/conner/universal-brand-folder': '8161d3e',
+    },
+  },
+  {
+    title: 'The payoff — shared history everywhere',
+    description: 'All 8 worktrees can now see both <strong>cc751da</strong> and <strong>8161d3e</strong> via <code>git log</code>, because every worktree reads from the same <code>.git/objects</code>. The work is in permanent merge history. If you ran <code>git worktree remove ../culinary-ops-coupons</code> right now, the folder would disappear but the commits would still exist forever in the shared storage. The folder was just a window; the work lives in git.',
+    activeWorktree: null,
+    localHeads: {
+      'conner/2026-04-09-coupons': 'cc751da',
+      'conner/universal-brand-folder': '8161d3e',
+    },
+    remoteHeads: {
+      'origin/conner/2026-04-09-coupons': 'cc751da',
+      'origin/conner/universal-brand-folder': '8161d3e',
+    },
+    note: 'Next time any of your 7 feature worktrees rebases off <code>conner/universal-brand-folder</code>, it\'ll pick up the coupons validator automatically. Any new worktree you create from the integration branch also inherits the work. The coupons worktree is safe to remove whenever you want — nothing is lost.',
+  },
+];
+
+// ─── State + rendering ──────────────────────────────────────────────────────
+let currentStep = 0;
+let prevLocalHeads = { ...INITIAL_LOCAL_HEADS };
+let prevRemoteHeads = { ...INITIAL_REMOTE_HEADS };
+
+function resolvedState(stepIdx) {
+  // Fold every step up to and including stepIdx onto the initial state.
+  const local  = { ...INITIAL_LOCAL_HEADS };
+  const remote = { ...INITIAL_REMOTE_HEADS };
+  for (let i = 0; i <= stepIdx; i++) {
+    const s = STEPS[i];
+    if (s.localHeads)  Object.assign(local,  s.localHeads);
+    if (s.remoteHeads) Object.assign(remote, s.remoteHeads);
+  }
+  return { local, remote };
+}
+
+function render(goingForward) {
+  const step = STEPS[currentStep];
+  const { local, remote } = resolvedState(currentStep);
+
+  // Which heads changed since the previous render? Used for the flash animation.
+  const changedLocal  = new Set();
+  const changedRemote = new Set();
+  for (const k of Object.keys(local)) {
+    if (local[k] !== prevLocalHeads[k]) changedLocal.add(k);
+  }
+  for (const k of Object.keys(remote)) {
+    if (remote[k] !== prevRemoteHeads[k]) changedRemote.add(k);
+  }
+
+  // ─── Worktrees grid ──
+  const grid = document.getElementById('worktreesGrid');
+  grid.innerHTML = '';
+  for (const w of WORKTREES) {
+    const card = document.createElement('div');
+    const classes = ['worktree-card'];
+    if (w.isIntegration) classes.push('integration');
+    if (step.activeWorktree === w.id) classes.push('active');
+    if (step.errorWorktree === w.id) classes.push('error');
+    if (step.pulseWorktrees?.includes(w.id)) classes.push('just-updated');
+    card.className = classes.join(' ');
+
+    const headHash = local[w.branch] || '—';
+    const isChanged = goingForward && changedLocal.has(w.branch);
+
+    card.innerHTML = `
+      ${w.isIntegration ? '<div class="integration-badge">Integration</div>' : ''}
+      ${step.errorWorktree === w.id ? '<div class="error-bubble">git refused</div>' : ''}
+      <div class="folder-label">
+        <div class="folder-icon"></div>
+      </div>
+      <div class="path">~/Downloads/${w.path}</div>
+      <div class="branch">${w.branch}</div>
+      <div class="head-row">
+        <span class="head-hash ${isChanged ? 'new' : ''}">HEAD → ${headHash}</span>
+      </div>
+    `;
+    grid.appendChild(card);
+  }
+
+  // ─── GitHub cloud ──
+  const cloud = document.getElementById('remoteBranches');
+  cloud.innerHTML = '';
+  const remoteOrder = [
+    'origin/conner/universal-brand-folder',
+    'origin/conner/2026-04-09-coupons',
+    'origin/conner/2026-04-09-subscriber-hub-v2',
+    'origin/conner/2026-04-09-client-profile-data-model',
+  ];
+  for (const key of remoteOrder) {
+    const hash = remote[key];
+    const row = document.createElement('div');
+    const classes = ['remote-branch'];
+    if (hash === null || hash === undefined) classes.push('missing');
+    if (goingForward && changedRemote.has(key)) classes.push('just-updated');
+    row.className = classes.join(' ');
+    const shortName = key.replace('origin/', '');
+    row.innerHTML = `
+      <div class="branch-name">${shortName}</div>
+      <div class="head-hash">${hash || '(not yet pushed)'}</div>
+    `;
+    cloud.appendChild(row);
+  }
+
+  // ─── Narration ──
+  document.getElementById('stepNumber').textContent = `Step ${currentStep + 1} of ${STEPS.length}`;
+  document.getElementById('stepTitle').textContent  = step.title;
+  document.getElementById('stepDescription').innerHTML = step.description;
+
+  const cmdEl = document.getElementById('stepCommand');
+  if (step.command) {
+    cmdEl.hidden = false;
+    cmdEl.innerHTML = `${step.commandCwd ? `<span class="cwd">in ${step.commandCwd}</span>` : ''}$ ${step.command}`;
+  } else {
+    cmdEl.hidden = true;
+  }
+
+  const errEl = document.getElementById('stepError');
+  if (step.error) {
+    errEl.hidden = false;
+    errEl.textContent = step.error;
+  } else {
+    errEl.hidden = true;
+  }
+
+  const noteEl = document.getElementById('stepNote');
+  if (step.note) {
+    noteEl.hidden = false;
+    noteEl.innerHTML = step.note;
+  } else {
+    noteEl.hidden = true;
+  }
+
+  // ─── Controls ──
+  document.getElementById('prevBtn').disabled = currentStep === 0;
+  document.getElementById('nextBtn').disabled = currentStep === STEPS.length - 1;
+
+  const dotsEl = document.getElementById('stepDots');
+  dotsEl.innerHTML = '';
+  for (let i = 0; i < STEPS.length; i++) {
+    const dot = document.createElement('button');
+    dot.className = 'dot' + (i === currentStep ? ' current' : i < currentStep ? ' visited' : '');
+    dot.setAttribute('aria-label', `Jump to step ${i + 1}`);
+    dot.addEventListener('click', () => jumpTo(i));
+    dotsEl.appendChild(dot);
+  }
+
+  // Stash current state for next render's diff
+  prevLocalHeads  = local;
+  prevRemoteHeads = remote;
+}
+
+function goNext() {
+  if (currentStep < STEPS.length - 1) {
+    currentStep++;
+    render(true);
+  }
+}
+
+function goPrev() {
+  if (currentStep > 0) {
+    currentStep--;
+    render(false);
+  }
+}
+
+function jumpTo(idx) {
+  const forward = idx > currentStep;
+  currentStep = idx;
+  render(forward);
+}
+
+function reset() {
+  currentStep = 0;
+  prevLocalHeads  = { ...INITIAL_LOCAL_HEADS };
+  prevRemoteHeads = { ...INITIAL_REMOTE_HEADS };
+  render(false);
+}
+
+document.getElementById('nextBtn').addEventListener('click', goNext);
+document.getElementById('prevBtn').addEventListener('click', goPrev);
+document.getElementById('resetBtn').addEventListener('click', reset);
+
+document.addEventListener('keydown', (e) => {
+  if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+  if (e.key === 'ArrowRight' || e.key === ' ') { e.preventDefault(); goNext(); }
+  else if (e.key === 'ArrowLeft') { e.preventDefault(); goPrev(); }
+  else if (e.key === 'r' || e.key === 'R') { reset(); }
+});
+
+render(false);
+</script>
+
+</body>
+</html>

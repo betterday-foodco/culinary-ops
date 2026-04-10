@@ -12,7 +12,7 @@ import { CommercePrismaService } from '../../../prisma/commerce-prisma.service';
  * Why we need this: Helcim does NOT support network-level account
  * updater (no Visa Account Updater / Mastercard ABU webhook). When a
  * customer's card is reissued, the old `processor_token` stops working
- * and the next Thursday cutoff charge fails with "expired card". This
+ * and the next weekly cutoff charge fails with "expired card". This
  * cron exists to warn the customer proactively BEFORE that failure.
  *
  * Research: conner/data-model/helcim-integration.md §9
