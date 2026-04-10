@@ -542,6 +542,29 @@ export default function MealDetailPage() {
       .sort((a, b) => (a.sort_order - b.sort_order) || a.name.localeCompare(b.name));
   }, [allTags]);
 
+  // Dynamic tag options from SystemTag — single source of truth.
+  // Falls back to hardcoded constants if SystemTag data hasn't loaded yet.
+  const allergenOptions = useMemo(() => {
+    const dynamic = allTags.filter(t => t.type === 'allergens' && t.subtype === 'Allergen').map(t => t.name);
+    return dynamic.length > 0 ? dynamic : ALLERGEN_OPTIONS;
+  }, [allTags]);
+  const dislikeOptions = useMemo(() => {
+    const dynamic = allTags.filter(t => t.type === 'allergens' && t.subtype === 'Dislike').map(t => t.name);
+    return dynamic.length > 0 ? dynamic : DISLIKE_OPTIONS;
+  }, [allTags]);
+  const badgeOptions = useMemo(() => {
+    const dynamic = allTags.filter(t => t.type === 'badges').map(t => t.name);
+    return dynamic.length > 0 ? dynamic : DIETARY_BADGE_OPTIONS;
+  }, [allTags]);
+  const proteinOptions = useMemo(() => {
+    const dynamic = allTags.filter(t => t.type === 'proteins').map(t => t.name);
+    return dynamic.length > 0 ? dynamic : PROTEIN_TYPE_OPTIONS;
+  }, [allTags]);
+  const starchOptions = useMemo(() => {
+    const dynamic = allTags.filter(t => t.type === 'starches').sort((a, b) => (a.sort_order - b.sort_order) || a.name.localeCompare(b.name)).map(t => t.name);
+    return dynamic.length > 0 ? dynamic : STARCH_OPTIONS;
+  }, [allTags]);
+
   // Ingredient-derived allergens — roll up from every ingredient this meal
   // touches, whether direct or via a sub-recipe. Case-insensitive, deduped.
   // This is the source-of-truth for what's actually IN the dish; the manual
@@ -989,7 +1012,7 @@ export default function MealDetailPage() {
                       </label>
                       <span className="text-xs text-gray-400">{allergenTags.length} selected</span>
                     </div>
-                    <PillPicker options={ALLERGEN_OPTIONS} selected={allergenTags}
+                    <PillPicker options={allergenOptions} selected={allergenTags}
                       onToggle={(v) => toggleTag(allergenTags, setAllergenTags, v)} color="red" />
                   </div>
 
@@ -1001,7 +1024,7 @@ export default function MealDetailPage() {
                       </label>
                       <span className="text-xs text-gray-400">{dislikes.length} selected</span>
                     </div>
-                    <PillPicker options={DISLIKE_OPTIONS} selected={dislikes}
+                    <PillPicker options={dislikeOptions} selected={dislikes}
                       onToggle={(v) => toggleTag(dislikes, setDislikes, v)} color="orange" />
                   </div>
                 </div>
@@ -1012,7 +1035,7 @@ export default function MealDetailPage() {
                     <h2 className="text-sm font-semibold text-gray-700">Dietary Badges</h2>
                     <span className="text-xs text-gray-400">{dietaryTags.length} selected</span>
                   </div>
-                  <PillPicker options={DIETARY_BADGE_OPTIONS} selected={dietaryTags}
+                  <PillPicker options={badgeOptions} selected={dietaryTags}
                     onToggle={(v) => toggleTag(dietaryTags, setDietaryTags, v)} color="green" />
                 </div>
 
@@ -1020,13 +1043,13 @@ export default function MealDetailPage() {
                 <div className="grid grid-cols-2 gap-4">
                   <div className="bg-white rounded-xl border border-gray-200 p-5">
                     <h2 className="text-sm font-semibold text-gray-700 mb-3">Protein Types</h2>
-                    <PillPicker options={PROTEIN_TYPE_OPTIONS} selected={proteinTypes}
+                    <PillPicker options={proteinOptions} selected={proteinTypes}
                       onToggle={(v) => toggleTag(proteinTypes, setProteinTypes, v)} color="purple" />
                   </div>
                   <div className="bg-white rounded-xl border border-gray-200 p-5">
                     <h2 className="text-sm font-semibold text-gray-700 mb-3">Starch</h2>
                     <div className="flex flex-wrap gap-2">
-                      {STARCH_OPTIONS.map((opt) => (
+                      {starchOptions.map((opt) => (
                         <button key={opt} onClick={() => setStarchType(starchType === opt ? '' : opt)}
                           className={`px-3 py-1 rounded-full text-xs font-medium border transition-all ${starchType === opt ? 'bg-yellow-100 text-yellow-700 border-yellow-300' : 'bg-white text-gray-500 border-gray-200 hover:border-gray-400'}`}>
                           {starchType === opt ? '✓ ' : ''}{opt}
