@@ -10,6 +10,19 @@ A running list of things that came up in chats but were consciously deferred —
 
 ## 🔮 Edge cases to handle later
 
+- [2026-04-09] **Timezone issue in DOTW coupon week matching**
+  `CouponValidationService.sameDateDay()` (line 743) compares delivery
+  weeks using UTC. A Vancouver customer at 11pm Monday (Tuesday UTC) could
+  get rejected from a Monday deal. Fix before DOTW coupons go live: compare
+  in business timezone (Mountain Time) or the customer's timezone.
+
+- [2026-04-09] **Brute-force coupon code guessing — no rate limiting**
+  The validate endpoint can be called repeatedly with no throttle. Someone
+  could script through `AAAA`, `AAAB`, etc. to find valid codes. Add rate
+  limiting (max 5 attempts per customer per minute) and optionally log
+  failed attempts for fraud detection. Fix before public launch if coupon
+  codes are short or predictable.
+
 - [2026-04-08] **Meal removed from menu after customer has it in a pre-order cart**
   Admin drops cookies from the April 20 menu but a subscriber already has cookies in their April 20 draft cart. Likely: show a warning in cart, silently drop at cutoff, optionally suggest an alternative. Needs UI + cart validation design. Not blocking Migration #3 coupon work.
 
@@ -35,6 +48,52 @@ A running list of things that came up in chats but were consciously deferred —
 ---
 
 ## 🛠️ Implementation TODOs
+
+- [2026-04-09] **Customer order metrics — denormalized counters on Customer profile**
+  Add 8 columns to the commerce `Customer` model: `total_orders`,
+  `total_spend`, `last_order_at`, `consecutive_weeks`, `longest_streak`,
+  `streak_broken_at`, `orders_this_month`, `meals_tried`. Schema columns
+  are free to add; the work is wiring ~25-30 update triggers across
+  order placement, cancellation, refund, and edit paths.
+  **Business rules decided 2026-04-09:**
+    - Minimum $25 order value to count toward milestones
+    - Refunds over 80% of order value remove the count
+    - Comp/free orders don't count
+    - Gift orders count for the buyer (they paid)
+    - Gift card payments count normally (just currency)
+    - Gift recipients are NOT first-time customers (they've tasted the
+      product) but get no milestone credit
+  **Wire first (simple, needed now):** `total_orders`, `total_spend`,
+  `last_order_at` — update on order events already being built.
+  **Wire later (need cron infrastructure):** `consecutive_weeks`,
+  `longest_streak`, `streak_broken_at` (weekly cron), `orders_this_month`
+  (monthly reset cron), `meals_tried` (line item scanning).
+  **Seam point:** `CouponValidationService.countCompletedOrders()` (line
+  517) currently does a live DB query. When `Customer.total_orders` is
+  wired, swap that one function from a query to a column read. The rest
+  of the coupon module doesn't change.
+
+- [2026-04-09] **Auto-computed marketing tags on Customer profile**
+  Derived from the order metrics above. Tags to auto-compute:
+  `vip` (spend > $2,000 or orders > 80), `at_risk` (subscriber + no
+  order in 21+ days), `champion` (streak > 12 weeks), `new` (first
+  order within 30 days), `lapsed` (no order in 60+ days), `high_value`
+  (avg order > $100), `adventurous` (meals_tried > 50% of active menu),
+  `creature_of_habit` (same 3-5 meals weekly), `gift_giver` (2+ gift
+  orders), `referrer` (1+ referred customers who ordered). These update
+  the existing `Customer.tags` array. Need the denormalized counters
+  first + a scheduled job or event-driven recompute. Build when the
+  email/notification automation system exists to act on them.
+
+- [2026-04-09] **Missing Prisma migration for `menu_category` + `diet_plan` columns**
+  These two columns on `MealRecipe` (culinary DB) were added via direct
+  SQL on the `conner-local-dev` Neon branch during the diet-plan rename
+  work (commit `5cca53e`). No migration file exists. Production database
+  does NOT have these columns. Need to create a migration file before
+  deploying to production, or the deployed app will crash trying to read
+  columns that don't exist. Also: production still has `net_weight_kg`
+  which dev removed — that migration file exists but hasn't been run on
+  production.
 
 - [2026-04-09] **Rename `MealRecipe.pricing_override` → `item_price`**
   The customer-facing sell price on the culinary `MealRecipe` model is
@@ -202,4 +261,15 @@ A running list of things that came up in chats but were consciously deferred —
 
 ## ✅ Resolved
 
-*(Move completed items here with a ✅ prefix and the resolution date.)*
+- ✅ [2026-04-09] **Customer-facing coupon error message catalog**
+  Built as `backend/src/modules/commerce-coupons/error-messages.ts`.
+  Maps all 26 error codes to warm customer-facing copy with placeholder
+  interpolation ({shortfall}, {required}, {startsAt}, etc.). Resolves
+  the 2026-04-08 TODO entry below.
+
+- ✅ [2026-04-09] **Coupon apply/remove endpoints (Phase 1 leaves 3 + 4)**
+  Built as `coupon-apply.service.ts` + `commerce-coupons.controller.ts`.
+  Three endpoints: POST apply, POST remove, POST validate (preview).
+  Includes: last-one-wins stacking, manual beats auto, TOCTOU re-validation
+  inside serializable transaction, global limit race fix, order total
+  recalculation. 15 tests, all passing.

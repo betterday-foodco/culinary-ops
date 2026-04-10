@@ -46,6 +46,11 @@ not yet pushed.
 | **Schema migration** | `backend/prisma/commerce/migrations/20260409060452_coupon_power_up/` | ✅ Already applied to Neon commerce dev branch |
 | **Feature picker mockup** | `conner/coupon-features-picker.html` | ✅ Already on `main`. Design reference for which fields to surface |
 | **DOTW scheduler mockup** | `conner/dotw-scheduler-mockup.html` | ✅ Already on `main`. Reference for the future DOTW calendar view |
+| **Apply service** | `backend/src/modules/commerce-coupons/coupon-apply.service.ts` | ✅ Shipped — apply/remove/validate with stacking + TOCTOU |
+| **Apply service tests** | `backend/src/modules/commerce-coupons/coupon-apply.service.spec.ts` | ✅ Shipped — 15 tests |
+| **Controller** | `backend/src/modules/commerce-coupons/commerce-coupons.controller.ts` | ✅ Shipped — 3 endpoints |
+| **Error messages** | `backend/src/modules/commerce-coupons/error-messages.ts` | ✅ Shipped — 26 error codes mapped |
+| **DTOs** | `backend/src/modules/commerce-coupons/dto/apply-coupon.dto.ts` | ✅ Shipped — apply/remove/validate DTOs |
 | **Next.js dashboard pages** | `frontend/app/(dashboard)/coupons/` | ❌ Doesn't exist yet. Next phase |
 
 ---
@@ -62,9 +67,10 @@ for the coupon module.
 |---|---|---|
 | **1. `CouponValidationService`** | Pure domain validator with 10 ordered rules | ✅ Shipped (`cc751da`) |
 | **2. DOTW week match** | Rule 10 of the validator, already implemented | ✅ Shipped (part of `cc751da`) |
-| **3. `POST /api/cart/apply-coupon`** | Endpoint that calls the validator, persists `CustomerCoupon.status=applied` | ❌ Not started |
-| **4. `POST /api/cart/remove-coupon`** | Endpoint that sets `CustomerCoupon.status=available`, clears `applied_at` | ❌ Not started |
-| **Parallel: error-messages catalog** | `backend/src/commerce/coupons/error-messages.ts` mapping validator error codes to warm customer copy | ❌ Not started |
+| **3. `POST /api/commerce/coupons/apply`** | Endpoint that calls the validator, persists `CustomerCoupon.status=applied`, handles stacking (last-one-wins), TOCTOU re-validation inside serializable transaction | ✅ Shipped |
+| **4. `POST /api/commerce/coupons/remove`** | Endpoint that reverts `CustomerCoupon.status=available`, decrements `uses_count`, recalculates order totals | ✅ Shipped |
+| **Bonus: `POST /api/commerce/coupons/validate`** | Preview-only validation — no mutations, returns savings preview + customer-facing error messages | ✅ Shipped |
+| **Parallel: error-messages catalog** | `backend/src/modules/commerce-coupons/error-messages.ts` mapping all 26 validator error codes to warm customer-facing copy with placeholder interpolation | ✅ Shipped |
 
 ### Phase 2 preview — Admin CRUD (day 2-3)
 
@@ -631,6 +637,32 @@ based on what's hot at that moment.
 ---
 
 ## 10. Change log
+
+### 2026-04-09 — Phase 1 complete (apply/remove/validate + error messages)
+
+- Shipped Phase 1 leaves 3 + 4 + bonus validate endpoint
+- Created `coupon-apply.service.ts` — apply/remove/validatePreview with:
+  - **Last-one-wins stacking**: non-stackable coupons replace the previous one
+  - **Manual beats auto**: manual codes always displace auto-applied coupons
+  - **Subscription discounts are a separate lane**: coupons always stack on top
+  - **TOCTOU protection**: re-validates inside a serializable transaction
+  - **Global limit race fix**: uses_count increment is atomic inside the transaction
+  - **Order total recalculation**: recalculates code_discount + total after apply/remove
+- Created `commerce-coupons.controller.ts` — 3 endpoints:
+  - `POST /api/commerce/coupons/apply` — mutating, returns success or structured error
+  - `POST /api/commerce/coupons/remove` — mutating, reverts coupon + decrements count
+  - `POST /api/commerce/coupons/validate` — preview-only, safe to call repeatedly
+- Created `error-messages.ts` — customer-facing copy for all 26 error codes with
+  placeholder interpolation ({shortfall}, {required}, {startsAt}, etc.)
+- Created `dto/apply-coupon.dto.ts` — input validation with class-validator
+- Updated `commerce-coupons.module.ts` — registered controller + apply service
+- Created `coupon-apply.service.spec.ts` — 15 tests covering:
+  - Apply: happy path, validation failure, missing order, wrong customer, locked order
+  - Stacking: last-one-wins displacement, stackable coexistence
+  - TOCTOU: deactivated, expired, limit-hit between validate and apply
+  - Remove: happy path, not-found, locked order
+  - Validate preview: savings preview, error messages with meta interpolation
+- **Total test count: 41 (26 validator + 15 apply service), all passing in ~1.6s**
 
 ### 2026-04-09 — initial build
 
