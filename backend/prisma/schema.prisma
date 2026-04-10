@@ -9,77 +9,80 @@ datasource db {
 }
 
 model User {
-  id                 String                 @id @default(uuid())
-  email              String                 @unique
-  password_hash      String
-  role               String                 @default("staff")
-  name               String?
-  station            String?
-  created_at         DateTime               @default(now())
-  station_role       String?
-  feedback_entries   KitchenFeedback[]
-  sent_messages      KitchenMessage[]       @relation("SentMessages")
-  received_messages  KitchenMessage[]       @relation("ReceivedMessages")
-  assigned_logs      KitchenProductionLog[] @relation("AssignedToLogs")
-  approved_bulk      KitchenProductionLog[] @relation("ApprovedBulk")
-  approved_shortages KitchenProductionLog[] @relation("ApprovedShortages")
+  id            String   @id @default(uuid())
+  email         String   @unique
+  password_hash String
+  role          String   @default("staff")  // "admin" | "staff" | "kitchen"
+  name          String?                      // display name, required for kitchen staff
+  station       String?                      // kitchen role only — one of the 6 fixed station names
+  station_role  String?                      // kitchen only — "lead" | "prep" (null = unset)
+  created_at    DateTime @default(now())
+
   production_logs    KitchenProductionLog[]
+  feedback_entries   KitchenFeedback[]
   station_requests   StationRequest[]
-  assigned_tasks     StationTask[]          @relation("AssignedStationTasks")
-  completed_tasks    StationTask[]          @relation("CompletedStationTasks")
-  created_tasks      StationTask[]          @relation("CreatedStationTasks")
+  created_tasks      StationTask[]  @relation("CreatedStationTasks")
+  assigned_tasks     StationTask[]  @relation("AssignedStationTasks")
+  completed_tasks    StationTask[]  @relation("CompletedStationTasks")
+  sent_messages      KitchenMessage[] @relation("SentMessages")
+  received_messages  KitchenMessage[] @relation("ReceivedMessages")
+  approved_shortages KitchenProductionLog[] @relation("ApprovedShortages")
+  approved_bulk      KitchenProductionLog[] @relation("ApprovedBulk")
+  assigned_logs      KitchenProductionLog[] @relation("AssignedToLogs")
 }
 
 model Ingredient {
-  id                    String               @id @default(uuid())
-  internal_name         String
-  display_name          String
-  sku                   String               @unique
-  category              String
-  location              String?
-  supplier_name         String?
-  trim_percentage       Float                @default(0)
-  base_weight           Float                @default(1)
-  cost_per_unit         Float                @default(0)
-  unit                  String               @default("Kgs")
-  stock                 Float                @default(0)
-  allergen_tags         String[]
-  benefits              String[]
-  is_active             Boolean              @default(true)
-  created_at            DateTime             @default(now())
-  updated_at            DateTime             @updatedAt
-  slug                  String               @unique
-  meal_components       MealComponent[]
+  id             String   @id @default(uuid())
+  internal_name  String
+  display_name   String
+  slug           String   @unique // URL-safe key for admin deep links
+  sku            String   @unique
+  category       String
+  location       String?
+  supplier_name  String?
+  trim_percentage Float   @default(0)
+  base_weight    Float    @default(1)
+  cost_per_unit  Float    @default(0)
+  unit           String   @default("Kgs")
+  stock          Float    @default(0)       // current on-hand quantity (in ingredient's unit)
+  allergen_tags  String[]
+  benefits       String[]
+  is_active      Boolean  @default(true)
+  created_at     DateTime @default(now())
+  updated_at     DateTime @updatedAt
+
   sub_recipe_components SubRecipeComponent[]
+  meal_components       MealComponent[]
 
   @@index([sku])
   @@index([category])
 }
 
 model SubRecipe {
-  id                String                   @id @default(uuid())
-  name              String
-  display_name      String?
-  sub_recipe_code   String                   @unique
-  instructions      String?
-  production_day    String?
-  station_tag       String?
-  priority          Int                      @default(3)
-  base_yield_weight Float                    @default(1)
-  base_yield_unit   String                   @default("Kgs")
-  computed_cost     Float                    @default(0)
-  is_active         Boolean                  @default(true)
-  created_at        DateTime                 @default(now())
-  updated_at        DateTime                 @updatedAt
-  sub_priority      Int?
-  slug              String                   @unique
-  feedback          KitchenFeedback[]
-  kitchen_logs      KitchenProductionLog[]
+  id               String   @id @default(uuid())
+  name             String
+  display_name     String?
+  slug             String   @unique // URL-safe key for admin deep links
+  sub_recipe_code  String   @unique
+  instructions     String?
+  production_day   String?
+  station_tag      String?
+  priority         Int      @default(3)
+  sub_priority     Int?     // 1=P1/AM, 2=P2, 3=P3/PM
+  base_yield_weight Float   @default(1)
+  base_yield_unit   String  @default("Kgs")
+  computed_cost    Float    @default(0)
+  is_active        Boolean  @default(true)
+  created_at       DateTime @default(now())
+  updated_at       DateTime @updatedAt
+
+  components        SubRecipeComponent[] @relation("SubRecipeComponents")
+  parent_components SubRecipeComponent[] @relation("ChildSubRecipe")
   meal_components   MealComponent[]
-  number_updates    ProductionNumberUpdate[]
+  kitchen_logs      KitchenProductionLog[]
+  feedback          KitchenFeedback[]
   station_requests  StationRequest[]
-  parent_components SubRecipeComponent[]     @relation("ChildSubRecipe")
-  components        SubRecipeComponent[]     @relation("SubRecipeComponents")
+  number_updates    ProductionNumberUpdate[]
 
   @@index([sub_recipe_code])
   @@index([station_tag])
@@ -87,124 +90,127 @@ model SubRecipe {
 }
 
 model SubRecipeComponent {
-  id                  String      @id @default(uuid())
+  id                  String     @id @default(uuid())
   sub_recipe_id       String
   ingredient_id       String?
   child_sub_recipe_id String?
   quantity            Float
-  unit                String      @default("Kgs")
-  trim_percentage     Float       @default(0)
-  child_sub_recipe    SubRecipe?  @relation("ChildSubRecipe", fields: [child_sub_recipe_id], references: [id])
+  unit                String     @default("Kgs")
+  trim_percentage     Float      @default(0)
+
+  sub_recipe          SubRecipe  @relation("SubRecipeComponents", fields: [sub_recipe_id], references: [id], onDelete: Cascade)
   ingredient          Ingredient? @relation(fields: [ingredient_id], references: [id])
-  sub_recipe          SubRecipe   @relation("SubRecipeComponents", fields: [sub_recipe_id], references: [id], onDelete: Cascade)
+  child_sub_recipe    SubRecipe?  @relation("ChildSubRecipe", fields: [child_sub_recipe_id], references: [id])
 }
 
 model MealRecipe {
-  id                     String               @id @default(uuid())
-  name                   String
-  display_name           String
-  category               String?
-  final_yield_weight     Float                @default(0)
-  pricing_override       Float?
-  computed_cost          Float                @default(0)
+  id                    String   @id @default(uuid())
+  meal_code             String?  @unique // e.g. "BD-001"
+  slug                  String   @unique // URL-safe key for customer-facing meal URLs (e.g. /menu/thai-basil-beef)
+  name                  String
+  display_name          String
+  category              String?
+  diet_plan_id          String   // FK → SystemTag.id where type='diets' (Omnivore or Plant-Based). Backfilled 2026-04-08 from Dish Masterlist CSV; NOT NULL as of that day. Every dish MUST belong to exactly one plan. See conner/data-model/decisions/2026-04-08-mandatory-diet-plan-on-dishes.md
+  linked_meal_id        String?  // points to the meat/vegan counterpart (one-directional: only set on the omnivore side)
+  final_yield_weight    Float    @default(0)
+  pricing_override      Float?
+  computed_cost         Float    @default(0)
   allergen_tags          String[]
   dislikes               String[]
   heating_instructions   String?
   packaging_instructions String?
   cooking_instructions   String?
   description            String?
+  short_description      String?
   image_url              String?
-  net_weight_kg          Float                @default(0)
-  is_active              Boolean              @default(true)
-  created_at             DateTime             @default(now())
-  updated_at             DateTime             @updatedAt
   calories               Int?
+  protein_g              Float?
   carbs_g                Float?
   fat_g                  Float?
-  protein_g              Float?
-  short_description      String?
-  linked_meal_id         String?
-  container_type         String?
-  dietary_tags           String[]
   fiber_g                Float?
-  label_ingredients      String?
-  portion_score          Int?
-  protein_types          String[]
   shelf_life_days        Int?
-  starch_type            String?
-  meal_code              String?              @unique
-  diet_plan_id           String?
-  slug                   String               @unique
-  corporate_order_items  CorporateOrderItem[]
-  components             MealComponent[]
-  SystemTag              SystemTag?           @relation(fields: [diet_plan_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  linked_meal            MealRecipe?          @relation("MealVariants", fields: [linked_meal_id], references: [id])
-  variant_meals          MealRecipe[]         @relation("MealVariants")
-  menu_queue_items       MenuQueueItem[]
-  orders                 Order[]
-  tasting_sessions       PlanTastingSession[]
-  portion_spec           PortionSpec?
-  production_plan_items  ProductionPlanItem[]
+  label_ingredients      String?  // comma-separated label text for product label
+  protein_types          String[] // e.g. ["Chicken", "Turkey"]
+  dietary_tags           String[] // e.g. ["Gluten Friendly", "High Protein", "Vegan"]
+  starch_type            String?  // "Rice" | "Pasta" | "Potato" | "Quinoa" | "Other" | "None"
+  container_type         String?  // "Meal Tray" | "Salad Container"
+  portion_score          Int?     // 1–4 scale
+  is_active              Boolean  @default(true)
+  created_at            DateTime @default(now())
+  updated_at            DateTime @updatedAt
+
+  linked_meal           MealRecipe?  @relation("MealVariants", fields: [linked_meal_id], references: [id], onDelete: SetNull)
+  variant_meals         MealRecipe[] @relation("MealVariants")
+  components            MealComponent[]
+  orders                Order[]
+  production_plan_items ProductionPlanItem[]
+  menu_queue_items      MenuQueueItem[]
+  portion_spec          PortionSpec?
+  tasting_sessions      PlanTastingSession[]
+  corporate_order_items CorporateOrderItem[]
 
   @@index([name])
   @@index([category])
   @@index([linked_meal_id])
-  @@index([diet_plan_id])
 }
 
 model PortionSpec {
-  id               String                 @id @default(uuid())
-  meal_id          String                 @unique
+  id               String   @id @default(uuid())
+  meal_id          String   @unique
   container_type   String?
   total_weight_min Float?
   total_weight_max Float?
   general_notes    String?
   tasting_notes    String?
-  created_at       DateTime               @default(now())
-  updated_at       DateTime               @updatedAt
   photo_url        String?
-  meal             MealRecipe             @relation(fields: [meal_id], references: [id], onDelete: Cascade)
-  components       PortionSpecComponent[]
+  created_at       DateTime @default(now())
+  updated_at       DateTime @updatedAt
+
+  meal       MealRecipe             @relation(fields: [meal_id], references: [id], onDelete: Cascade)
+  components PortionSpecComponent[]
 }
 
 model PortionSpecComponent {
-  id              String      @id @default(uuid())
+  id              String  @id @default(uuid())
   spec_id         String
   ingredient_name String
   portion_min     Float?
   portion_max     Float?
-  portion_unit    String?     @default("g")
+  portion_unit    String? @default("g")
   tool            String?
   notes           String?
-  sort_order      Int         @default(0)
-  spec            PortionSpec @relation(fields: [spec_id], references: [id], onDelete: Cascade)
+  sort_order      Int     @default(0)
+
+  spec PortionSpec @relation(fields: [spec_id], references: [id], onDelete: Cascade)
 
   @@index([spec_id])
 }
 
 model MealComponent {
-  id               String      @id @default(uuid())
-  meal_id          String
-  ingredient_id    String?
-  sub_recipe_id    String?
-  quantity         Float
-  unit             String      @default("gr")
-  portioning_notes String?
-  sort_order       Int         @default(0)
-  ingredient       Ingredient? @relation(fields: [ingredient_id], references: [id])
-  meal             MealRecipe  @relation(fields: [meal_id], references: [id], onDelete: Cascade)
-  sub_recipe       SubRecipe?  @relation(fields: [sub_recipe_id], references: [id])
+  id                String      @id @default(uuid())
+  meal_id           String
+  ingredient_id     String?
+  sub_recipe_id     String?
+  quantity          Float
+  unit              String      @default("gr")
+  sort_order        Int         @default(0)
+  portioning_notes  String?
+
+  meal           MealRecipe  @relation(fields: [meal_id], references: [id], onDelete: Cascade)
+  ingredient     Ingredient? @relation(fields: [ingredient_id], references: [id])
+  sub_recipe     SubRecipe?  @relation(fields: [sub_recipe_id], references: [id])
 }
 
 model Order {
-  id                String     @id @default(uuid())
-  external_order_id String     @unique
+  id                String   @id @default(uuid())
+  external_order_id String   @unique
   meal_id           String
   quantity          Int
   production_date   DateTime
-  source_platform   String     @default("shopify")
-  created_at        DateTime   @default(now())
-  meal              MealRecipe @relation(fields: [meal_id], references: [id])
+  source_platform   String   @default("shopify")
+  created_at        DateTime @default(now())
+
+  meal MealRecipe @relation(fields: [meal_id], references: [id])
 
   @@index([production_date])
   @@index([meal_id])
@@ -212,68 +218,73 @@ model Order {
 }
 
 model ProductionPlan {
-  id                     String                   @id @default(uuid())
-  week_label             String
-  week_start             DateTime
-  status                 String                   @default("draft")
-  notes                  String?
-  created_at             DateTime                 @default(now())
-  updated_at             DateTime                 @updatedAt
-  published_to_kitchen   Boolean                  @default(false)
-  published_to_corporate Boolean                  @default(false)
-  CorporateParCart       CorporateParCart[]
-  kitchen_logs           KitchenProductionLog[]
-  tasting_sessions       PlanTastingSession[]
-  week_note              PlanWeekNote?
-  number_updates         ProductionNumberUpdate[]
-  items                  ProductionPlanItem[]
-  station_requests       StationRequest[]
-  station_tasks          StationTask[]
+  id                   String   @id @default(uuid())
+  week_label           String
+  week_start           DateTime
+  status               String   @default("draft")
+  notes                String?
+  published_to_kitchen    Boolean  @default(false)
+  published_to_corporate  Boolean  @default(false)  // true once menu is pushed to corporate portal
+  created_at              DateTime @default(now())
+  updated_at              DateTime @updatedAt
+
+  items            ProductionPlanItem[]
+  kitchen_logs     KitchenProductionLog[]
+  station_requests StationRequest[]
+  station_tasks    StationTask[]
+  tasting_sessions PlanTastingSession[]
+  week_note        PlanWeekNote?
+  number_updates   ProductionNumberUpdate[]
 
   @@index([week_start])
 }
 
 model ProductionPlanItem {
-  id       String         @id @default(uuid())
+  id       String @id @default(uuid())
   plan_id  String
   meal_id  String
-  quantity Int            @default(0)
-  meal     MealRecipe     @relation(fields: [meal_id], references: [id])
-  plan     ProductionPlan @relation(fields: [plan_id], references: [id], onDelete: Cascade)
+  quantity Int    @default(0)
+
+  plan ProductionPlan @relation(fields: [plan_id], references: [id], onDelete: Cascade)
+  meal MealRecipe     @relation(fields: [meal_id], references: [id])
 
   @@unique([plan_id, meal_id])
 }
 
 model KitchenProductionLog {
-  id                      String         @id @default(uuid())
-  plan_id                 String
-  sub_recipe_id           String
-  user_id                 String
-  status                  String         @default("not_started")
-  qty_cooked              Float?
-  weight_recorded         Float?
-  notes                   String?
-  logged_at               DateTime       @default(now())
-  updated_at              DateTime       @updatedAt
-  cooked_by               String?
-  have_on_hand            Float?
-  shortage_approved       Boolean        @default(false)
-  shortage_approved_at    DateTime?
-  shortage_approved_by_id String?
-  bulk_approved           Boolean        @default(false)
-  bulk_approved_at        DateTime?
-  bulk_approved_by_id     String?
-  bulk_reason             String?
-  started_at              DateTime?
-  assigned_to_id          String?
-  lead_approved           Boolean        @default(false)
-  lead_approved_at        DateTime?
-  assigned_to             User?          @relation("AssignedToLogs", fields: [assigned_to_id], references: [id])
-  bulk_approved_by        User?          @relation("ApprovedBulk", fields: [bulk_approved_by_id], references: [id])
+  id              String   @id @default(uuid())
+  plan_id         String
+  sub_recipe_id   String
+  user_id         String
+  status          String   @default("not_started") // not_started | in_progress | done | short | bulk
+  qty_cooked      Float?
+  weight_recorded Float?
+  have_on_hand    Float?   // qty already available (reduces required cook amount)
+  notes           String?
+  cooked_by       String?   // freetext: who actually cooked it
+  started_at      DateTime? // set when status → in_progress (for time tracking)
+  // Shortage approval
+  shortage_approved         Boolean   @default(false)
+  shortage_approved_by_id   String?
+  shortage_approved_at      DateTime?
+  // Bulk cooking approval
+  bulk_reason               String?   // reason for cooking extra
+  bulk_approved             Boolean   @default(false)
+  bulk_approved_by_id       String?
+  bulk_approved_at          DateTime?
+  // Station lead assignment + approval
+  assigned_to_id            String?   // prep cook this task is assigned to
+  lead_approved             Boolean   @default(false)
+  lead_approved_at          DateTime?
+  logged_at       DateTime @default(now())
+  updated_at      DateTime @updatedAt
+
   plan                    ProductionPlan @relation(fields: [plan_id], references: [id])
-  shortage_approved_by    User?          @relation("ApprovedShortages", fields: [shortage_approved_by_id], references: [id])
   sub_recipe              SubRecipe      @relation(fields: [sub_recipe_id], references: [id])
   user                    User           @relation(fields: [user_id], references: [id])
+  shortage_approved_by    User?          @relation("ApprovedShortages", fields: [shortage_approved_by_id], references: [id])
+  bulk_approved_by        User?          @relation("ApprovedBulk", fields: [bulk_approved_by_id], references: [id])
+  assigned_to             User?          @relation("AssignedToLogs", fields: [assigned_to_id], references: [id])
 
   @@unique([plan_id, sub_recipe_id, user_id])
   @@index([plan_id])
@@ -281,52 +292,55 @@ model KitchenProductionLog {
 }
 
 model KitchenFeedback {
-  id            String    @id @default(uuid())
+  id            String   @id @default(uuid())
   sub_recipe_id String
   user_id       String
   plan_id       String?
-  rating        Int
+  rating        Int      // 1–5
   comment       String?
-  created_at    DateTime  @default(now())
-  admin_notes   String?
-  is_fixed      Boolean   @default(false)
-  updated_at    DateTime  @default(now()) @updatedAt
-  sub_recipe    SubRecipe @relation(fields: [sub_recipe_id], references: [id])
-  user          User      @relation(fields: [user_id], references: [id])
+  admin_notes   String?  // chef/admin notes after reviewing feedback
+  is_fixed      Boolean  @default(false)  // admin marks recipe as fixed
+  created_at    DateTime @default(now())
+  updated_at    DateTime @default(now()) @updatedAt
+
+  sub_recipe SubRecipe @relation(fields: [sub_recipe_id], references: [id])
+  user       User      @relation(fields: [user_id], references: [id])
 
   @@index([sub_recipe_id])
 }
 
 model StationRequest {
-  id            String          @id @default(uuid())
+  id            String   @id @default(uuid())
   from_user_id  String
-  to_station    String
+  to_station    String   // target station, e.g. "Sauce Station"
   plan_id       String?
   sub_recipe_id String?
   description   String
   quantity      Float?
   unit          String?
-  status        String          @default("pending")
-  created_at    DateTime        @default(now())
-  updated_at    DateTime        @updatedAt
-  from_user     User            @relation(fields: [from_user_id], references: [id])
-  plan          ProductionPlan? @relation(fields: [plan_id], references: [id])
-  sub_recipe    SubRecipe?      @relation(fields: [sub_recipe_id], references: [id])
+  status        String   @default("pending")  // pending | acknowledged | completed
+  created_at    DateTime @default(now())
+  updated_at    DateTime @updatedAt
+
+  from_user  User            @relation(fields: [from_user_id], references: [id])
+  plan       ProductionPlan? @relation(fields: [plan_id], references: [id])
+  sub_recipe SubRecipe?      @relation(fields: [sub_recipe_id], references: [id])
 
   @@index([to_station])
   @@index([plan_id])
 }
 
 model MenuQueueItem {
-  id              String     @id @default(uuid())
-  column_id       String
+  id              String   @id @default(uuid())
+  column_id       String   // "meat_1".."meat_5", "omni_1".."omni_6", "vegan_1"
   meal_id         String
-  position        Int        @default(0)
-  repeat_weeks    Int        @default(4)
-  weeks_remaining Int        @default(0)
-  created_at      DateTime   @default(now())
-  updated_at      DateTime   @updatedAt
-  meal            MealRecipe @relation(fields: [meal_id], references: [id], onDelete: Cascade)
+  position        Int      @default(0) // sort order within column; 0 = this week
+  repeat_weeks    Int      @default(4) // after serving, goes back to end with this many weeks gap
+  weeks_remaining Int      @default(0) // display only — 0 = on menu this week
+  created_at      DateTime @default(now())
+  updated_at      DateTime @updatedAt
+
+  meal MealRecipe @relation(fields: [meal_id], references: [id], onDelete: Cascade)
 
   @@unique([column_id, meal_id])
   @@index([column_id])
@@ -340,21 +354,22 @@ model MenuAdvanceLog {
 }
 
 model StationTask {
-  id               String          @id @default(uuid())
+  id               String    @id @default(uuid())
   plan_id          String?
   title            String
   description      String?
-  station          String?
-  assigned_user_id String?
+  station          String?          // null = show on all stations
+  assigned_user_id String?          // null = all staff on that station
   completed_by_id  String?
   completed_at     DateTime?
   created_by_id    String
-  created_at       DateTime        @default(now())
-  updated_at       DateTime        @updatedAt
-  assigned_user    User?           @relation("AssignedStationTasks", fields: [assigned_user_id], references: [id])
-  completed_by     User?           @relation("CompletedStationTasks", fields: [completed_by_id], references: [id])
-  created_by       User            @relation("CreatedStationTasks", fields: [created_by_id], references: [id])
-  plan             ProductionPlan? @relation(fields: [plan_id], references: [id], onDelete: Cascade)
+  created_at       DateTime  @default(now())
+  updated_at       DateTime  @updatedAt
+
+  plan          ProductionPlan? @relation(fields: [plan_id], references: [id], onDelete: Cascade)
+  assigned_user User?           @relation("AssignedStationTasks", fields: [assigned_user_id], references: [id])
+  completed_by  User?           @relation("CompletedStationTasks", fields: [completed_by_id], references: [id])
+  created_by    User            @relation("CreatedStationTasks", fields: [created_by_id], references: [id])
 
   @@index([station])
   @@index([plan_id])
@@ -363,13 +378,14 @@ model StationTask {
 model KitchenMessage {
   id           String   @id @default(uuid())
   from_user_id String
-  to_station   String?
-  to_user_id   String?
+  to_station   String?   // null = broadcast to all kitchen; specific = to that station only
+  to_user_id   String?   // direct message to a specific user (e.g. chef)
   body         String
   is_read      Boolean  @default(false)
   created_at   DateTime @default(now())
-  from_user    User     @relation("SentMessages", fields: [from_user_id], references: [id])
-  to_user      User?    @relation("ReceivedMessages", fields: [to_user_id], references: [id])
+
+  from_user User  @relation("SentMessages",     fields: [from_user_id], references: [id])
+  to_user   User? @relation("ReceivedMessages", fields: [to_user_id],   references: [id])
 
   @@index([to_station])
   @@index([to_user_id])
@@ -377,44 +393,47 @@ model KitchenMessage {
 }
 
 model PlanTastingSession {
-  id            String         @id @default(uuid())
+  id            String   @id @default(uuid())
   plan_id       String
   meal_id       String
   taster_name   String?
   tasting_notes String?
-  checked_steps Json           @default("[]")
-  created_at    DateTime       @default(now())
-  updated_at    DateTime       @updatedAt
-  meal          MealRecipe     @relation(fields: [meal_id], references: [id], onDelete: Cascade)
-  plan          ProductionPlan @relation(fields: [plan_id], references: [id], onDelete: Cascade)
+  checked_steps Json     @default("[]")
+  created_at    DateTime @default(now())
+  updated_at    DateTime @updatedAt
+
+  plan ProductionPlan @relation(fields: [plan_id], references: [id], onDelete: Cascade)
+  meal MealRecipe     @relation(fields: [meal_id], references: [id], onDelete: Cascade)
 
   @@unique([plan_id, meal_id])
   @@index([plan_id])
 }
 
 model PlanWeekNote {
-  id         String         @id @default(uuid())
-  plan_id    String         @unique
+  id         String   @id @default(uuid())
+  plan_id    String   @unique
   heading    String?
   notes      String?
-  created_at DateTime       @default(now())
-  updated_at DateTime       @updatedAt
-  plan       ProductionPlan @relation(fields: [plan_id], references: [id], onDelete: Cascade)
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  plan ProductionPlan @relation(fields: [plan_id], references: [id], onDelete: Cascade)
 }
 
 model ProductionNumberUpdate {
-  id            String         @id @default(uuid())
+  id            String   @id @default(uuid())
   plan_id       String
   sub_recipe_id String
   wednesday_qty Float
   thursday_qty  Float?
   unit          String?
-  shortage      Boolean        @default(false)
+  shortage      Boolean  @default(false)
   shortage_note String?
-  updated_at    DateTime       @updatedAt
-  created_at    DateTime       @default(now())
-  plan          ProductionPlan @relation(fields: [plan_id], references: [id], onDelete: Cascade)
-  sub_recipe    SubRecipe      @relation(fields: [sub_recipe_id], references: [id], onDelete: Cascade)
+  updated_at    DateTime @updatedAt
+  created_at    DateTime @default(now())
+
+  plan       ProductionPlan @relation(fields: [plan_id], references: [id], onDelete: Cascade)
+  sub_recipe SubRecipe      @relation(fields: [sub_recipe_id], references: [id], onDelete: Cascade)
 
   @@unique([plan_id, sub_recipe_id])
   @@index([plan_id])
@@ -429,61 +448,66 @@ model KitchenStation {
 }
 
 model DailyChecklist {
-  id          String                     @id @default(uuid())
+  id          String   @id @default(uuid())
   title       String
-  day         String
+  day         String   // 'wednesday', 'thursday', 'friday'
   station     String?
-  sort_order  Int                        @default(0)
-  is_active   Boolean                    @default(true)
-  created_at  DateTime                   @default(now())
+  sort_order  Int      @default(0)
+  is_active   Boolean  @default(true)
+  created_at  DateTime @default(now())
+
   completions DailyChecklistCompletion[]
 }
 
 model DailyChecklistCompletion {
-  id           String         @id @default(uuid())
+  id           String   @id @default(uuid())
   checklist_id String
   week_label   String
   completed_by String?
-  completed_at DateTime       @default(now())
-  checklist    DailyChecklist @relation(fields: [checklist_id], references: [id], onDelete: Cascade)
+  completed_at DateTime @default(now())
+
+  checklist DailyChecklist @relation(fields: [checklist_id], references: [id], onDelete: Cascade)
 
   @@unique([checklist_id, week_label])
 }
 
 model SystemTag {
-  id               String          @id @default(uuid())
-  name             String
-  type             String
-  subtype          String?
-  source           String          @default("dish")
-  visible          Boolean         @default(true)
-  label_bold       Boolean         @default(false)
-  rule             String?
-  emoji            String?
-  sort_order       Int             @default(0)
-  created_at       DateTime        @default(now())
-  updated_at       DateTime        @updatedAt
-  slug             String
-  MealRecipe       MealRecipe[]
+  id          String   @id @default(uuid())
+  name        String
+  slug        String   // URL-safe key. Scoped unique per (type, slug) — same slug may exist across types (e.g. "shellfish" as both allergen and protein).
+  type        String   // allergens, proteins, badges, diets, menu-cats, ingredient-cats, suppliers, storage
+  subtype     String?  // Allergen, Dislike, Protein, Filter, Badge, Plan, Category, Supplier, Location
+  source      String   @default("dish") // ingredient, dish, computed
+  visible     Boolean  @default(true)
+  label_bold  Boolean  @default(false)
+  rule        String?  // computed rule expression
+  emoji       String?
+  sort_order  Int      @default(0)
+  created_at  DateTime @default(now())
+  updated_at  DateTime @updatedAt
+
   connections_from TagConnection[] @relation("ConnectionFrom")
   connections_to   TagConnection[] @relation("ConnectionTo")
 
   @@unique([type, slug])
+  @@index([type])
 }
 
 model TagConnection {
   id           String    @id @default(uuid())
   from_tag_id  String
   to_tag_id    String
-  relationship String
+  relationship String    // blocks, triggers, linked, composed
   description  String?
   created_at   DateTime  @default(now())
-  from_tag     SystemTag @relation("ConnectionFrom", fields: [from_tag_id], references: [id], onDelete: Cascade)
-  to_tag       SystemTag @relation("ConnectionTo", fields: [to_tag_id], references: [id], onDelete: Cascade)
+
+  from_tag SystemTag @relation("ConnectionFrom", fields: [from_tag_id], references: [id], onDelete: Cascade)
+  to_tag   SystemTag @relation("ConnectionTo", fields: [to_tag_id], references: [id], onDelete: Cascade)
 
   @@unique([from_tag_id, to_tag_id, relationship])
 }
 
+// Generic key-value store for integration settings (API tokens, endpoints, etc.)
 model SystemConfig {
   id         String   @id @default(uuid())
   key        String   @unique
@@ -491,325 +515,27 @@ model SystemConfig {
   updated_at DateTime @updatedAt
 }
 
+// Log of inbound webhook calls from third-party platforms
 model WebhookLog {
-  id          String   @id @default(uuid())
-  source      String
-  event_type  String?
-  payload     Json
-  status      String   @default("received")
-  result      Json?
-  error       String?
-  received_at DateTime @default(now())
+  id           String   @id @default(uuid())
+  source       String   // e.g. "mealprep"
+  event_type   String?  // e.g. "order.created"
+  payload      Json
+  status       String   @default("received") // received | processed | error
+  result       Json?    // what we did (plan created/updated, meal matches, etc.)
+  error        String?
+  received_at  DateTime @default(now())
 
   @@index([source])
   @@index([received_at])
 }
 
-model CorporateCompany {
-  id                        String                      @id
-  name                      String
-  email                     String?
-  phone                     String?
-  address                   String?
-  city                      String?
-  province                  String?
-  postal_code               String?
-  contact_name              String?
-  contact_phone             String?
-  contact_email             String?
-  is_active                 Boolean                     @default(true)
-  plan_type                 String?
-  delivery_day              String?
-  delivery_notes            String?
-  extra                     Json?
-  created_at                DateTime                    @default(now())
-  updated_at                DateTime                    @updatedAt
-  allow_extra_at_full_price Boolean                     @default(false)
-  auto_charge_enabled       Boolean                     @default(false)
-  billing_cycle             String                      @default("weekly")
-  billing_reference         String?
-  collection_method         String                      @default("manual")
-  collection_timing         String?
-  credit_balance            Float                       @default(0)
-  delivery_window_end       String?
-  delivery_window_start     String?
-  email_domain              String?
-  enable_employee_levels    Boolean                     @default(false)
-  enable_par_levels         Boolean                     @default(false)
-  free_bd_subsidy           Float                       @default(0)
-  free_company_subsidy      Float                       @default(0)
-  free_employee_price       Float                       @default(0)
-  free_meals_week           Int                         @default(0)
-  fridge_location           String?
-  full_price                Float                       @default(16.99)
-  helcim_customer_code      String?
-  invoice_prefix            String?
-  manager_can_edit_meals    Boolean                     @default(true)
-  manager_password          String?
-  max_meals_per_week        Int                         @default(99)
-  monthly_statement_day     Int?
-  next_invoice_number       Int                         @default(1)
-  overdue_days              Int                         @default(15)
-  payment_terms             String                      @default("due-on-receipt")
-  tier1_bd_subsidy          Float                       @default(0)
-  tier1_company_subsidy     Float                       @default(0)
-  tier1_employee_price      Float                       @default(0)
-  tier1_meals               Int                         @default(0)
-  tier2_bd_subsidy          Float                       @default(0)
-  tier2_company_subsidy     Float                       @default(0)
-  tier2_employee_price      Float                       @default(0)
-  tier2_meals               Int                         @default(0)
-  tier3_bd_subsidy          Float                       @default(0)
-  tier3_company_subsidy     Float                       @default(0)
-  tier3_employee_price      Float                       @default(0)
-  tier3_meals               Int                         @default(0)
-  allowed_email_domain      String?
-  slug                      String                      @unique
-  invoices                  CompanyInvoice[]
-  benefit_levels            CorporateBenefitLevel[]
-  company_pin               CorporateCompanyPIN?
-  credit_notes              CorporateCreditNote[]
-  employees                 CorporateEmployee[]
-  CorporateMealAllowanceLog CorporateMealAllowanceLog[]
-  monthly_statements        CorporateMonthlyStatement[]
-  orders                    CorporateOrder[]
-  CorporateParCart          CorporateParCart?
-  par_levels                CorporateParLevel[]
-
-  @@index([is_active])
-}
-
-model CorporateEmployee {
-  id              String                @id @default(uuid())
-  employee_code   String                @unique
-  company_id      String
-  email           String
-  name            String
-  pin_hash        String?
-  benefit_level   String                @default("General")
-  meals_remaining Int                   @default(0)
-  is_active       Boolean               @default(true)
-  notes           String?
-  created_at      DateTime              @default(now())
-  updated_at      DateTime              @updatedAt
-  role            String                @default("employee")
-  company         CorporateCompany      @relation(fields: [company_id], references: [id])
-  magic_tokens    CorporateMagicToken[]
-  orders          CorporateOrder[]
-
-  @@unique([company_id, email])
-  @@index([company_id])
-  @@index([employee_code])
-}
-
-model CorporateOrder {
-  id            String               @id @default(uuid())
-  order_code    String               @unique
-  company_id    String
-  employee_id   String?
-  delivery_date DateTime?
-  status        CorpOrderStatus      @default(pending)
-  total_amount  Float                @default(0)
-  employee_cost Float                @default(0)
-  company_cost  Float                @default(0)
-  bd_cost       Float                @default(0)
-  notes         String?
-  source        String               @default("portal")
-  created_at    DateTime             @default(now())
-  updated_at    DateTime             @updatedAt
-  company       CorporateCompany     @relation(fields: [company_id], references: [id])
-  employee      CorporateEmployee?   @relation(fields: [employee_id], references: [id])
-  items         CorporateOrderItem[]
-
-  @@index([company_id])
-  @@index([employee_id])
-  @@index([delivery_date])
-  @@index([status])
-}
-
-model CorporateOrderItem {
-  id               String         @id @default(uuid())
-  order_id         String
-  meal_recipe_id   String?
-  meal_external_id String?
-  meal_name        String
-  quantity         Int            @default(1)
-  tier             MealTier       @default(free)
-  unit_price       Float          @default(0)
-  employee_subsidy Float          @default(0)
-  company_subsidy  Float          @default(0)
-  bd_subsidy       Float          @default(0)
-  line_total       Float          @default(0)
-  meal_recipe      MealRecipe?    @relation(fields: [meal_recipe_id], references: [id])
-  order            CorporateOrder @relation(fields: [order_id], references: [id], onDelete: Cascade)
-
-  @@index([order_id])
-  @@index([meal_recipe_id])
-  @@index([meal_external_id])
-}
-
-model CorporateBenefitLevel {
-  id              String           @id @default(uuid())
-  company_id      String
-  free_meals_week Int              @default(0)
-  full_price      Float            @default(0)
-  level_id        String
-  level_name      String?
-  level_order     Int              @default(0)
-  max_meals_week  Int              @default(0)
-  tier_config     Json?
-  company         CorporateCompany @relation(fields: [company_id], references: [id], onDelete: Cascade)
-
-  @@unique([company_id, level_id])
-  @@index([company_id])
-}
-
-model CorporateParLevel {
-  id            String           @id @default(uuid())
-  company_id    String
-  category_id   String
-  category_name String?
-  par_quantity  Int              @default(0)
-  items_json    Json?
-  last_modified DateTime?
-  mode          String           @default("auto")
-  modified_by   String?
-  status        String           @default("active")
-  company       CorporateCompany @relation(fields: [company_id], references: [id], onDelete: Cascade)
-
-  @@unique([company_id, category_id])
-  @@index([company_id])
-}
-
-model CorporateCompanyPIN {
-  company_id String           @id
-  pin_hash   String
-  updated_at DateTime         @updatedAt
-  company    CorporateCompany @relation(fields: [company_id], references: [id], onDelete: Cascade)
-}
-
-model CorporateMagicToken {
-  token       String             @id
-  employee_id String?
-  expires_at  DateTime
-  is_used     Boolean            @default(false)
-  created_at  DateTime           @default(now())
-  company_id  String
-  email       String
-  employee    CorporateEmployee? @relation(fields: [employee_id], references: [id], onDelete: Cascade)
-
-  @@index([employee_id])
-  @@index([email])
-  @@index([expires_at])
-}
-
-model CompanyInvoice {
-  id                    String           @id @default(uuid())
-  invoice_number        String           @unique
-  company_id            String
-  period_start          DateTime
-  period_end            DateTime
-  status                String           @default("draft")
-  notes                 String?
-  pdf_url               String?
-  due_at                DateTime?
-  created_at            DateTime         @default(now())
-  updated_at            DateTime         @updatedAt
-  amount_due            Float            @default(0)
-  bd_contributed        Float            @default(0)
-  billing_cycle         String?
-  collection_method     String?
-  company_owed          Float            @default(0)
-  credit_applied        Float            @default(0)
-  employee_paid         Float            @default(0)
-  legacy_id             String?          @unique
-  overdue_reminder_sent Boolean          @default(false)
-  paid_amount           Float            @default(0)
-  paid_at               DateTime?
-  payment_method        String?
-  payment_reference     String?
-  sent_at               DateTime?
-  subtotal_full_retail  Float            @default(0)
-  sunday_anchors        String?
-  tier_breakdown        Json?
-  total_employees       Int              @default(0)
-  total_meals           Int              @default(0)
-  total_orders          Int              @default(0)
-  company               CorporateCompany @relation(fields: [company_id], references: [id])
-
-  @@index([company_id])
-  @@index([status])
-  @@index([period_start])
-}
-
-model CorporateCreditNote {
-  id               String           @id @default(uuid())
-  credit_note_code String           @unique
-  company_id       String
-  employee_id      String?
-  amount           Float
-  reason           String?
-  applied_to_order String?
-  applied_at       DateTime?
-  is_void          Boolean          @default(false)
-  created_at       DateTime         @default(now())
-  updated_at       DateTime         @updatedAt
-  company          CorporateCompany @relation(fields: [company_id], references: [id])
-
-  @@index([company_id])
-  @@index([employee_id])
-}
-
-model CorporateMonthlyStatement {
-  id             String           @id @default(uuid())
-  statement_code String           @unique
-  company_id     String
-  month_year     String
-  total_meals    Int              @default(0)
-  total_employee Float            @default(0)
-  total_company  Float            @default(0)
-  total_bd       Float            @default(0)
-  pdf_url        String?
-  created_at     DateTime         @default(now())
-  updated_at     DateTime         @updatedAt
-  company        CorporateCompany @relation(fields: [company_id], references: [id])
-
-  @@index([company_id])
-  @@index([month_year])
-}
-
-model CorporateSetting {
-  key        String   @id
-  value      String
-  updated_at DateTime @updatedAt
-}
-
-model CorporateMealAllowanceLog {
-  id               String           @id
-  company_id       String
-  level_id         String?
-  level_name       String?
-  changed_by       String
-  field            String
-  old_value        String           @default("")
-  new_value        String           @default("")
-  description      String           @default("")
-  created_at       DateTime         @default(now())
-  CorporateCompany CorporateCompany @relation(fields: [company_id], references: [id], onDelete: Cascade)
-
-  @@index([company_id, created_at])
-  @@index([level_id])
-}
-
-model CorporateParCart {
-  company_id       String           @id
-  plan_id          String
-  items_json       Json
-  built_at         DateTime         @default(now())
-  confirmed        Boolean          @default(false)
-  CorporateCompany CorporateCompany @relation(fields: [company_id], references: [id], onDelete: Cascade)
-  ProductionPlan   ProductionPlan   @relation(fields: [plan_id], references: [id])
-}
+// ─────────────────────────────────────────────────────────────────────────────
+// CORPORATE MODULE
+// Replaces Flask + Google Sheets (betterday-app) — all data lives in Neon.
+// Role separation enforced at JWT level: CORP_EMPLOYEE / CORP_MANAGER / ADMIN.
+// Culinary staff have zero visibility into these models and vice-versa.
+// ─────────────────────────────────────────────────────────────────────────────
 
 enum CorpOrderStatus {
   pending
@@ -824,5 +550,252 @@ enum MealTier {
   tier1
   tier2
   tier3
-  office
+}
+
+// One row per client company (e.g. "SHAG", "DEMO")
+// Meaningful string ID kept from legacy system for zero-friction migration.
+model CorporateCompany {
+  id             String   @id               // e.g. "SHAG" — matches legacy CompanyID
+  slug           String   @unique            // lowercased URL-safe key (e.g. "shag") for corporate portal URLs
+  name           String
+  email          String?
+  phone          String?
+  address        String?
+  city           String?
+  province       String?
+  postal_code    String?
+  contact_name   String?
+  contact_phone  String?
+  contact_email  String?
+  is_active      Boolean  @default(true)
+  plan_type      String?                    // e.g. "Standard" | "Premium"
+  delivery_day   String?                    // "Wednesday" | "Thursday"
+  delivery_notes String?
+  // Fields that didn't map to dedicated columns are preserved as JSON
+  // so we lose zero data from the 61-column Google Sheet.
+  extra          Json?
+  created_at     DateTime @default(now())
+  updated_at     DateTime @updatedAt
+
+  employees          CorporateEmployee[]
+  orders             CorporateOrder[]
+  benefit_levels     CorporateBenefitLevel[]
+  par_levels         CorporateParLevel[]
+  company_pin        CorporateCompanyPIN?
+  invoices           CompanyInvoice[]
+  credit_notes       CorporateCreditNote[]
+  monthly_statements CorporateMonthlyStatement[]
+
+  @@index([is_active])
+}
+
+// One row per employee across all companies
+model CorporateEmployee {
+  id              String   @id @default(uuid())
+  employee_code   String   @unique           // legacy "EMP55814975" format
+  company_id      String
+  email           String
+  name            String
+  pin_hash        String?                    // bcrypt hash of 4-digit PIN
+  benefit_level   String?                   // "free" | "tier1" | "tier2" | "tier3"
+  meals_remaining Int      @default(0)       // resets weekly
+  is_active       Boolean  @default(true)
+  notes           String?
+  created_at      DateTime @default(now())
+  updated_at      DateTime @updatedAt
+
+  company       CorporateCompany  @relation(fields: [company_id], references: [id])
+  orders        CorporateOrder[]
+  magic_tokens  CorporateMagicToken[]
+
+  @@unique([company_id, email])
+  @@index([company_id])
+  @@index([employee_code])
+}
+
+// Order header — one per submission (employee may order multiple meals)
+model CorporateOrder {
+  id              String           @id @default(uuid())
+  order_code      String           @unique   // legacy "10022" format (no prefix)
+  company_id      String
+  employee_id     String?                    // null = company-level / walk-in
+  delivery_date   DateTime?
+  status          CorpOrderStatus  @default(pending)
+  total_amount    Float            @default(0)
+  employee_cost   Float            @default(0)
+  company_cost    Float            @default(0)
+  bd_cost         Float            @default(0)
+  notes           String?
+  source          String           @default("portal") // "portal" | "manager" | "import"
+  created_at      DateTime         @default(now())
+  updated_at      DateTime         @updatedAt
+
+  company    CorporateCompany    @relation(fields: [company_id], references: [id])
+  employee   CorporateEmployee?  @relation(fields: [employee_id], references: [id])
+  items      CorporateOrderItem[]
+
+  @@index([company_id])
+  @@index([employee_id])
+  @@index([delivery_date])
+  @@index([status])
+}
+
+// One row per meal line within an order
+model CorporateOrderItem {
+  id                String    @id @default(uuid())
+  order_id          String
+  meal_recipe_id    String?                  // FK to culinary MealRecipe (nullable until linked)
+  meal_external_id  String?                  // legacy "#509" format from GAS
+  meal_name         String                   // denormalised snapshot at order time
+  quantity          Int       @default(1)
+  tier              MealTier  @default(free)
+  unit_price        Float     @default(0)    // what employee actually pays per meal
+  employee_subsidy  Float     @default(0)
+  company_subsidy   Float     @default(0)
+  bd_subsidy        Float     @default(0)
+  line_total        Float     @default(0)    // unit_price × quantity
+
+  order       CorporateOrder @relation(fields: [order_id], references: [id], onDelete: Cascade)
+  meal_recipe MealRecipe?    @relation(fields: [meal_recipe_id], references: [id], onDelete: SetNull)
+
+  @@index([order_id])
+  @@index([meal_recipe_id])
+  @@index([meal_external_id])
+}
+
+// Employee benefit groups per company (from BenefitLevels sheet).
+// e.g. SHAG has "Base" (level 1), DEMO has "Manager" (level 1).
+// Each group has its own free-meal quota and per-tier pricing config.
+model CorporateBenefitLevel {
+  id               String  @id @default(uuid())
+  company_id       String
+  level_id         String              // legacy LevelID, e.g. "1" or "2"
+  level_name       String?             // e.g. "Base" | "Manager" | "General"
+  level_order      Int     @default(0)
+  free_meals_week  Int     @default(0) // FreeMealsPerWeek for this group
+  max_meals_week   Int     @default(0) // MaxMealsPerWeek cap
+  full_price       Float   @default(0) // FullPrice — cost if over all tier allotments
+  // All tier pricing columns stored as JSON to stay flexible:
+  // { free: { employeePrice, bdSubsidy, companySubsidy },
+  //   tier1: { meals, employeePrice, bdSubsidy, companySubsidy }, … }
+  tier_config      Json?
+
+  company CorporateCompany @relation(fields: [company_id], references: [id], onDelete: Cascade)
+
+  @@unique([company_id, level_id])
+  @@index([company_id])
+}
+
+// Par-level targets per category per company (e.g. "Protein" = 20 meals/week)
+model CorporateParLevel {
+  id            String  @id @default(uuid())
+  company_id    String
+  category_id   String  // e.g. "protein" | "vegan" | "salad"
+  category_name String?
+  par_quantity  Int     @default(0)
+  items_json    Json?   // optional breakdown of specific meal IDs within category
+
+  company CorporateCompany @relation(fields: [company_id], references: [id], onDelete: Cascade)
+
+  @@unique([company_id, category_id])
+  @@index([company_id])
+}
+
+// One PIN per company — used by manager portal login
+// PK = company_id so there is exactly one row per company (no uuid needed)
+model CorporateCompanyPIN {
+  company_id String   @id
+  pin_hash   String                         // bcrypt hash
+  updated_at DateTime @updatedAt
+
+  company CorporateCompany @relation(fields: [company_id], references: [id], onDelete: Cascade)
+}
+
+// Short-lived magic-link tokens emailed to employees (15-min TTL)
+// Replaces the in-memory dict in the Flask app
+model CorporateMagicToken {
+  token       String   @id                  // UUID/hex token sent in the email link
+  employee_id String?                       // nullable — resolved after employee lookup
+  email       String                        // raw email used to send the link
+  company_id  String                        // which company portal this is for
+  expires_at  DateTime                      // created_at + 15 min
+  is_used     Boolean  @default(false)
+  created_at  DateTime @default(now())
+
+  employee CorporateEmployee? @relation(fields: [employee_id], references: [id], onDelete: Cascade)
+
+  @@index([employee_id])
+  @@index([email])
+  @@index([expires_at])
+}
+
+// Company invoices generated by BD admin or auto-monthly
+model CompanyInvoice {
+  id             String   @id @default(uuid())
+  invoice_number String   @unique           // e.g. "INV-2024-001"
+  company_id     String
+  period_start   DateTime
+  period_end     DateTime
+  amount_total   Float    @default(0)
+  amount_paid    Float    @default(0)
+  status         String   @default("draft") // draft | sent | paid | overdue | void
+  notes          String?
+  pdf_url        String?
+  issued_at      DateTime?
+  due_at         DateTime?
+  created_at     DateTime @default(now())
+  updated_at     DateTime @updatedAt
+
+  company CorporateCompany @relation(fields: [company_id], references: [id])
+
+  @@index([company_id])
+  @@index([status])
+}
+
+// Credit notes issued to employees or companies
+model CorporateCreditNote {
+  id               String   @id @default(uuid())
+  credit_note_code String   @unique          // e.g. "CN-2024-001"
+  company_id       String
+  employee_id      String?                   // null = company-level credit
+  amount           Float
+  reason           String?
+  applied_to_order String?                   // order_code it was applied against
+  applied_at       DateTime?
+  is_void          Boolean  @default(false)
+  created_at       DateTime @default(now())
+  updated_at       DateTime @updatedAt
+
+  company CorporateCompany @relation(fields: [company_id], references: [id])
+
+  @@index([company_id])
+  @@index([employee_id])
+}
+
+// Monthly summary statement per company
+model CorporateMonthlyStatement {
+  id               String   @id @default(uuid())
+  statement_code   String   @unique          // e.g. "STMT-SHAG-2024-01"
+  company_id       String
+  month_year       String                    // "2024-01" ISO format
+  total_meals      Int      @default(0)
+  total_employee   Float    @default(0)      // total charged to employees
+  total_company    Float    @default(0)      // total charged to company
+  total_bd         Float    @default(0)      // total BD subsidy given
+  pdf_url          String?
+  created_at       DateTime @default(now())
+  updated_at       DateTime @updatedAt
+
+  company CorporateCompany @relation(fields: [company_id], references: [id])
+
+  @@index([company_id])
+  @@index([month_year])
+}
+
+// Key-value store for corporate settings (replaces Settings sheet)
+// e.g. key="last_order_id" value="10022"
+model CorporateSetting {
+  key        String   @id
+  value      String
+  updated_at DateTime @updatedAt
 }

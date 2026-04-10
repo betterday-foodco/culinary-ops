@@ -65,8 +65,17 @@ export class UpdateMealComponentDto {
 }
 
 export class CreateMealDto {
+  // Legacy admin-only "internal name" used for sorting workarounds in the old
+  // SPRWT system (e.g. "[Meat] Chicken Alfredo"). In the new model every dish
+  // has a proper diet_plan_id + category for sorting/filtering, so the
+  // internal name is no longer required at the UI level. The DB column is
+  // still NOT NULL — the service auto-fills it from display_name when the
+  // caller omits it, so the capability stays available for fringe cases
+  // (surfaced via the "Advanced / Admin" toggle on the meal edit page) but
+  // isn't a required field at the create step.
+  @IsOptional()
   @IsString()
-  name: string;
+  name?: string;
 
   @IsString()
   display_name: string;
@@ -74,6 +83,10 @@ export class CreateMealDto {
   @IsOptional()
   @IsString()
   category?: string;
+
+  @IsOptional()
+  @IsString()
+  diet_plan_id?: string | null; // uuid of a SystemTag row where type='diets' (Omnivore or Plant-Based). See ADR 2026-04-08.
 
   @IsOptional()
   @IsNumber()
@@ -116,17 +129,8 @@ export class CreateMealDto {
   image_url?: string;
 
   @IsOptional()
-  @IsNumber()
-  @Min(0)
-  net_weight_kg?: number;
-
-  @IsOptional()
   @IsUUID()
   linked_meal_id?: string | null;
-
-  @IsOptional()
-  @IsString()
-  diet_plan_id?: string | null;
 
   @IsOptional()
   @IsNumber()

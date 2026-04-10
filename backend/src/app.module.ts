@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
+import { ScheduleModule } from '@nestjs/schedule';
 import { PrismaModule } from './prisma/prisma.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { IngredientsModule } from './modules/ingredients/ingredients.module';
@@ -23,6 +24,9 @@ import { MealPrepWebhookModule } from './modules/mealprep-webhook/mealprep-webho
 import { MealPrepSyncModule } from './modules/mealprep-sync/mealprep-sync.module';
 import { CorporateSyncModule } from './modules/corporate-sync/corporate-sync.module';
 import { CorporateModule } from './modules/corporate/corporate.module';
+import { CommerceCustomersModule } from './modules/commerce-customers/commerce-customers.module';
+import { CommerceCheckoutModule } from './modules/commerce-checkout/commerce-checkout.module';
+import { CommerceCouponsModule } from './modules/commerce-coupons/commerce-coupons.module';
 import { HealthController } from './health.controller';
 import { ShopifyWebhookController } from './webhooks/shopify.controller';
 import { CostEngineService } from './services/cost-engine.service';
@@ -31,6 +35,7 @@ import { ProductionEngineService } from './services/production-engine.service';
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true }),
+    ScheduleModule.forRoot(),
     PrismaModule,
     AuthModule,
     IngredientsModule,
@@ -54,6 +59,9 @@ import { ProductionEngineService } from './services/production-engine.service';
     MealPrepSyncModule,
     CorporateSyncModule,
     CorporateModule,
+    CommerceCustomersModule,
+    CommerceCheckoutModule,
+    CommerceCouponsModule,
   ],
   controllers: [HealthController, ShopifyWebhookController],
   providers: [CostEngineService, ProductionEngineService],

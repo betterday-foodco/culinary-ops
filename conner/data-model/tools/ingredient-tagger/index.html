@@ -1,0 +1,1248 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>BetterDay Ingredient Tagger</title>
+<style>
+/* ──────────────────────────────────────────────────────────────────────
+   Self-contained styles — no external dependencies. Safe to hand off.
+   Color palette mirrors brand/tokens.css but is inlined so this file
+   runs standalone from any local HTTP server (no /brand/ needed).
+   ────────────────────────────────────────────────────────────────────── */
+:root {
+  --navy-dark:   #003141;
+  --navy:        #00465E;
+  --primary:     #4EA2FD;
+  --primary-sky: #E8F3FF;
+  --cream:       #FAEBDA;
+  --yellow:      #FFC600;
+  --green:       #6BBD52;
+  --green-dark:  #167421;
+  --red:         #D93025;
+  --amber:       #E6B300;
+  --g50:         #f9fafb;
+  --g100:        #f3f4f6;
+  --g200:        #e5e7eb;
+  --g300:        #d1d5db;
+  --g400:        #9ca3af;
+  --g500:        #6b7280;
+  --g700:        #374151;
+  --g900:        #111827;
+  --border:      1px solid var(--g200);
+  --radius:      8px;
+  --radius-lg:   12px;
+  --shadow:      0 1px 3px rgba(0,49,65,.08), 0 4px 12px rgba(0,49,65,.04);
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+  font-size: 14px;
+  color: var(--g900);
+  background: var(--g50);
+  line-height: 1.5;
+}
+/* ── Top bar ── */
+.topbar {
+  position: sticky; top: 0; z-index: 50;
+  background: white; border-bottom: 2px solid var(--navy-dark);
+  padding: 14px 24px 12px;
+  box-shadow: 0 2px 8px rgba(0,49,65,.06);
+}
+.topbar-row {
+  display: flex; align-items: center; gap: 16px;
+  flex-wrap: wrap;
+}
+.topbar-title {
+  font-size: 18px; font-weight: 800; color: var(--navy-dark);
+  margin-right: auto;
+}
+.topbar-title small {
+  display: block; font-size: 11px; font-weight: 500; color: var(--g500);
+  margin-top: 2px;
+}
+.stats {
+  display: flex; gap: 18px; font-size: 12px; color: var(--g500);
+}
+.stat { display: inline-flex; align-items: baseline; gap: 5px; }
+.stat b { font-size: 15px; font-weight: 800; color: var(--navy-dark); }
+.stat.done b { color: var(--green-dark); }
+.stat.dirty b { color: var(--amber); }
+.stat.warn b { color: var(--red); }
+.btn {
+  padding: 8px 14px; border: 1.5px solid var(--navy-dark); border-radius: 100px;
+  background: white; color: var(--navy-dark); font-family: inherit;
+  font-size: 12px; font-weight: 700; cursor: pointer; transition: all .12s;
+  white-space: nowrap;
+}
+.btn:hover { background: var(--navy-dark); color: white; }
+.btn-primary { background: var(--navy-dark); color: white; }
+.btn-primary:hover { background: var(--navy); }
+.btn-danger { border-color: var(--red); color: var(--red); }
+.btn-danger:hover { background: var(--red); color: white; }
+
+/* ── Filter row ── */
+.filter-row {
+  display: flex; align-items: center; gap: 10px; margin-top: 12px;
+  flex-wrap: wrap;
+}
+.filter-row input[type="search"] {
+  flex: 1; min-width: 220px;
+  padding: 8px 14px; border: var(--border); border-radius: 100px;
+  font-family: inherit; font-size: 13px;
+}
+.filter-row input[type="search"]:focus {
+  outline: none; border-color: var(--primary); box-shadow: 0 0 0 3px rgba(78,162,253,.15);
+}
+.filter-row select {
+  padding: 8px 12px; border: var(--border); border-radius: 100px;
+  font-family: inherit; font-size: 12px; font-weight: 600;
+  background: white; cursor: pointer;
+}
+
+/* ── Main list ── */
+main {
+  max-width: 1200px; margin: 0 auto; padding: 20px;
+}
+.loading {
+  text-align: center; padding: 60px; color: var(--g500); font-size: 14px;
+}
+.empty-state {
+  text-align: center; padding: 40px; color: var(--g400);
+  font-style: italic; font-size: 13px;
+}
+
+/* ── Status badges (used in the row + modal) ── */
+.status-badge {
+  padding: 2px 8px; border-radius: 100px;
+  font-size: 9px; font-weight: 800; text-transform: uppercase; letter-spacing: .06em;
+  white-space: nowrap;
+}
+.status-badge.matched { background: var(--primary-sky); color: var(--primary); }
+.status-badge.needs_review { background: var(--g100); color: var(--g700); }
+.status-badge.sprwt_only { background: #fee; color: var(--red); }
+.status-badge.dirty { background: #fef3c7; color: #92400e; }
+
+/* ── Ingredient table (compact, spreadsheet-style) ── */
+.ingredient-table {
+  width: 100%; border-collapse: collapse;
+  background: white; box-shadow: var(--shadow); border-radius: var(--radius-lg);
+  overflow: hidden;
+}
+.ingredient-table thead th {
+  position: sticky; top: 118px; /* below topbar */
+  background: var(--navy-dark); color: white;
+  padding: 10px 12px;
+  font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: .06em;
+  text-align: left; z-index: 10;
+}
+.ingredient-table tbody tr {
+  border-bottom: 1px solid var(--g100);
+  transition: background .08s;
+}
+.ingredient-table tbody tr:nth-child(even) { background: #fafbfc; }
+.ingredient-table tbody tr:hover { background: var(--primary-sky); cursor: pointer; }
+.ingredient-table tbody tr.dirty {
+  background: #fef9e7;
+  box-shadow: inset 3px 0 0 var(--amber);
+}
+.ingredient-table tbody tr.sprwt_only {
+  background: #fef5f5;
+  box-shadow: inset 3px 0 0 var(--red);
+  color: var(--g500);
+}
+.ingredient-table tbody tr.matched {
+  box-shadow: inset 3px 0 0 var(--primary);
+}
+.ingredient-table td {
+  padding: 8px 12px; font-size: 12px; vertical-align: middle;
+}
+.ingredient-table td.cell-name {
+  font-weight: 700; color: var(--navy-dark);
+  max-width: 320px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.ingredient-table td.cell-meta {
+  font-size: 10px; color: var(--g500); text-transform: uppercase; letter-spacing: .04em;
+  white-space: nowrap;
+}
+.ingredient-table td.cell-tags {
+  min-width: 180px;
+}
+.ingredient-table td.cell-status { width: 110px; }
+.ingredient-table td.cell-action { width: 78px; text-align: right; }
+
+/* Inline tag chips (read-only display in the row) */
+.tag-inline {
+  display: inline-block;
+  padding: 1px 8px; margin: 1px 3px 1px 0;
+  border-radius: 100px;
+  font-size: 10px; font-weight: 700; white-space: nowrap;
+}
+.tag-inline.allergen { background: var(--cream); color: var(--navy-dark); }
+.tag-inline.dislike  { background: #fef3c7; color: #92400e; }
+.tag-inline.suggestion { background: var(--primary-sky); color: var(--primary); border: 1px dashed var(--primary); }
+.tag-empty { color: var(--g400); font-style: italic; font-size: 11px; }
+
+/* Tag button in each row */
+.tag-btn {
+  padding: 5px 12px;
+  border: 1.5px solid var(--navy-dark); border-radius: 100px;
+  background: white; color: var(--navy-dark);
+  font-family: inherit; font-size: 11px; font-weight: 700;
+  cursor: pointer; transition: all .1s;
+  white-space: nowrap;
+}
+.tag-btn:hover { background: var(--navy-dark); color: white; }
+.tag-btn.has-suggestion { border-color: var(--primary); color: var(--primary); }
+.tag-btn.has-suggestion:hover { background: var(--primary); color: white; }
+
+/* ── Modal (opens when Tag… clicked) ── */
+.modal-backdrop {
+  position: fixed; inset: 0; z-index: 150;
+  background: rgba(0,49,65,.55);
+  display: none;
+  align-items: center; justify-content: center;
+  padding: 20px;
+}
+.modal-backdrop.open { display: flex; }
+.modal {
+  background: white; border-radius: var(--radius-lg);
+  box-shadow: 0 20px 60px rgba(0,49,65,.35);
+  max-width: 680px; width: 100%; max-height: 90vh;
+  display: flex; flex-direction: column;
+}
+.modal-header {
+  padding: 16px 20px 14px;
+  border-bottom: var(--border);
+  display: flex; align-items: flex-start; gap: 14px;
+}
+.modal-title {
+  flex: 1; min-width: 0;
+}
+.modal-title h2 {
+  margin: 0; font-size: 18px; font-weight: 800; color: var(--navy-dark);
+  line-height: 1.25;
+}
+.modal-title .modal-meta {
+  font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em;
+  color: var(--g500); margin-top: 4px;
+}
+.modal-close {
+  width: 30px; height: 30px; padding: 0;
+  border: none; background: var(--g100); color: var(--g500);
+  border-radius: 6px; cursor: pointer; font-size: 18px; line-height: 1;
+  flex-shrink: 0;
+}
+.modal-close:hover { background: var(--g200); color: var(--navy-dark); }
+.modal-body {
+  padding: 16px 20px; overflow-y: auto; flex: 1;
+}
+.modal-section {
+  margin-bottom: 18px;
+}
+.modal-section-label {
+  font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: .05em;
+  color: var(--g500); margin-bottom: 8px;
+  display: flex; align-items: center; gap: 10px;
+}
+.modal-section-label .accept-btn {
+  padding: 3px 10px; font-size: 10px; border: 1.5px solid var(--primary);
+  background: white; color: var(--primary); border-radius: 100px;
+  cursor: pointer; font-weight: 700; text-transform: none; letter-spacing: 0;
+}
+.modal-section-label .accept-btn:hover { background: var(--primary); color: white; }
+.modal-section-label .clear-btn {
+  padding: 3px 10px; font-size: 10px; border: 1.5px solid var(--g300);
+  background: white; color: var(--g500); border-radius: 100px;
+  cursor: pointer; font-weight: 700; text-transform: none; letter-spacing: 0;
+}
+.modal-section-label .clear-btn:hover { background: var(--g200); }
+
+/* Suggestion box (shows SPRWT + current Neon state at a glance) */
+.suggestion-box {
+  background: var(--primary-sky);
+  border: 1px dashed var(--primary);
+  border-radius: var(--radius);
+  padding: 10px 12px;
+  margin-bottom: 14px;
+  font-size: 12px;
+}
+.suggestion-box .suggestion-label {
+  font-size: 10px; font-weight: 800; text-transform: uppercase;
+  color: var(--primary); letter-spacing: .05em;
+  margin-bottom: 6px;
+}
+.suggestion-box .suggestion-chips { display: flex; flex-wrap: wrap; gap: 4px; }
+
+/* Chip pickers (inside modal) */
+.chip-picker {
+  display: flex; flex-wrap: wrap; gap: 6px;
+}
+.chip {
+  padding: 6px 14px; border-radius: 100px;
+  border: 1.5px solid var(--g300); background: white;
+  font-family: inherit; font-size: 12px; font-weight: 600;
+  color: var(--g700); cursor: pointer; transition: all .1s;
+  user-select: none;
+}
+.chip:hover { border-color: var(--navy); color: var(--navy-dark); }
+.chip.selected {
+  background: var(--navy-dark); color: white; border-color: var(--navy-dark);
+}
+.chip.selected:hover { background: var(--navy); }
+.chip.suggested {
+  border-color: var(--primary); background: var(--primary-sky); color: var(--primary);
+}
+.chip.suggested.selected {
+  background: var(--primary); color: white; border-color: var(--primary);
+}
+
+/* Notes input inside the modal */
+.modal-notes {
+  width: 100%; padding: 8px 12px;
+  border: var(--border); border-radius: var(--radius);
+  font-family: inherit; font-size: 12px;
+}
+.modal-notes:focus { outline: none; border-color: var(--primary); }
+
+.modal-footer {
+  padding: 12px 20px;
+  border-top: var(--border);
+  display: flex; justify-content: flex-end; gap: 10px;
+  background: var(--g50);
+}
+
+/* ── Toast ── */
+.toast {
+  position: fixed; bottom: 20px; right: 20px;
+  padding: 12px 18px; background: var(--navy-dark); color: white;
+  border-radius: var(--radius); box-shadow: var(--shadow);
+  font-size: 12px; font-weight: 600; z-index: 100;
+  opacity: 0; transform: translateY(10px); transition: all .2s;
+  pointer-events: none;
+}
+.toast.show { opacity: 1; transform: translateY(0); }
+
+/* ── Help panel ── */
+details.help {
+  max-width: 1200px; margin: 16px auto 0; padding: 0 20px;
+}
+details.help summary {
+  cursor: pointer; font-size: 12px; font-weight: 700; color: var(--g500);
+  padding: 6px 0;
+}
+details.help summary:hover { color: var(--navy-dark); }
+details.help .help-body {
+  background: white; border: var(--border); border-radius: var(--radius);
+  padding: 14px 18px; margin-top: 8px; font-size: 12px; line-height: 1.6;
+  color: var(--g700);
+}
+details.help code {
+  background: var(--g100); padding: 1px 6px; border-radius: 3px;
+  font-size: 11px; color: var(--navy-dark);
+}
+
+/* ── Dropzone (shown when auto-fetch fails) ── */
+.dropzone {
+  max-width: 620px; margin: 60px auto; padding: 56px 40px;
+  border: 3px dashed var(--g300); border-radius: 16px;
+  background: white; text-align: center; cursor: pointer;
+  transition: all .15s;
+}
+.dropzone:hover { border-color: var(--primary); background: #fafbfc; }
+.dropzone.drag-over {
+  border-color: var(--primary); background: var(--primary-sky);
+  transform: scale(1.01);
+}
+.dropzone-icon { font-size: 56px; opacity: .35; line-height: 1; }
+.dropzone h2 {
+  margin: 18px 0 8px; color: var(--navy-dark);
+  font-size: 20px; font-weight: 800;
+}
+.dropzone p { color: var(--g500); font-size: 13px; margin: 4px 0; }
+.dropzone .dropzone-hint {
+  margin-top: 18px; font-size: 11px; color: var(--g400); line-height: 1.5;
+}
+.dropzone code {
+  background: var(--g100); padding: 1px 6px; border-radius: 3px;
+  font-size: 10px; color: var(--navy-dark); font-family: ui-monospace, monospace;
+}
+.dropzone.drag-over * { pointer-events: none; }
+
+/* Body-wide drop indicator (when you drag a file over the whole page) */
+body.drag-over-page::after {
+  content: 'Drop the CSV to load it';
+  position: fixed; inset: 0; z-index: 200;
+  display: flex; align-items: center; justify-content: center;
+  background: rgba(78,162,253,0.12);
+  border: 4px dashed var(--primary);
+  color: var(--navy-dark); font-weight: 800; font-size: 20px;
+  pointer-events: none;
+}
+</style>
+</head>
+<body>
+
+<header class="topbar">
+  <div class="topbar-row">
+    <div class="topbar-title">
+      BetterDay Ingredient Tagger
+      <small>Allergen &amp; dislike review — conner-local-dev branch backfill</small>
+    </div>
+    <div class="stats">
+      <span class="stat">Total <b id="stat-total">—</b></span>
+      <span class="stat matched">Matched <b id="stat-matched">—</b></span>
+      <span class="stat">Need review <b id="stat-review">—</b></span>
+      <span class="stat warn">SPRWT only <b id="stat-sprwt">—</b></span>
+      <span class="stat dirty">Edited <b id="stat-dirty">—</b></span>
+    </div>
+  </div>
+  <div class="filter-row">
+    <input type="search" id="search" placeholder="Search ingredient name, SKU, or category…" autocomplete="off">
+    <select id="status-filter">
+      <option value="all">All statuses</option>
+      <option value="matched">Matched (has SPRWT suggestion)</option>
+      <option value="needs_review">Needs review (no SPRWT data)</option>
+      <option value="sprwt_only">SPRWT only (not in Neon)</option>
+      <option value="dirty">Edited only</option>
+    </select>
+    <select id="allergen-filter">
+      <option value="all">Any allergen</option>
+      <!-- populated from canonical list in JS -->
+    </select>
+    <button class="btn" onclick="acceptAllSuggestions()" title="Copy SPRWT suggestions to final for every visible matched row">Accept visible ✓</button>
+    <button class="btn" onclick="document.getElementById('file-input').click()" title="Load a different CSV from disk (e.g. an edited version)">📂 Load CSV…</button>
+    <input type="file" id="file-input" accept=".csv,text/csv" style="display:none">
+    <button class="btn btn-primary" onclick="downloadCSV()">💾 Download CSV</button>
+    <button class="btn btn-primary" onclick="downloadSQL()">📋 Download SQL</button>
+    <button class="btn btn-danger" onclick="clearDraft()">🗑 Clear draft</button>
+  </div>
+</header>
+
+<details class="help">
+  <summary>ℹ️ How this works + workflow</summary>
+  <div class="help-body">
+    <p><strong>Data source:</strong> <code>ingredients-review.csv</code> loaded on page open. Rows come from a join of the Neon <code>Ingredient</code> table (302 rows from production) with an extraction of allergen data from the SPRWT admin UI PDF export (144 rows).</p>
+    <p><strong>Workflow:</strong></p>
+    <ol>
+      <li>Rows marked <span class="status-badge matched" style="display:inline-block">matched</span> have SPRWT suggestions — review and click <strong>Accept ✓</strong> on each, or click <strong>Accept visible ✓</strong> at the top to bulk-accept a filtered subset.</li>
+      <li>Rows marked <span class="status-badge needs_review" style="display:inline-block">needs review</span> have no SPRWT data — click the allergen chips yourself if you know what's in them.</li>
+      <li>Rows marked <span class="status-badge sprwt_only" style="display:inline-block">sprwt only</span> are ingredients that exist in the SPRWT PDF but NOT in the Neon <code>Ingredient</code> table. These can't be updated (no Neon id) — they're flagged for Darlene to migrate separately.</li>
+      <li>Your edits are <strong>auto-saved to localStorage</strong> on every click. Refresh the page and your work is still there. Use <strong>Clear draft</strong> to start over.</li>
+      <li>When done, click <strong>Download CSV</strong> to get the full edited dataset, or <strong>Download SQL</strong> to get UPDATE statements for just the changed rows. The SQL is safe to run against any Neon branch — it only touches the rows you explicitly edited.</li>
+    </ol>
+    <p><strong>Allergen list:</strong> the 13 canonical allergens from the <code>SystemTag</code> table (Peanuts, Tree Nuts, Eggs, Fish, Shellfish, Crustaceans, Soy, Sesame, Wheat, Mustard, Sulphites, Dairy, Gluten). Corn, Hemp, Chickpea, Lentil, Sunflower and other SPRWT-legacy &quot;allergens&quot; are intentionally excluded — those are being retired.</p>
+    <p><strong>Dislikes:</strong> preserved in the CSV for future use but <em>not</em> written to Neon yet — the Ingredient table has no <code>dislikes</code> column. When Gurleen adds one, the captured values can be applied with a one-liner.</p>
+    <p><strong>Running this tool:</strong> <code>python3 -m http.server 8000</code> from anywhere (this folder or the repo root), then open <code>http://localhost:8000/index.html</code> if you're serving this folder directly, or navigate to the folder if you're serving from the repo root.</p>
+  </div>
+</details>
+
+<main id="list">
+  <div class="loading">Loading ingredients-review.csv…</div>
+</main>
+
+<div class="toast" id="toast"></div>
+
+<!-- Tagging modal (populated by renderModalBody() when a row is clicked) -->
+<div class="modal-backdrop" id="modal-backdrop">
+  <div class="modal" id="modal" role="dialog" aria-modal="true"></div>
+</div>
+
+<script>
+// ──────────────────────────────────────────────────────────────────────
+// Canonical SystemTag vocabulary
+// ──────────────────────────────────────────────────────────────────────
+const ALLERGENS = [
+  'Peanuts', 'Tree Nuts', 'Eggs', 'Fish', 'Shellfish', 'Crustaceans',
+  'Soy', 'Sesame', 'Wheat', 'Gluten', 'Mustard', 'Sulphites', 'Dairy',
+];
+
+// Dislike list — preserved for future use when Ingredient gets a dislikes
+// column. Edits here stay in the CSV export but are NOT in the SQL export.
+const DISLIKES = [
+  'Spicy', 'Cilantro', 'Mushrooms', 'Eggplant', 'Pineapple', 'Olives',
+  'Sunflower', 'Cashew', 'Beets', 'Zucchini', 'Quinoa', 'Corn', 'Lentil',
+  'Chickpea', 'Soy Curls', 'Onion', 'Kale', 'Coconut', 'Raw Veg',
+];
+
+const STORAGE_KEY = 'bd-ingredient-tagger-draft-v1';
+
+// ──────────────────────────────────────────────────────────────────────
+// State
+// ──────────────────────────────────────────────────────────────────────
+let rows = [];              // parsed CSV rows (original from file)
+let edits = {};             // id (or synthetic key) → { final_allergens, final_dislikes, notes }
+let filters = { search: '', status: 'all', allergen: 'all' };
+
+function rowKey(r) {
+  // Neon rows have a UUID id; SPRWT-only rows don't, so fall back to name.
+  return r.id || ('sprwt_only::' + r.display_name);
+}
+
+// ──────────────────────────────────────────────────────────────────────
+// CSV parsing (handles quoted fields with commas/newlines)
+// ──────────────────────────────────────────────────────────────────────
+function parseCSV(text) {
+  const out = [];
+  let i = 0, field = '', row = [], inQuotes = false;
+  while (i < text.length) {
+    const c = text[i];
+    if (inQuotes) {
+      if (c === '"') {
+        if (text[i + 1] === '"') { field += '"'; i += 2; continue; }
+        inQuotes = false; i++; continue;
+      }
+      field += c; i++; continue;
+    }
+    if (c === '"') { inQuotes = true; i++; continue; }
+    if (c === ',') { row.push(field); field = ''; i++; continue; }
+    if (c === '\n' || c === '\r') {
+      if (field !== '' || row.length > 0) { row.push(field); out.push(row); row = []; field = ''; }
+      if (c === '\r' && text[i + 1] === '\n') i++;
+      i++; continue;
+    }
+    field += c; i++;
+  }
+  if (field !== '' || row.length > 0) { row.push(field); out.push(row); }
+  if (out.length === 0) return [];
+  const header = out[0];
+  return out.slice(1).map(r => {
+    const o = {};
+    header.forEach((h, idx) => { o[h] = (r[idx] ?? '').trim(); });
+    return o;
+  });
+}
+
+function splitTags(s) {
+  if (!s) return [];
+  return s.split(';').map(x => x.trim()).filter(Boolean);
+}
+
+function joinTags(arr) {
+  return (arr || []).join('; ');
+}
+
+// CSV value escaping for export
+function csvEscape(v) {
+  if (v == null) return '';
+  const s = String(v);
+  if (s.includes(',') || s.includes('"') || s.includes('\n')) {
+    return '"' + s.replace(/"/g, '""') + '"';
+  }
+  return s;
+}
+
+// ──────────────────────────────────────────────────────────────────────
+// Load CSV on page open — tries fetch() first, falls back to dropzone
+// ──────────────────────────────────────────────────────────────────────
+async function loadCSV() {
+  try {
+    const res = await fetch('ingredients-review.csv');
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const text = await res.text();
+    loadCSVFromText(text);
+  } catch (e) {
+    // fetch() fails when opened via file:// OR when the server isn't
+    // serving the CSV from this folder. Either way, fall back to the
+    // dropzone UI so the user can load the file manually.
+    console.info('Auto-fetch failed, showing dropzone:', e.message);
+    showDropzone();
+  }
+}
+
+// Parse + install a CSV. Called by loadCSV() (auto-fetch) AND by
+// readFile() (drag-drop or file input). Safe to call multiple times —
+// each call replaces rows[] but preserves the edits map, so a user can
+// drop an updated CSV without losing their in-progress tagging.
+function loadCSVFromText(text) {
+  rows = parseCSV(text);
+  if (rows.length === 0) {
+    toast('CSV has no rows');
+    showDropzone();
+    return;
+  }
+  // Verify the CSV has the expected columns — if not, it's probably
+  // the wrong file (user dropped a meals CSV or something else).
+  const requiredCols = ['id', 'display_name', 'status'];
+  const firstRow = rows[0];
+  const missing = requiredCols.filter(c => !(c in firstRow));
+  if (missing.length > 0) {
+    toast(`Wrong CSV — missing columns: ${missing.join(', ')}`);
+    showDropzone();
+    return;
+  }
+  loadEdits();
+  rows.forEach(r => {
+    const key = rowKey(r);
+    if (!edits[key]) {
+      edits[key] = {
+        final_allergens: splitTags(r.final_allergens),
+        final_dislikes: splitTags(r.final_dislikes),
+        notes: r.notes || '',
+        accepted: false,
+      };
+    }
+  });
+  populateAllergenFilter();
+  render();
+  toast(`Loaded ${rows.length} ingredients`);
+}
+
+// Read a File (from drag-drop or <input type="file">) and install it.
+function readFile(file) {
+  if (!file) return;
+  if (!file.name.toLowerCase().endsWith('.csv')) {
+    toast('Please drop a .csv file');
+    return;
+  }
+  const reader = new FileReader();
+  reader.onload = e => loadCSVFromText(e.target.result);
+  reader.onerror = () => toast('Failed to read file: ' + reader.error);
+  reader.readAsText(file);
+}
+
+// Show the fallback dropzone when fetch() fails or after clearDraft.
+function showDropzone() {
+  const listEl = document.getElementById('list');
+  listEl.innerHTML = `
+    <div id="dropzone" class="dropzone">
+      <div class="dropzone-icon">📄</div>
+      <h2>Drop <code>ingredients-review.csv</code> here</h2>
+      <p>or click to choose a file from disk</p>
+      <p class="dropzone-hint">
+        This page normally loads the CSV automatically when you open it through a local HTTP server.
+        You're probably seeing this because you opened the file directly (<code>file://</code>) — that's fine,
+        just drop the CSV in and go. Your edits still auto-save to browser storage.
+      </p>
+    </div>`;
+  const dz = document.getElementById('dropzone');
+  dz.addEventListener('click', () => document.getElementById('file-input').click());
+  dz.addEventListener('dragover', e => {
+    e.preventDefault();
+    dz.classList.add('drag-over');
+  });
+  dz.addEventListener('dragleave', e => {
+    // Only clear if we've actually left the dropzone (not just moved to a child)
+    if (!dz.contains(e.relatedTarget)) dz.classList.remove('drag-over');
+  });
+  dz.addEventListener('drop', e => {
+    e.preventDefault();
+    dz.classList.remove('drag-over');
+    const file = e.dataTransfer?.files?.[0];
+    if (file) readFile(file);
+  });
+}
+
+// ──────────────────────────────────────────────────────────────────────
+// localStorage persistence
+// ──────────────────────────────────────────────────────────────────────
+function loadEdits() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (raw) edits = JSON.parse(raw);
+  } catch (e) { edits = {}; }
+}
+function saveEdits() {
+  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(edits)); }
+  catch (e) { console.warn('localStorage save failed', e); }
+}
+function clearDraft() {
+  if (!confirm('Clear all unsaved edits? Any tags you\'ve added will be lost. The loaded CSV stays in place.')) return;
+  localStorage.removeItem(STORAGE_KEY);
+  edits = {};
+  // Reset every row's edit state to the CSV's baseline
+  rows.forEach(r => {
+    edits[rowKey(r)] = {
+      final_allergens: splitTags(r.final_allergens),
+      final_dislikes: splitTags(r.final_dislikes),
+      notes: r.notes || '',
+      accepted: false,
+    };
+  });
+  render();
+  toast('Draft cleared');
+}
+
+// ──────────────────────────────────────────────────────────────────────
+// Row state helpers
+// ──────────────────────────────────────────────────────────────────────
+function isDirty(r) {
+  const e = edits[rowKey(r)];
+  if (!e) return false;
+  const currentNeon = new Set(splitTags(r.current_allergens_neon));
+  const finalSet = new Set(e.final_allergens);
+  if (currentNeon.size !== finalSet.size) return true;
+  for (const a of currentNeon) if (!finalSet.has(a)) return true;
+  if (e.notes && e.notes !== (r.notes || '')) return true;
+  if (e.final_dislikes && e.final_dislikes.length > 0) return true;
+  return false;
+}
+
+function setEdit(r, patch) {
+  const key = rowKey(r);
+  edits[key] = { ...edits[key], ...patch };
+  saveEdits();
+}
+
+function toggleAllergen(r, tag) {
+  const e = edits[rowKey(r)];
+  const arr = [...(e.final_allergens || [])];
+  const idx = arr.indexOf(tag);
+  if (idx >= 0) arr.splice(idx, 1);
+  else arr.push(tag);
+  // keep in canonical order
+  arr.sort((a, b) => ALLERGENS.indexOf(a) - ALLERGENS.indexOf(b));
+  setEdit(r, { final_allergens: arr });
+  updateRow(r);
+  updateStats();
+}
+function toggleDislike(r, tag) {
+  const e = edits[rowKey(r)];
+  const arr = [...(e.final_dislikes || [])];
+  const idx = arr.indexOf(tag);
+  if (idx >= 0) arr.splice(idx, 1);
+  else arr.push(tag);
+  arr.sort();
+  setEdit(r, { final_dislikes: arr });
+  updateRow(r);
+  updateStats();
+}
+function acceptSuggestion(r) {
+  setEdit(r, {
+    final_allergens: splitTags(r.sprwt_suggested_allergens),
+    final_dislikes: splitTags(r.sprwt_suggested_dislikes),
+  });
+  updateRow(r);
+  updateStats();
+  toast('Accepted suggestion');
+}
+function clearRow(r) {
+  setEdit(r, { final_allergens: [], final_dislikes: [] });
+  updateRow(r);
+  updateStats();
+}
+function setNotes(r, val) {
+  setEdit(r, { notes: val });
+  // no re-render (avoid losing focus)
+  updateStats();
+}
+
+// ──────────────────────────────────────────────────────────────────────
+// Rendering
+// ──────────────────────────────────────────────────────────────────────
+function esc(s) {
+  return String(s ?? '').replace(/[&<>"']/g, c => ({
+    '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'
+  }[c]));
+}
+
+// Compact one-line row — the spreadsheet-style view. Tag chips are
+// read-only displays here; editing happens in the modal (see renderModal).
+function renderRow(r) {
+  const key = rowKey(r);
+  const e = edits[key] || { final_allergens: [], final_dislikes: [], notes: '' };
+  const dirty = isDirty(r);
+  const rowClass = [r.status, dirty ? 'dirty' : ''].filter(Boolean).join(' ');
+
+  // Prefer edited values; fall back to current Neon state for display.
+  const displayAllergens = dirty
+    ? (e.final_allergens || [])
+    : splitTags(r.current_allergens_neon);
+  const displayDislikes = e.final_dislikes || [];
+  const sprwtAllergens = splitTags(r.sprwt_suggested_allergens);
+  const sprwtDislikes = splitTags(r.sprwt_suggested_dislikes);
+  const hasSuggestion = sprwtAllergens.length > 0 || sprwtDislikes.length > 0;
+
+  const statusLabel = dirty ? 'edited' : r.status.replace('_', ' ');
+  const statusClass = dirty ? 'dirty' : r.status;
+
+  // Show suggestion chips (dashed blue) for unaccepted SPRWT matches so
+  // you can scan for "what does the PDF say for each row" at a glance.
+  const showSuggestionHint = !dirty && hasSuggestion && splitTags(r.current_allergens_neon).length === 0;
+
+  // Build the inline tag chip HTML — what renders in the row's tag cell.
+  let tagsHtml = '';
+  if (displayAllergens.length === 0 && displayDislikes.length === 0) {
+    if (showSuggestionHint) {
+      tagsHtml = sprwtAllergens.map(t => `<span class="tag-inline suggestion">${esc(t)}</span>`).join('')
+               + sprwtDislikes.map(t => `<span class="tag-inline suggestion">${esc(t)} (dislike)</span>`).join('');
+    } else {
+      tagsHtml = '<span class="tag-empty">— none —</span>';
+    }
+  } else {
+    tagsHtml = displayAllergens.map(t => `<span class="tag-inline allergen">${esc(t)}</span>`).join('')
+             + displayDislikes.map(t => `<span class="tag-inline dislike">${esc(t)}</span>`).join('');
+  }
+
+  // Tag button varies for rows that can't be updated (sprwt_only — no Neon id)
+  const tagBtnClass = showSuggestionHint ? 'tag-btn has-suggestion' : 'tag-btn';
+  const tagBtnLabel = r.status === 'sprwt_only' ? 'View' : 'Tag…';
+
+  return `
+    <tr class="${rowClass}" data-key="${esc(key)}" data-action="open-modal">
+      <td class="cell-name" title="${esc(r.display_name)}">${esc(r.display_name)}</td>
+      <td class="cell-meta">${esc(r.category || '')}</td>
+      <td class="cell-tags">${tagsHtml}</td>
+      <td class="cell-status"><span class="status-badge ${statusClass}">${statusLabel}</span></td>
+      <td class="cell-action">
+        <button class="${tagBtnClass}" data-action="open-modal" data-key="${esc(key)}">${tagBtnLabel}</button>
+      </td>
+    </tr>`;
+}
+
+// Render the modal body for a given row. Called when the modal opens AND
+// re-called after each chip toggle so the selected state stays in sync.
+function renderModalBody(r) {
+  const key = rowKey(r);
+  const e = edits[key] || { final_allergens: [], final_dislikes: [], notes: '' };
+  const currentAllergens = splitTags(r.current_allergens_neon);
+  const sprwtAllergens = splitTags(r.sprwt_suggested_allergens);
+  const sprwtDislikes = splitTags(r.sprwt_suggested_dislikes);
+  const sprwtRaw = splitTags(r.sprwt_raw_allergens);
+
+  // Suggestion summary panel (only shown if SPRWT PDF had data for this row)
+  const suggestionBox = (sprwtAllergens.length > 0 || sprwtDislikes.length > 0)
+    ? `
+      <div class="suggestion-box">
+        <div class="suggestion-label">📄 SPRWT PDF suggestion${sprwtRaw.length > 0 && sprwtRaw.join(';') !== sprwtAllergens.join(';') ? ` <span style="color:var(--g500);font-weight:500;text-transform:none">(raw: ${esc(sprwtRaw.join(', '))})</span>` : ''}</div>
+        <div class="suggestion-chips">
+          ${sprwtAllergens.map(t => `<span class="tag-inline allergen">${esc(t)}</span>`).join('')}
+          ${sprwtDislikes.map(t => `<span class="tag-inline dislike">${esc(t)} (dislike)</span>`).join('')}
+        </div>
+      </div>`
+    : '';
+
+  // Current Neon state panel (always shown, tells you what's already there)
+  const currentBox = currentAllergens.length > 0
+    ? `
+      <div class="suggestion-box" style="background:var(--cream);border-color:var(--navy);">
+        <div class="suggestion-label" style="color:var(--navy-dark)">✓ Currently in Neon</div>
+        <div class="suggestion-chips">
+          ${currentAllergens.map(t => `<span class="tag-inline allergen">${esc(t)}</span>`).join('')}
+        </div>
+      </div>`
+    : '';
+
+  return `
+    <div class="modal-header">
+      <div class="modal-title">
+        <h2>${esc(r.display_name)}</h2>
+        <div class="modal-meta">
+          ${r.category ? esc(r.category) + ' · ' : ''}
+          ${r.sku ? 'SKU ' + esc(r.sku) + ' · ' : ''}
+          ${r.supplier_name ? esc(r.supplier_name) + ' · ' : ''}
+          <span class="status-badge ${isDirty(r) ? 'dirty' : r.status}">${isDirty(r) ? 'edited' : r.status.replace('_', ' ')}</span>
+        </div>
+      </div>
+      <button class="modal-close" data-action="close-modal" title="Close (Esc)">✕</button>
+    </div>
+    <div class="modal-body">
+      ${currentBox}
+      ${suggestionBox}
+      <div class="modal-section">
+        <div class="modal-section-label">
+          Allergens
+          ${sprwtAllergens.length > 0 ? `<button class="accept-btn" data-action="accept" data-key="${esc(key)}">Accept SPRWT ✓</button>` : ''}
+          <button class="clear-btn" data-action="clear" data-key="${esc(key)}">Clear</button>
+        </div>
+        <div class="chip-picker">
+          ${ALLERGENS.map(a => {
+            const selected = e.final_allergens.includes(a);
+            const suggested = sprwtAllergens.includes(a);
+            const classes = ['chip'];
+            if (suggested) classes.push('suggested');
+            if (selected) classes.push('selected');
+            return `<button class="${classes.join(' ')}" data-action="toggle-allergen" data-key="${esc(key)}" data-tag="${esc(a)}">${esc(a)}</button>`;
+          }).join('')}
+        </div>
+      </div>
+      <div class="modal-section">
+        <div class="modal-section-label">
+          Dislikes
+          <span style="font-weight:500;text-transform:none;letter-spacing:0;color:var(--g400);font-size:10px">(captured in CSV, not yet a Neon column)</span>
+        </div>
+        <div class="chip-picker">
+          ${DISLIKES.map(d => {
+            const selected = e.final_dislikes.includes(d);
+            const suggested = sprwtDislikes.includes(d);
+            const classes = ['chip'];
+            if (suggested) classes.push('suggested');
+            if (selected) classes.push('selected');
+            return `<button class="${classes.join(' ')}" data-action="toggle-dislike" data-key="${esc(key)}" data-tag="${esc(d)}">${esc(d)}</button>`;
+          }).join('')}
+        </div>
+      </div>
+      <div class="modal-section">
+        <div class="modal-section-label">Notes</div>
+        <input type="text" class="modal-notes" value="${esc(e.notes || '')}"
+               data-action="notes" data-key="${esc(key)}"
+               placeholder="Optional — e.g. 'Transcription error in PDF' or 'Contains trace dairy'">
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn" data-action="close-modal">Done</button>
+    </div>`;
+}
+
+// Build a quick id→row lookup so chip onclick handlers can reference rows
+// without closures (simpler than rebuilding listeners on every render).
+window.__row__ = {};
+
+function rowMatches(r) {
+  if (filters.status === 'dirty') {
+    if (!isDirty(r)) return false;
+  } else if (filters.status !== 'all' && r.status !== filters.status) {
+    return false;
+  }
+  if (filters.allergen !== 'all') {
+    const e = edits[rowKey(r)] || {};
+    const finalSet = new Set(e.final_allergens || []);
+    const suggested = new Set(splitTags(r.sprwt_suggested_allergens));
+    const current = new Set(splitTags(r.current_allergens_neon));
+    if (!finalSet.has(filters.allergen) && !suggested.has(filters.allergen) && !current.has(filters.allergen)) {
+      return false;
+    }
+  }
+  if (filters.search) {
+    const q = filters.search.toLowerCase();
+    const hay = (r.display_name + ' ' + r.sku + ' ' + r.category + ' ' + r.supplier_name).toLowerCase();
+    if (!hay.includes(q)) return false;
+  }
+  return true;
+}
+
+function render() {
+  window.__row__ = {};
+  rows.forEach(r => { window.__row__[rowKey(r)] = r; });
+  const visible = rows.filter(rowMatches);
+  const listEl = document.getElementById('list');
+  if (visible.length === 0) {
+    listEl.innerHTML = '<div class="empty-state">No ingredients match your filters.</div>';
+  } else {
+    listEl.innerHTML = `
+      <table class="ingredient-table">
+        <thead>
+          <tr>
+            <th>Ingredient</th>
+            <th>Category</th>
+            <th>Tags</th>
+            <th>Status</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          ${visible.map(renderRow).join('')}
+        </tbody>
+      </table>`;
+  }
+  updateStats();
+  // If a modal is open, re-render its body in case the edited row changed
+  if (activeModalKey) refreshModal();
+}
+
+function updateRow(r) {
+  const key = rowKey(r);
+  // The row is now a <tr>. Using a tbody-scoped query avoids CSS.escape
+  // collisions with the colons in our SPRWT-only synthetic keys.
+  const existingEl = document.querySelector(`tr[data-key="${CSS.escape(key)}"]`);
+  if (!existingEl) return;
+  // Build the new <tr> via a temporary <table> so the parser doesn't
+  // strip it out (browsers only allow <tr> inside <table>/<tbody>).
+  const tmp = document.createElement('tbody');
+  tmp.innerHTML = renderRow(r);
+  const newEl = tmp.firstElementChild;
+  existingEl.replaceWith(newEl);
+  // Keep the open modal (if any) in sync with the updated row.
+  if (activeModalKey === key) refreshModal();
+}
+
+function updateStats() {
+  const total = rows.length;
+  const matched = rows.filter(r => r.status === 'matched').length;
+  const review = rows.filter(r => r.status === 'needs_review').length;
+  const sprwt = rows.filter(r => r.status === 'sprwt_only').length;
+  const dirty = rows.filter(isDirty).length;
+  document.getElementById('stat-total').textContent = total;
+  document.getElementById('stat-matched').textContent = matched;
+  document.getElementById('stat-review').textContent = review;
+  document.getElementById('stat-sprwt').textContent = sprwt;
+  document.getElementById('stat-dirty').textContent = dirty;
+}
+
+function populateAllergenFilter() {
+  const sel = document.getElementById('allergen-filter');
+  ALLERGENS.forEach(a => {
+    const opt = document.createElement('option');
+    opt.value = a; opt.textContent = a;
+    sel.appendChild(opt);
+  });
+}
+
+// ──────────────────────────────────────────────────────────────────────
+// Bulk actions
+// ──────────────────────────────────────────────────────────────────────
+function acceptAllSuggestions() {
+  const visible = rows.filter(rowMatches).filter(r => splitTags(r.sprwt_suggested_allergens).length > 0 || splitTags(r.sprwt_suggested_dislikes).length > 0);
+  if (visible.length === 0) { toast('No visible rows with suggestions'); return; }
+  if (!confirm(`Accept SPRWT suggestions for ${visible.length} visible rows?`)) return;
+  visible.forEach(r => {
+    setEdit(r, {
+      final_allergens: splitTags(r.sprwt_suggested_allergens),
+      final_dislikes: splitTags(r.sprwt_suggested_dislikes),
+    });
+  });
+  render();
+  toast(`Accepted ${visible.length} suggestions`);
+}
+
+// ──────────────────────────────────────────────────────────────────────
+// Export: CSV (full dataset with edits merged in) + SQL (dirty rows only)
+// ──────────────────────────────────────────────────────────────────────
+function downloadCSV() {
+  const cols = [
+    'id','display_name','category','sku','supplier_name',
+    'current_allergens_neon','sprwt_suggested_allergens','sprwt_suggested_dislikes',
+    'sprwt_raw_allergens','final_allergens','final_dislikes','status','notes',
+  ];
+  let out = cols.join(',') + '\n';
+  rows.forEach(r => {
+    const e = edits[rowKey(r)] || {};
+    const merged = {
+      ...r,
+      final_allergens: joinTags(e.final_allergens || []),
+      final_dislikes: joinTags(e.final_dislikes || []),
+      notes: e.notes || r.notes || '',
+    };
+    out += cols.map(c => csvEscape(merged[c] ?? '')).join(',') + '\n';
+  });
+  const stamp = new Date().toISOString().slice(0, 10);
+  downloadBlob(out, `ingredients-review-${stamp}.csv`, 'text/csv');
+  toast('CSV downloaded');
+}
+
+function downloadSQL() {
+  // Only rows where:
+  //   (a) row has a Neon id (status = matched | needs_review)
+  //   (b) final_allergens differs from current_allergens_neon
+  const changed = [];
+  rows.forEach(r => {
+    if (!r.id) return; // sprwt_only rows don't have a Neon id
+    const e = edits[rowKey(r)] || {};
+    if (!isDirty(r)) return;
+    changed.push({ id: r.id, name: r.display_name, allergens: e.final_allergens || [] });
+  });
+  if (changed.length === 0) {
+    toast('No edited rows to export');
+    return;
+  }
+  const sqlQuote = s => "'" + String(s).replace(/'/g, "''") + "'";
+  const sqlArr = a => a.length === 0 ? "ARRAY[]::text[]" : 'ARRAY[' + a.map(sqlQuote).join(', ') + ']::text[]';
+  const lines = [];
+  lines.push('-- ──────────────────────────────────────────────────────────────────');
+  lines.push('-- Generated by conner/data-model/tools/ingredient-tagger');
+  lines.push('-- Timestamp: ' + new Date().toISOString());
+  lines.push(`-- Rows to update: ${changed.length}`);
+  lines.push('--');
+  lines.push('-- Review the statements below. Safe to run against any Neon branch.');
+  lines.push('-- Each UPDATE targets a specific Ingredient.id, so there\'s no risk');
+  lines.push('-- of hitting unintended rows. Wraps in a transaction so the whole');
+  lines.push('-- set applies or none of it does.');
+  lines.push('-- ──────────────────────────────────────────────────────────────────');
+  lines.push('');
+  lines.push('BEGIN;');
+  lines.push('');
+  changed.forEach(c => {
+    lines.push(`-- ${c.name}`);
+    lines.push(`UPDATE "Ingredient" SET allergen_tags = ${sqlArr(c.allergens)}, updated_at = NOW() WHERE id = ${sqlQuote(c.id)};`);
+    lines.push('');
+  });
+  lines.push('-- Verify:');
+  const idList = changed.map(c => sqlQuote(c.id)).join(', ');
+  lines.push(`-- SELECT display_name, allergen_tags FROM "Ingredient" WHERE id IN (${idList});`);
+  lines.push('');
+  lines.push('COMMIT;');
+  const stamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+  downloadBlob(lines.join('\n'), `ingredient-allergen-backfill-${stamp}.sql`, 'text/plain');
+  toast(`SQL downloaded (${changed.length} UPDATE statements)`);
+}
+
+function downloadBlob(content, filename, mime) {
+  const blob = new Blob([content], { type: mime });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = filename;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+// ──────────────────────────────────────────────────────────────────────
+// Toast
+// ──────────────────────────────────────────────────────────────────────
+let toastTimer = null;
+function toast(msg) {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => el.classList.remove('show'), 2000);
+}
+
+// ──────────────────────────────────────────────────────────────────────
+// Wire up filters
+// ──────────────────────────────────────────────────────────────────────
+document.getElementById('search').addEventListener('input', e => {
+  filters.search = e.target.value; render();
+});
+document.getElementById('status-filter').addEventListener('change', e => {
+  filters.status = e.target.value; render();
+});
+document.getElementById('allergen-filter').addEventListener('change', e => {
+  filters.allergen = e.target.value; render();
+});
+
+// ──────────────────────────────────────────────────────────────────────
+// Modal (tagging popup)
+// ──────────────────────────────────────────────────────────────────────
+let activeModalKey = null;
+
+function openModal(key) {
+  const r = window.__row__[key];
+  if (!r) return;
+  activeModalKey = key;
+  const backdrop = document.getElementById('modal-backdrop');
+  const modal = document.getElementById('modal');
+  modal.innerHTML = renderModalBody(r);
+  backdrop.classList.add('open');
+  // Focus the first chip so keyboard users can immediately toggle
+  const firstChip = modal.querySelector('.chip');
+  if (firstChip) firstChip.focus();
+}
+
+function closeModal() {
+  activeModalKey = null;
+  document.getElementById('modal-backdrop').classList.remove('open');
+  document.getElementById('modal').innerHTML = '';
+}
+
+// Re-render the modal body in place (called from toggleAllergen etc.
+// so chip selected state updates as you click).
+function refreshModal() {
+  if (!activeModalKey) return;
+  const r = window.__row__[activeModalKey];
+  if (!r) return;
+  const modal = document.getElementById('modal');
+  // Preserve notes input focus + cursor position across re-renders
+  const activeEl = document.activeElement;
+  const isNotes = activeEl && activeEl.dataset?.action === 'notes';
+  const cursorPos = isNotes ? activeEl.selectionStart : null;
+  modal.innerHTML = renderModalBody(r);
+  if (isNotes) {
+    const newNotes = modal.querySelector('[data-action="notes"]');
+    if (newNotes) {
+      newNotes.focus();
+      if (cursorPos !== null) newNotes.setSelectionRange(cursorPos, cursorPos);
+    }
+  }
+}
+
+// ──────────────────────────────────────────────────────────────────────
+// Delegated event listeners
+// ──────────────────────────────────────────────────────────────────────
+// Using data-action + data-key attributes instead of inline onclick means
+// we don't have to worry about escaping apostrophes in ingredient names
+// like "Mary's Organic Crackers" — the DOM stores the attribute value as
+// a plain string, we just read it back.
+const listEl = document.getElementById('list');
+
+// Handler used for both the row list AND the modal (same actions)
+function handleDataAction(btn) {
+  if (!btn) return;
+  const action = btn.dataset.action;
+  const key = btn.dataset.key;
+  if (action === 'close-modal') { closeModal(); return; }
+  if (action === 'open-modal') { openModal(key); return; }
+  const r = window.__row__[key];
+  if (!r) return;
+  switch (action) {
+    case 'toggle-allergen': toggleAllergen(r, btn.dataset.tag); break;
+    case 'toggle-dislike':  toggleDislike(r, btn.dataset.tag); break;
+    case 'accept':          acceptSuggestion(r); break;
+    case 'clear':           clearRow(r); break;
+  }
+}
+
+listEl.addEventListener('click', e => {
+  const el = e.target.closest('[data-action]');
+  if (!el || el.tagName === 'INPUT') return;
+  handleDataAction(el);
+});
+
+listEl.addEventListener('input', e => {
+  if (e.target.tagName !== 'INPUT' || e.target.dataset.action !== 'notes') return;
+  const r = window.__row__[e.target.dataset.key];
+  if (r) setNotes(r, e.target.value);
+});
+
+// Modal click delegation — handles chip toggles, accept, clear, and close.
+// The backdrop click (but NOT the modal box click) closes the modal.
+document.getElementById('modal-backdrop').addEventListener('click', e => {
+  if (e.target.id === 'modal-backdrop') { closeModal(); return; }
+  const el = e.target.closest('[data-action]');
+  if (!el || el.tagName === 'INPUT') return;
+  handleDataAction(el);
+});
+
+document.getElementById('modal').addEventListener('input', e => {
+  if (e.target.tagName !== 'INPUT' || e.target.dataset.action !== 'notes') return;
+  const r = window.__row__[e.target.dataset.key];
+  if (r) setNotes(r, e.target.value);
+});
+
+// Keyboard: Esc closes modal
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape' && activeModalKey) { closeModal(); e.preventDefault(); }
+});
+
+// ──────────────────────────────────────────────────────────────────────
+// File input (topbar "Load CSV…" button) + body-wide drag-and-drop
+// ──────────────────────────────────────────────────────────────────────
+document.getElementById('file-input').addEventListener('change', e => {
+  if (e.target.files[0]) readFile(e.target.files[0]);
+  // Reset the input so selecting the same file again re-triggers change
+  e.target.value = '';
+});
+
+// Drag-and-drop anywhere on the page — makes it feel like you can just
+// toss the CSV at the window and it works. We track dragenter/dragleave
+// with a depth counter to handle child elements firing their own events.
+let dragDepth = 0;
+document.body.addEventListener('dragenter', e => {
+  if (!e.dataTransfer.types.includes('Files')) return;
+  e.preventDefault();
+  dragDepth++;
+  document.body.classList.add('drag-over-page');
+});
+document.body.addEventListener('dragover', e => {
+  if (e.dataTransfer.types.includes('Files')) e.preventDefault();
+});
+document.body.addEventListener('dragleave', e => {
+  if (!e.dataTransfer.types.includes('Files')) return;
+  dragDepth--;
+  if (dragDepth <= 0) {
+    dragDepth = 0;
+    document.body.classList.remove('drag-over-page');
+  }
+});
+document.body.addEventListener('drop', e => {
+  if (!e.dataTransfer.files.length) return;
+  e.preventDefault();
+  dragDepth = 0;
+  document.body.classList.remove('drag-over-page');
+  readFile(e.dataTransfer.files[0]);
+});
+
+loadCSV();
+</script>
+</body>
+</html>

@@ -1,0 +1,3086 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Checkout — BetterDay Food Co.</title>
+<link rel="stylesheet" href="/brand/tokens.css">
+<style>
+/* ══════════════════════════════════════════════════════════════════════
+   Checkout — standalone customer-facing page
+   Ported from conner/app/subscriber-hub-2.0.html (the subscriber hub's
+   in-tab checkout accordion), stripped of the hub-specific tab wrapper
+   and retargeted for guest checkout. All core brand colors come from
+   /brand/tokens.css via var(--brand-*) references. Derived tints stay
+   in the Local tints block below so they're auditable.
+
+   Payment, express checkout (Apple/Google Pay), and order submission
+   are MOCKED — the real Helcim backend lives in the helcim-integration
+   worktree. This page only handles the visual flow.
+   ══════════════════════════════════════════════════════════════════════ */
+
+:root {
+  /* Local tints derived from the brand palette. Kept here so every
+     non-brand color in the file is discoverable in one place. */
+  --cko-cream-2:      #F5F0E6;                 /* slightly darker cream than --brand-cream */
+  --cko-cream-3:      #FAF5EC;                 /* pending-step background */
+  --cko-cream-4:      #FEFDFB;                 /* complete-step hover surface */
+  --cko-cream-5:      #FFF9EC;                 /* complete-step hover surface 2 */
+  --cko-cream-6:      #FFFEFB;                 /* complete-step base */
+  --cko-cream-7:      #F5E8D3;                 /* perks gradient stop */
+
+  --cko-border-soft:  #E8DCC4;                 /* pending-step border */
+  --cko-border-warm:  #D4C4A8;                 /* complete-step hover border */
+  --cko-border-cool:  #C0B0A0;                 /* active-step border + placeholder text */
+
+  --cko-text-warm:    #8A7A6A;                 /* muted warm grey */
+  --cko-text-body:    #5A4A3A;                 /* body copy warm */
+  --cko-text-faint:   #A0907C;                 /* pending-step text */
+
+  --cko-yellow-soft:  #FFF5CC;                 /* upsell + arrival banner */
+  --cko-yellow-mid:   #FFE999;                 /* upsell gradient stop */
+  --cko-yellow-edge:  #FFD966;                 /* arrival banner border */
+  --cko-amber:        #D97706;                 /* arrival banner icon */
+
+  --cko-error-bg:     #FEF2F2;                 /* invalid field background */
+
+  /* Payment brand tile colors — these are real Visa/MC/etc. brand marks,
+     not part of BetterDay's brand system. They stay as hex. */
+  --cko-visa:         #1A1F71;
+  --cko-mc:           #EB001B;
+  --cko-amex:         #2557D6;
+  --cko-disc:         #F47216;
+
+  /* Third-party brand marks — Apple Pay / Google Pay. These are
+     Apple's and Google's actual brand colors; they cannot be re-tokenized
+     to BetterDay's palette because they'd no longer look like the real
+     buttons. Grouped here so the only hexes in the rest of the file are
+     inside this :root block and the Google Pay SVG fill attributes. */
+  --cko-ap-bg:        #000;          /* Apple Pay button background */
+  --cko-gp-bg:        #FFFFFF;       /* Google Pay button background */
+  --cko-gp-text:      #3C4043;       /* Google's standard dark grey */
+  --cko-gp-border:    #DADCE0;       /* Google's standard border grey */
+  --cko-gp-hover-bg:  #F8F9FA;       /* Google's hover surface */
+  --cko-gp-hover-bd:  #BDC1C6;       /* Google's hover border */
+  --cko-gp-blue:      #1A73E8;       /* Google's "Pay" blue */
+  --cko-apple-text:   #1C1C1E;       /* Apple system label color */
+  --cko-apple-grey:   #86868B;       /* Apple system secondary label */
+  --cko-apple-line:   #E5E5EA;       /* Apple system separator line */
+
+  /* Misc component-specific tints that don't map to brand tokens */
+  --cko-navy-deepest: #012030;       /* even darker than --brand-navy-dark */
+  --cko-pay-tile-bg:  #FAFAFA;       /* saved card tile background */
+  --cko-img-fallback: #E8DDD0;       /* broken image background */
+
+  /* Page-level locals */
+  --cko-page-max:     1240px;
+  --cko-sidebar-w:    380px;
+  --cko-nav-offset:   96px;                    /* space for the fixed marketing nav */
+}
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  font-family: var(--font-body);
+  background: var(--bg-page);
+  color: var(--text-primary);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+.checkout-wrap {
+  max-width: var(--cko-page-max);
+  margin: 0 auto;
+  padding: var(--cko-nav-offset) 24px 64px;
+}
+@media (max-width: 640px) {
+  .checkout-wrap { padding: 80px 14px 120px; }
+}
+
+/* ── Small shared utilities ────────────────────────────────────────── */
+.css-divider {
+  border: none;
+  border-top: 1px dashed rgba(0, 49, 65, 0.12);
+  margin: 2px 0;
+}
+.css-empty {
+  font-size: 12px;
+  color: rgba(0, 49, 65, 0.5);
+  text-align: center;
+  padding: 8px 0;
+}
+
+/* ══════════════════════════════════════════════════════════════════════
+   CHECKOUT — accordion stepper
+   Modeled on Casper / Brooks / Away patterns:
+   - Numbered circles with vertical connector line
+   - White step cards on cream page bg, no colored hero strips
+   - Active step expanded, completed shows recap + Edit, pending dim
+   - Sticky right sidebar with savings pills + perks + help
+   ══════════════════════════════════════════════════════════════════════ */
+
+/* Page grid */
+.checkout-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) var(--cko-sidebar-w);
+  gap: 28px;
+  align-items: start;
+}
+@media (max-width: 980px) { .checkout-grid { grid-template-columns: 1fr; } }
+.checkout-left { display: flex; flex-direction: column; gap: 18px; min-width: 0; }
+.checkout-right { position: sticky; top: 120px; }
+@media (max-width: 980px) { .checkout-right { position: static; top: auto; } }
+
+/* ── Navy header bar — Checkout title + cutoff countdown ─────────── */
+.checkout-header-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  background: var(--brand-navy);
+  color: var(--brand-cream);
+  padding: 18px 26px;
+  border-radius: 16px;
+  border: 1.5px solid var(--brand-navy-dark);
+  box-shadow: 0 4px 14px rgba(0, 49, 65, 0.12);
+  margin-bottom: 12px;
+  flex-wrap: wrap;
+}
+.checkout-header-title {
+  font-family: var(--font-heading);
+  font-size: 32px;
+  font-weight: 400;
+  color: var(--brand-cream);
+  letter-spacing: 0.01em;
+  line-height: 1;
+  margin: 0;
+}
+.checkout-header-right { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; justify-content: flex-end; }
+.checkout-header-cutoff-label {
+  display: flex; align-items: center; gap: 7px;
+  font-size: 12px; font-weight: 700; letter-spacing: 0.02em;
+  color: rgba(250, 235, 218, 0.8);
+  text-transform: uppercase;
+}
+.checkout-header-cutoff-label svg { width: 14px; height: 14px; color: var(--brand-yellow); }
+.checkout-header-cutoff-date {
+  color: var(--brand-yellow);
+  font-weight: 800;
+  text-transform: none;
+  letter-spacing: 0.01em;
+  font-size: 13px;
+}
+.checkout-header-countdown { display: flex; align-items: center; gap: 5px; flex-wrap: nowrap; }
+.checkout-cutoff-cell {
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 8px;
+  padding: 5px 10px;
+  display: flex; flex-direction: column; align-items: center;
+  min-width: 42px;
+  font-variant-numeric: tabular-nums;
+}
+.checkout-cutoff-cell-num { font-size: 16px; font-weight: 900; color: var(--brand-yellow); line-height: 1; }
+.checkout-cutoff-cell-lbl {
+  font-size: 8.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em;
+  color: rgba(250, 235, 218, 0.6);
+  margin-top: 2px;
+}
+@media (max-width: 640px) {
+  .checkout-header-bar { padding: 14px 18px; gap: 12px; }
+  .checkout-header-title { font-size: 24px; }
+  .checkout-header-right { gap: 10px; width: 100%; justify-content: space-between; }
+  .checkout-header-cutoff-label { font-size: 11px; }
+}
+
+/* "Step X of 4" indicator */
+.checkout-step-indicator {
+  font-size: 11px;
+  font-weight: 800;
+  color: var(--cko-text-warm);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  padding: 0 4px 6px;
+  margin-top: 2px;
+}
+.checkout-step-indicator strong { color: var(--brand-navy); font-weight: 900; }
+
+/* ── Gift toggle ───────────────────────────────────────────────────── */
+.checkout-gift-toggle {
+  display: flex;
+  background: var(--cko-cream-2);
+  border-radius: 12px;
+  overflow: hidden;
+  border: 1.5px solid var(--border-section);
+  padding: 3px;
+}
+.checkout-gift-toggle button {
+  flex: 1;
+  padding: 12px 16px;
+  font-size: 13.5px;
+  font-weight: 700;
+  color: var(--cko-text-warm);
+  background: none;
+  border: none;
+  cursor: pointer;
+  transition: all 0.25s;
+  font-family: inherit;
+  display: flex; align-items: center; justify-content: center; gap: 8px;
+  border-radius: 10px;
+}
+.checkout-gift-toggle button svg { width: 16px; height: 16px; }
+.checkout-gift-toggle button.active {
+  background: var(--brand-green);
+  color: var(--brand-navy-dark);
+  box-shadow: 0 4px 12px rgba(107, 189, 82, 0.35);
+}
+.checkout-gift-notice {
+  display: flex; align-items: flex-start; gap: 11px;
+  background: linear-gradient(135deg, rgba(107, 189, 82, 0.1), rgba(22, 116, 33, 0.06));
+  border: 1.5px solid rgba(107, 189, 82, 0.4);
+  border-radius: 12px;
+  padding: 13px 16px;
+  margin-top: 14px;
+  font-size: 12.5px;
+  color: var(--cko-text-body);
+  line-height: 1.5;
+}
+.checkout-gift-notice svg {
+  width: 16px; height: 16px;
+  color: var(--brand-green-dark);
+  stroke-width: 2.5;
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+.checkout-gift-notice strong { color: var(--brand-green-dark); font-weight: 800; }
+
+/* ── One-time → subscribe upsell banner ────────────────────────────── */
+.checkout-upsell {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  background: linear-gradient(135deg, var(--cko-yellow-soft), var(--cko-yellow-mid));
+  border: 1.5px solid var(--brand-yellow);
+  border-radius: 14px;
+  padding: 14px 18px;
+  box-shadow: 0 4px 14px rgba(255, 198, 0, 0.18);
+  position: relative;
+}
+.checkout-upsell-icon {
+  width: 38px; height: 38px;
+  border-radius: 50%;
+  background: var(--brand-yellow);
+  color: var(--brand-navy-dark);
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
+  box-shadow: 0 2px 6px rgba(0, 49, 65, 0.18);
+}
+.checkout-upsell-icon svg { width: 20px; height: 20px; stroke-width: 2.5; }
+.checkout-upsell-body { flex: 1; min-width: 0; }
+.checkout-upsell-title {
+  font-family: var(--font-heading);
+  font-size: 17px;
+  color: var(--brand-navy-dark);
+  line-height: 1.1;
+}
+.checkout-upsell-sub {
+  font-size: 12px;
+  color: var(--cko-text-body);
+  font-weight: 600;
+  margin-top: 3px;
+  line-height: 1.35;
+}
+.checkout-upsell-cta {
+  background: var(--brand-navy-dark);
+  color: var(--text-on-dark);
+  border: none;
+  border-radius: var(--radius-button);
+  padding: 11px 18px;
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 800;
+  cursor: pointer;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  transition: all 0.15s;
+  box-shadow: 0 3px 8px rgba(0, 49, 65, 0.25);
+}
+.checkout-upsell-cta:hover {
+  background: var(--cko-navy-deepest);
+  transform: translateY(-1px);
+  box-shadow: 0 5px 12px rgba(0, 49, 65, 0.3);
+}
+.checkout-upsell-cta svg { width: 13px; height: 13px; stroke-width: 2.5; }
+.checkout-upsell-dismiss {
+  background: none;
+  border: none;
+  width: 24px; height: 24px;
+  display: flex; align-items: center; justify-content: center;
+  color: rgba(0, 49, 65, 0.4);
+  cursor: pointer;
+  border-radius: 50%;
+  flex-shrink: 0;
+  transition: all 0.15s;
+}
+.checkout-upsell-dismiss:hover { background: rgba(0, 49, 65, 0.08); color: var(--brand-navy-dark); }
+.checkout-upsell-dismiss svg { width: 14px; height: 14px; stroke-width: 2.5; }
+
+/* ── Express checkout row (Apple/Google Pay MOCK) ──────────────────── */
+.checkout-express {
+  background: var(--bg-card);
+  border: 1.5px solid var(--border-section);
+  border-radius: 16px;
+  padding: 20px 24px;
+  box-shadow: var(--shadow-card);
+  margin-bottom: 4px;
+}
+.checkout-express-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+.checkout-express-label {
+  font-size: 11px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--brand-navy);
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+.checkout-express-label svg { width: 13px; height: 13px; color: var(--brand-green-dark); stroke-width: 2.5; }
+.checkout-express-badge {
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--cko-text-warm);
+  background: var(--cko-cream-3);
+  border: 1px solid var(--border-section);
+  padding: 3px 9px;
+  border-radius: var(--radius-badge);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+.checkout-express-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 12px;
+}
+@media (max-width: 480px) { .checkout-express-grid { grid-template-columns: 1fr; } }
+.checkout-express-btn {
+  /* Default look matches Apple Pay; .google-pay override below swaps it. */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  height: 56px;
+  border-radius: 12px;
+  border: 1.5px solid var(--border-section);
+  background: var(--cko-ap-bg);
+  color: var(--text-on-dark);
+  font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', sans-serif;
+  font-size: 15px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.15s;
+  letter-spacing: 0.01em;
+  padding: 0 18px;
+}
+.checkout-express-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.18);
+}
+.checkout-express-btn svg { height: 22px; width: auto; flex-shrink: 0; }
+.checkout-express-btn.apple-pay  { background: var(--cko-ap-bg); color: var(--text-on-dark); border-color: var(--cko-ap-bg); }
+.checkout-express-btn.google-pay { background: var(--cko-gp-bg); color: var(--cko-gp-text); border-color: var(--cko-gp-border); }
+.checkout-express-btn.google-pay:hover { background: var(--cko-gp-hover-bg); border-color: var(--cko-gp-hover-bd); }
+.checkout-express-btn-label { font-weight: 800; letter-spacing: 0.01em; }
+.checkout-express-divider {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin: 18px 0 4px;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--cko-text-warm);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+.checkout-express-divider::before,
+.checkout-express-divider::after { content: ''; flex: 1; height: 1px; background: var(--border-section); }
+
+/* ── Express checkout processing overlay (simplified mock) ─────────── */
+.cko-express-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.55);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  z-index: 1000;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transition: opacity 0.25s ease;
+}
+.cko-express-overlay.open { display: flex; opacity: 1; }
+.cko-express-sheet {
+  background: var(--bg-card);
+  border-radius: 20px;
+  width: 90%;
+  max-width: 400px;
+  padding: 36px 28px 28px;
+  text-align: center;
+  font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', sans-serif;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.35);
+  transform: translateY(20px);
+  transition: transform 0.35s cubic-bezier(0.2, 0.9, 0.3, 1.1);
+}
+.cko-express-overlay.open .cko-express-sheet { transform: translateY(0); }
+.cko-express-brand { font-size: 22px; font-weight: 700; margin-bottom: 18px; letter-spacing: -0.01em; color: var(--cko-ap-bg); }
+.cko-express-spinner {
+  width: 54px;
+  height: 54px;
+  border-radius: 50%;
+  border: 4px solid var(--cko-apple-line);
+  border-top-color: var(--cko-ap-bg);
+  margin: 6px auto 18px;
+  animation: ckoSpin 0.8s linear infinite;
+}
+.cko-express-overlay.google .cko-express-spinner { border-top-color: var(--cko-gp-blue); }
+.cko-express-status { font-size: 15px; font-weight: 600; color: var(--cko-apple-text); }
+.cko-express-total  { font-size: 13px; color: var(--cko-apple-grey); margin-top: 6px; font-variant-numeric: tabular-nums; }
+@keyframes ckoSpin { to { transform: rotate(360deg); } }
+
+/* ── Stepper ───────────────────────────────────────────────────────── */
+.checkout-stepper {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  padding-left: 46px;
+}
+.checkout-stepper::before {
+  content: '';
+  position: absolute;
+  left: 17px; top: 18px; bottom: 18px;
+  width: 2px;
+  background: var(--border-section);
+  z-index: 0;
+}
+
+.checkout-step {
+  position: relative;
+  background: var(--bg-card);
+  border: 1.5px solid var(--border-section);
+  border-radius: 16px;
+  padding: 22px 26px;
+  box-shadow: 0 2px 8px rgba(0, 49, 65, 0.04);
+  transition: all 0.25s ease;
+}
+.checkout-step.complete {
+  padding: 16px 26px;
+  background: var(--cko-cream-6);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+.checkout-step.complete:hover {
+  background: var(--cko-cream-5);
+  border-color: var(--cko-border-warm);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 14px rgba(0, 49, 65, 0.08);
+}
+.checkout-step.complete:hover .checkout-step-edit {
+  background: rgba(78, 162, 253, 0.12);
+  color: var(--brand-navy);
+}
+.checkout-step.pending {
+  background: var(--cko-cream-3);
+  border-color: var(--cko-border-soft);
+  opacity: 0.7;
+}
+.checkout-step.active {
+  box-shadow: 0 6px 22px rgba(0, 49, 65, 0.1);
+  border-color: var(--cko-border-cool);
+}
+
+.checkout-step-num {
+  position: absolute;
+  left: -46px; top: 18px;
+  width: 36px; height: 36px;
+  border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 15px;
+  font-weight: 800;
+  font-family: var(--font-body);
+  border: 2.5px solid var(--border-section);
+  background: var(--brand-cream);
+  color: var(--cko-text-faint);
+  z-index: 1;
+  transition: all 0.25s;
+}
+.checkout-step.active .checkout-step-num {
+  background: var(--brand-navy);
+  color: var(--text-on-dark);
+  border-color: var(--brand-navy);
+  box-shadow: 0 4px 12px rgba(0, 49, 65, 0.3);
+  transform: scale(1.06);
+}
+.checkout-step.complete .checkout-step-num {
+  background: var(--brand-green);
+  color: var(--text-on-dark);
+  border-color: var(--brand-green);
+  box-shadow: 0 3px 10px rgba(107, 189, 82, 0.4);
+}
+.checkout-step.complete .checkout-step-num svg { width: 18px; height: 18px; stroke-width: 3.5; }
+
+.checkout-step-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.checkout-step-title {
+  font-family: var(--font-heading);
+  font-size: 24px;
+  font-weight: 400;
+  color: var(--brand-navy);
+  letter-spacing: 0.01em;
+  line-height: 1;
+  margin: 0;
+}
+.checkout-step.complete .checkout-step-title { font-size: 17px; color: var(--brand-navy-dark); font-weight: 400; }
+.checkout-step.pending  .checkout-step-title { font-size: 17px; color: var(--cko-text-faint); font-weight: 400; }
+.checkout-step-edit {
+  background: rgba(78, 162, 253, 0.08);
+  border: 1.5px solid rgba(78, 162, 253, 0.25);
+  color: var(--brand-primary);
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 800;
+  cursor: pointer;
+  padding: 10px 22px;
+  border-radius: var(--radius-button);
+  transition: all 0.15s;
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  letter-spacing: 0.02em;
+}
+.checkout-step-edit:hover {
+  background: var(--brand-primary);
+  color: var(--text-on-dark);
+  border-color: var(--brand-primary);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 10px rgba(78, 162, 253, 0.3);
+}
+
+.checkout-step-recap {
+  margin-top: 6px;
+  font-size: 13px;
+  color: var(--cko-text-body);
+  line-height: 1.45;
+  font-weight: 500;
+}
+.checkout-step-recap strong { color: var(--brand-navy-dark); font-weight: 700; }
+
+.checkout-step-body { display: none; margin-top: 18px; }
+.checkout-step.active .checkout-step-body { display: block; animation: checkoutStepIn 0.3s ease; }
+@keyframes checkoutStepIn {
+  from { opacity: 0; transform: translateY(-6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.checkout-step-required {
+  font-size: 11px;
+  color: var(--cko-text-warm);
+  font-weight: 600;
+  margin-bottom: 14px;
+  font-style: italic;
+}
+.checkout-step-required::before { content: '* '; color: var(--brand-red); font-weight: 800; }
+
+/* ── Form fields ───────────────────────────────────────────────────── */
+.checkout-form { display: flex; flex-direction: column; gap: 14px; }
+.checkout-form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+@media (max-width: 600px) { .checkout-form-row { grid-template-columns: 1fr; } }
+.checkout-field-label {
+  font-size: 11px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--brand-navy-dark);
+  margin-bottom: 5px;
+  display: block;
+}
+.checkout-field-label.req::after { content: ' *'; color: var(--brand-red); }
+.checkout-field-input {
+  width: 100%;
+  border: 1.5px solid var(--border-section);
+  border-radius: 10px;
+  padding: 13px 15px;
+  font-size: 14px;
+  font-family: inherit;
+  color: var(--brand-navy-dark);
+  background: var(--bg-card);
+  outline: none;
+  transition: all 0.15s;
+}
+.checkout-field-input:focus {
+  border-color: var(--brand-primary);
+  box-shadow: 0 0 0 3px rgba(78, 162, 253, 0.12);
+}
+.checkout-field-input::placeholder { color: var(--cko-border-cool); }
+.checkout-field-input.error {
+  border-color: var(--brand-red);
+  background: var(--cko-error-bg);
+}
+.checkout-field-error {
+  font-size: 11px;
+  color: var(--brand-red);
+  font-weight: 600;
+  margin-top: 4px;
+  display: none;
+}
+.checkout-field-input.error + .checkout-field-error { display: block; }
+
+.checkout-checkbox-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 13px;
+  color: var(--cko-text-body);
+  line-height: 1.45;
+  padding: 6px 0;
+}
+.checkout-checkbox-row input[type=checkbox] {
+  width: 16px; height: 16px;
+  flex-shrink: 0;
+  margin-top: 1px;
+  accent-color: var(--brand-navy);
+  cursor: pointer;
+}
+
+/* ── Delivery method toggle ────────────────────────────────────────── */
+.checkout-method-toggle {
+  display: flex;
+  background: var(--cko-cream-2);
+  border-radius: 12px;
+  overflow: hidden;
+  border: 1.5px solid var(--border-section);
+  padding: 3px;
+}
+.checkout-method-toggle button {
+  flex: 1;
+  padding: 13px 16px;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--cko-text-warm);
+  background: none;
+  border: none;
+  cursor: pointer;
+  transition: all 0.25s;
+  font-family: inherit;
+  display: flex; align-items: center; justify-content: center; gap: 8px;
+  border-radius: 10px;
+}
+.checkout-method-toggle button svg { width: 17px; height: 17px; }
+.checkout-method-toggle button.active {
+  background: var(--brand-navy);
+  color: var(--text-on-dark);
+  box-shadow: 0 4px 12px rgba(0, 49, 65, 0.3);
+}
+
+/* ── Address / pickup radio cards ──────────────────────────────────── */
+.checkout-radio-list { display: flex; flex-direction: column; gap: 10px; }
+.checkout-radio-card {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 14px 16px;
+  border: 1.5px solid var(--border-section);
+  border-radius: 12px;
+  background: var(--bg-card);
+  cursor: pointer;
+  transition: all 0.15s;
+  font-family: inherit;
+  text-align: left;
+  width: 100%;
+}
+.checkout-radio-card:hover { border-color: rgba(0, 49, 65, 0.3); background: var(--cko-cream-4); }
+.checkout-radio-card.active {
+  border-color: var(--brand-navy);
+  border-width: 2px;
+  background: linear-gradient(135deg, rgba(78, 162, 253, 0.04), rgba(0, 70, 94, 0.06));
+  padding: 13px 15px;
+}
+.checkout-radio-dot {
+  width: 18px; height: 18px;
+  border-radius: 50%;
+  border: 2px solid var(--cko-border-cool);
+  flex-shrink: 0;
+  margin-top: 2px;
+  position: relative;
+  transition: all 0.15s;
+}
+.checkout-radio-card.active .checkout-radio-dot { border-color: var(--brand-navy); }
+.checkout-radio-card.active .checkout-radio-dot::after {
+  content: '';
+  position: absolute;
+  top: 50%; left: 50%;
+  width: 10px; height: 10px;
+  border-radius: 50%;
+  background: var(--brand-navy);
+  transform: translate(-50%, -50%);
+}
+.checkout-radio-info { flex: 1; min-width: 0; }
+.checkout-radio-title { font-size: 14px; font-weight: 700; color: var(--brand-navy-dark); line-height: 1.3; }
+.checkout-radio-sub { font-size: 12px; color: var(--cko-text-warm); margin-top: 3px; line-height: 1.4; }
+.checkout-radio-meta {
+  font-size: 11px;
+  color: var(--brand-green-dark);
+  font-weight: 700;
+  margin-top: 5px;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+.checkout-radio-add {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 8px;
+  color: var(--brand-navy);
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  background: none;
+  border: none;
+  padding: 8px 0;
+  font-family: inherit;
+  align-self: flex-start;
+}
+.checkout-radio-add svg { width: 14px; height: 14px; stroke-width: 2.5; }
+.checkout-radio-add:hover { color: var(--brand-navy-dark); text-decoration: underline; }
+
+/* Estimated arrival banner */
+.checkout-arrival-banner {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  background: var(--cko-yellow-soft);
+  border: 1px solid var(--cko-yellow-edge);
+  border-radius: 10px;
+  padding: 11px 14px;
+  margin-top: 14px;
+  font-size: 12.5px;
+  color: var(--cko-text-body);
+  line-height: 1.45;
+}
+.checkout-arrival-banner svg {
+  width: 16px; height: 16px;
+  color: var(--cko-amber);
+  stroke-width: 2.5;
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+.checkout-arrival-banner strong { color: var(--brand-navy-dark); font-weight: 700; }
+
+/* Guest-mode inline forms (when acctAddresses/paymentMethods are empty) */
+.checkout-inline-form {
+  background: var(--cko-cream-6);
+  border: 1.5px dashed var(--border-section);
+  border-radius: 12px;
+  padding: 16px 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.checkout-inline-form-title {
+  font-size: 11px;
+  font-weight: 800;
+  color: var(--brand-navy);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.checkout-inline-form-title svg { width: 13px; height: 13px; stroke-width: 2.5; color: var(--brand-primary); }
+
+/* ── Payment list + security row ───────────────────────────────────── */
+.checkout-pay-list { display: flex; flex-direction: column; gap: 10px; }
+.checkout-pay-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 16px;
+  border: 1.5px solid var(--border-section);
+  border-radius: 12px;
+  background: var(--bg-card);
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.checkout-pay-row:hover { border-color: rgba(0, 49, 65, 0.3); }
+.checkout-pay-row.active {
+  border-color: var(--brand-navy);
+  border-width: 2px;
+  background: linear-gradient(135deg, rgba(78, 162, 253, 0.04), rgba(0, 70, 94, 0.06));
+  padding: 13px 15px;
+}
+.checkout-pay-row .checkout-radio-dot { margin-top: 0; }
+.checkout-pay-row-icon {
+  width: 42px; height: 28px;
+  border-radius: 5px;
+  background: var(--cko-pay-tile-bg);
+  border: 1.5px solid var(--border-section);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 9px;
+  font-weight: 800;
+  color: var(--brand-navy-dark);
+  flex-shrink: 0;
+  letter-spacing: 0.5px;
+}
+.checkout-pay-row-info { flex: 1; min-width: 0; }
+.checkout-pay-row-num {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--brand-navy-dark);
+  font-family: 'SF Mono', 'Menlo', monospace;
+  letter-spacing: 1px;
+}
+.checkout-pay-row-exp { font-size: 11.5px; color: var(--cko-text-warm); margin-top: 2px; }
+.checkout-pay-row-default {
+  font-size: 9px;
+  font-weight: 800;
+  color: var(--brand-green-dark);
+  background: rgba(107, 189, 82, 0.15);
+  padding: 3px 7px;
+  border-radius: var(--radius-badge);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.checkout-pay-secure-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--cko-text-warm);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: 1px dashed var(--border-section);
+}
+.checkout-pay-secure-row > div:first-child { display: flex; align-items: center; gap: 6px; }
+.checkout-pay-secure-row svg { width: 13px; height: 13px; color: var(--brand-green-dark); stroke-width: 2.5; }
+.checkout-pay-brands { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+.checkout-pay-brand {
+  height: 22px;
+  padding: 0 8px;
+  border-radius: 4px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 9px;
+  font-weight: 900;
+  color: var(--text-on-dark);
+  letter-spacing: 0.5px;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+}
+.checkout-pay-brand.visa { background: var(--cko-visa); }
+.checkout-pay-brand.mc   { background: var(--cko-mc); }
+.checkout-pay-brand.amex { background: var(--cko-amex); }
+.checkout-pay-brand.disc { background: var(--cko-disc); color: var(--brand-navy-dark); }
+
+/* ── CTA row per step ──────────────────────────────────────────────── */
+.checkout-step-cta-row {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 12px;
+  margin-top: 20px;
+  padding-top: 18px;
+  border-top: 1px solid rgba(0, 49, 65, 0.08);
+}
+.checkout-step-cta {
+  background: var(--brand-yellow);
+  color: var(--brand-navy-dark);
+  border: none;
+  border-radius: var(--radius-button);
+  padding: 13px 26px;
+  font-family: var(--font-body);
+  font-size: 14px;
+  font-weight: 800;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  transition: all 0.15s;
+  box-shadow: 0 3px 10px rgba(255, 198, 0, 0.32);
+  letter-spacing: 0.01em;
+}
+.checkout-step-cta:hover {
+  background: var(--brand-yellow-dark);
+  transform: translateY(-1px);
+  box-shadow: 0 5px 14px rgba(255, 198, 0, 0.42);
+}
+.checkout-step-cta svg { width: 14px; height: 14px; stroke-width: 3; }
+.checkout-step-cta.large {
+  padding: 17px 32px;
+  font-size: 16px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  width: 100%;
+  justify-content: center;
+}
+.checkout-step-cta.large svg { width: 16px; height: 16px; }
+
+.checkout-cta-microcopy {
+  font-size: 11px;
+  color: var(--cko-text-warm);
+  text-align: center;
+  margin-top: 10px;
+  font-weight: 500;
+  line-height: 1.45;
+}
+.checkout-cta-microcopy a { color: var(--brand-primary); font-weight: 700; }
+.checkout-cta-microcopy a:hover { text-decoration: underline; }
+
+/* ── Review list ───────────────────────────────────────────────────── */
+.checkout-review-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  background: var(--cko-cream-3);
+  border-radius: 12px;
+  padding: 14px 16px;
+  font-size: 13px;
+  color: var(--brand-navy-dark);
+}
+.checkout-review-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 10px;
+  font-variant-numeric: tabular-nums;
+}
+.checkout-review-row.label {
+  font-size: 11px;
+  color: var(--cko-text-warm);
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 2px;
+}
+.checkout-review-row strong { font-weight: 700; }
+.checkout-review-divider {
+  border: none;
+  border-top: 1px dashed rgba(0, 49, 65, 0.12);
+  margin: 6px 0;
+}
+
+/* ══════════════════════════════════════════════════════════════════════
+   SIDEBAR — order summary + perks + help
+   ══════════════════════════════════════════════════════════════════════ */
+.checkout-summary {
+  background: var(--bg-card);
+  border: 1.5px solid var(--border-section);
+  border-radius: 16px;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 4px 14px rgba(0, 49, 65, 0.06);
+  overflow: hidden;
+}
+.checkout-summary-inner {
+  padding: 20px 22px 22px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.checkout-summary-perks {
+  padding: 18px 22px;
+  background: linear-gradient(180deg, var(--brand-cream), var(--cko-cream-7));
+  border-top: 1.5px dashed var(--border-section);
+}
+.checkout-summary-help {
+  padding: 14px 22px 18px;
+  background: var(--cko-cream-3);
+  border-top: 1px solid var(--border-section);
+  font-size: 11.5px;
+  color: var(--cko-text-body);
+}
+
+.checkout-summary-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+.checkout-summary-head-title {
+  font-family: var(--font-heading);
+  font-size: 22px;
+  font-weight: 400;
+  color: var(--brand-navy);
+  letter-spacing: 0.01em;
+  line-height: 1;
+}
+.checkout-summary-head-count { font-size: 13px; font-weight: 600; color: var(--cko-text-warm); }
+
+.checkout-items {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  max-height: 280px;
+  overflow-y: auto;
+  padding-right: 2px;
+}
+.checkout-items::-webkit-scrollbar { width: 5px; }
+.checkout-items::-webkit-scrollbar-thumb { background: rgba(0, 49, 65, 0.18); border-radius: 5px; }
+.checkout-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 11px;
+  padding: 10px 0;
+  border-bottom: 1px dashed rgba(0, 49, 65, 0.08);
+}
+.checkout-item:last-child { border-bottom: none; }
+.checkout-item-img {
+  width: 48px; height: 48px;
+  border-radius: 8px;
+  object-fit: cover;
+  background: var(--cko-img-fallback);
+  flex-shrink: 0;
+  border: 1.5px solid var(--border-section);
+}
+.checkout-item-info { flex: 1; min-width: 0; }
+.checkout-item-name {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--brand-navy-dark);
+  line-height: 1.25;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+.checkout-item-meta { display: flex; align-items: center; gap: 6px; margin-top: 3px; flex-wrap: wrap; }
+.checkout-item-qty { font-size: 11px; color: var(--cko-text-warm); font-weight: 600; }
+.checkout-item-off-pill {
+  font-size: 9.5px;
+  font-weight: 800;
+  color: var(--brand-green-dark);
+  background: rgba(107, 189, 82, 0.18);
+  padding: 2px 7px;
+  border-radius: var(--radius-badge);
+  letter-spacing: 0.02em;
+  border: 1px solid rgba(107, 189, 82, 0.4);
+}
+.checkout-item-right {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+  flex-shrink: 0;
+}
+.checkout-item-price {
+  font-size: 13.5px;
+  font-weight: 800;
+  color: var(--brand-navy-dark);
+  font-variant-numeric: tabular-nums;
+  line-height: 1.1;
+}
+.checkout-item-price-old {
+  font-size: 10.5px;
+  font-weight: 600;
+  color: rgba(0, 49, 65, 0.4);
+  text-decoration: line-through;
+  font-variant-numeric: tabular-nums;
+}
+
+.checkout-totals { display: flex; flex-direction: column; gap: 5px; }
+.checkout-total-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 13px;
+  color: var(--brand-navy-dark);
+  font-variant-numeric: tabular-nums;
+  line-height: 1.3;
+}
+.checkout-total-row .lbl { color: rgba(0, 49, 65, 0.7); font-weight: 500; }
+.checkout-total-row .val { font-weight: 600; color: var(--brand-navy-dark); }
+.checkout-total-row.savings .lbl,
+.checkout-total-row.savings .val { color: var(--brand-green-dark); font-weight: 700; }
+.checkout-total-row.free .val {
+  color: var(--brand-green-dark);
+  font-weight: 800;
+  text-transform: uppercase;
+  font-size: 11px;
+  letter-spacing: 0.05em;
+}
+
+.checkout-grand-total {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  padding-top: 10px;
+  border-top: 1.5px solid rgba(0, 49, 65, 0.12);
+}
+.checkout-grand-total-label {
+  font-family: var(--font-body);
+  font-size: 18px;
+  font-weight: 800;
+  color: var(--brand-navy);
+}
+.checkout-grand-total-val {
+  font-family: var(--font-body);
+  font-size: 24px;
+  font-weight: 900;
+  color: var(--brand-navy-dark);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
+}
+
+.checkout-saved-badge {
+  align-self: flex-end;
+  background: var(--brand-green);
+  color: var(--brand-navy-dark);
+  font-size: 11px;
+  font-weight: 800;
+  padding: 6px 12px;
+  border-radius: var(--radius-badge);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  box-shadow: 0 3px 10px rgba(107, 189, 82, 0.4);
+}
+.checkout-saved-badge svg { width: 11px; height: 11px; stroke-width: 3; }
+
+.checkout-promo-toggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: none;
+  border: none;
+  color: var(--brand-primary);
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  padding: 6px 0;
+  align-self: flex-start;
+  transition: all 0.15s;
+}
+.checkout-promo-toggle:hover { color: var(--brand-navy); }
+.checkout-promo-toggle svg { width: 11px; height: 11px; stroke-width: 3; transition: transform 0.2s; }
+.checkout-promo-toggle.open svg { transform: rotate(180deg); }
+.checkout-promo-fields { display: none; flex-direction: column; gap: 8px; margin-top: 4px; }
+.checkout-promo-fields.open { display: flex; }
+.checkout-promo-row { display: flex; gap: 6px; align-items: stretch; }
+.checkout-promo-row input {
+  flex: 1;
+  min-width: 0;
+  border: 1.5px solid var(--border-section);
+  border-radius: 10px;
+  padding: 9px 12px;
+  font-size: 12.5px;
+  font-family: inherit;
+  color: var(--brand-navy-dark);
+  background: var(--bg-card);
+  outline: none;
+  transition: all 0.15s;
+}
+.checkout-promo-row input:focus {
+  border-color: var(--brand-primary);
+  box-shadow: 0 0 0 3px rgba(78, 162, 253, 0.12);
+}
+.checkout-promo-row input::placeholder { color: var(--cko-border-cool); }
+.checkout-promo-apply {
+  background: var(--bg-card);
+  border: 1.5px solid var(--brand-navy);
+  color: var(--brand-navy);
+  font-size: 11px;
+  font-weight: 800;
+  padding: 0 14px;
+  border-radius: 10px;
+  cursor: pointer;
+  font-family: inherit;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  transition: all 0.15s;
+  flex-shrink: 0;
+}
+.checkout-promo-apply:hover { background: var(--brand-navy); color: var(--text-on-dark); }
+
+.checkout-points-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  background: rgba(255, 198, 0, 0.12);
+  border: 1px solid rgba(255, 198, 0, 0.35);
+  border-radius: 10px;
+  padding: 10px 12px;
+}
+.checkout-points-info { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+.checkout-points-title { font-size: 12px; font-weight: 800; color: var(--brand-navy-dark); line-height: 1.2; }
+.checkout-points-sub { font-size: 10.5px; color: var(--cko-text-warm); font-weight: 600; }
+.checkout-points-toggle-btn {
+  background: none;
+  color: var(--brand-navy);
+  font-size: 11px;
+  font-weight: 800;
+  cursor: pointer;
+  font-family: inherit;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  flex-shrink: 0;
+  padding: 6px 12px;
+  border-radius: var(--radius-button);
+  transition: all 0.15s;
+  border: 1.5px solid var(--brand-navy);
+}
+.checkout-points-toggle-btn:hover { background: rgba(0, 70, 94, 0.08); }
+.checkout-points-toggle-btn.applied { background: var(--brand-navy); color: var(--text-on-dark); }
+
+/* Perks of every box */
+.checkout-perks-title {
+  font-family: var(--font-heading);
+  font-size: 15px;
+  font-weight: 400;
+  color: var(--brand-navy);
+  text-align: center;
+  margin-bottom: 14px;
+  letter-spacing: 0.01em;
+}
+.checkout-perks-row {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+}
+.checkout-perk {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  text-align: center;
+}
+.checkout-perk-icon {
+  width: 38px; height: 38px;
+  border-radius: 50%;
+  background: var(--bg-card);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--brand-navy);
+  border: 1.5px solid var(--border-section);
+  box-shadow: 0 2px 6px rgba(0, 49, 65, 0.06);
+}
+.checkout-perk-icon svg { width: 18px; height: 18px; stroke-width: 2; }
+.checkout-perk-label {
+  font-size: 10.5px;
+  font-weight: 700;
+  color: var(--brand-navy-dark);
+  line-height: 1.2;
+  letter-spacing: 0.005em;
+}
+
+/* Need help footer */
+.checkout-summary-help-title {
+  font-size: 11px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--brand-navy-dark);
+  margin-bottom: 6px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.checkout-summary-help-title svg { width: 13px; height: 13px; color: var(--brand-primary); stroke-width: 2.5; }
+.checkout-summary-help-line {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 3px;
+}
+.checkout-summary-help-line svg { width: 11px; height: 11px; color: var(--cko-text-warm); stroke-width: 2.5; flex-shrink: 0; }
+.checkout-summary-help-line a { color: var(--brand-navy); font-weight: 600; text-decoration: none; }
+.checkout-summary-help-line a:hover { text-decoration: underline; }
+
+/* Mobile sticky Pay Now bar */
+.checkout-mobile-cta { display: none; }
+@media (max-width: 980px) {
+  .checkout-mobile-cta {
+    display: flex;
+    position: fixed;
+    bottom: 0; left: 0; right: 0;
+    background: var(--bg-card);
+    border-top: 1.5px solid var(--border-section);
+    padding: 12px 16px env(safe-area-inset-bottom, 12px);
+    z-index: 50;
+    box-shadow: 0 -4px 14px rgba(0, 49, 65, 0.12);
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+  }
+  .checkout-mobile-cta-info { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+  .checkout-mobile-cta-label {
+    font-size: 10px;
+    font-weight: 700;
+    color: var(--cko-text-warm);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+  .checkout-mobile-cta-total {
+    font-size: 18px;
+    font-weight: 900;
+    color: var(--brand-navy-dark);
+    font-variant-numeric: tabular-nums;
+  }
+  .checkout-mobile-cta-btn {
+    background: var(--brand-yellow);
+    color: var(--brand-navy-dark);
+    border: none;
+    border-radius: var(--radius-button);
+    padding: 13px 22px;
+    font-family: inherit;
+    font-size: 13px;
+    font-weight: 800;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    flex-shrink: 0;
+    box-shadow: 0 3px 10px rgba(255, 198, 0, 0.32);
+  }
+  .checkout-mobile-cta-btn svg { width: 14px; height: 14px; stroke-width: 3; }
+  /* Add bottom padding so sticky bar doesn't cover content */
+  body { padding-bottom: 80px; }
+}
+
+/* ══════════════════════════════════════════════════════════════════════
+   SUCCESS PANEL — shown after submitCheckout() / express checkout mock
+   Replaces the stepper in-place (no page navigation)
+   ══════════════════════════════════════════════════════════════════════ */
+.cko-success {
+  display: none;
+  background: var(--bg-card);
+  border: 1.5px solid var(--brand-green);
+  border-radius: 20px;
+  padding: 48px 36px;
+  text-align: center;
+  box-shadow: 0 12px 36px rgba(22, 116, 33, 0.12);
+}
+.cko-success.open { display: block; animation: checkoutStepIn 0.5s ease; }
+.cko-success-icon {
+  width: 84px; height: 84px;
+  border-radius: 50%;
+  background: var(--brand-green);
+  color: var(--text-on-dark);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 8px 24px rgba(107, 189, 82, 0.4);
+  margin-bottom: 22px;
+  animation: ckoCheckBounce 0.6s cubic-bezier(0.2, 0.9, 0.3, 1.3);
+}
+.cko-success-icon svg { width: 44px; height: 44px; stroke-width: 3.5; }
+@keyframes ckoCheckBounce {
+  0%   { transform: scale(0.3); opacity: 0; }
+  60%  { transform: scale(1.15); opacity: 1; }
+  100% { transform: scale(1); }
+}
+.cko-success-title {
+  font-family: var(--font-heading);
+  font-size: 34px;
+  color: var(--brand-navy);
+  margin-bottom: 10px;
+  line-height: 1.1;
+}
+.cko-success-sub {
+  font-size: 15px;
+  color: var(--cko-text-body);
+  line-height: 1.55;
+  max-width: 460px;
+  margin: 0 auto 22px;
+}
+.cko-success-sub strong { color: var(--brand-navy-dark); font-weight: 700; }
+.cko-success-meta {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  max-width: 460px;
+  margin: 0 auto 24px;
+  text-align: left;
+}
+.cko-success-meta-cell {
+  background: var(--cko-cream-3);
+  border: 1px solid var(--border-section);
+  border-radius: 12px;
+  padding: 12px 14px;
+}
+.cko-success-meta-label {
+  font-size: 10px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--cko-text-warm);
+  margin-bottom: 3px;
+}
+.cko-success-meta-val {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--brand-navy-dark);
+  font-variant-numeric: tabular-nums;
+}
+.cko-success-ctas { display: flex; justify-content: center; gap: 12px; flex-wrap: wrap; }
+.cko-success-btn {
+  background: var(--brand-yellow);
+  color: var(--brand-navy-dark);
+  border: none;
+  border-radius: var(--radius-button);
+  padding: 14px 26px;
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 800;
+  cursor: pointer;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  box-shadow: 0 3px 10px rgba(255, 198, 0, 0.32);
+  text-decoration: none;
+}
+.cko-success-btn:hover {
+  background: var(--brand-yellow-dark);
+  transform: translateY(-1px);
+  box-shadow: 0 5px 14px rgba(255, 198, 0, 0.42);
+}
+.cko-success-btn.secondary {
+  background: var(--bg-card);
+  border: 1.5px solid var(--brand-navy);
+  color: var(--brand-navy);
+  box-shadow: none;
+}
+.cko-success-btn.secondary:hover { background: var(--brand-navy); color: var(--text-on-dark); box-shadow: 0 4px 12px rgba(0, 49, 65, 0.2); }
+
+/* ══════════════════════════════════════════════════════════════════════
+   TOAST — minimal inline implementation
+   ══════════════════════════════════════════════════════════════════════ */
+.cko-toast-container {
+  position: fixed;
+  bottom: 24px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 2000;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  pointer-events: none;
+}
+.cko-toast {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  background: var(--brand-navy-dark);
+  color: var(--text-on-dark);
+  padding: 12px 18px;
+  border-radius: 12px;
+  font-size: 13px;
+  font-weight: 600;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
+  animation: ckoToastIn 0.25s ease;
+  pointer-events: auto;
+  max-width: 90vw;
+}
+.cko-toast.success { background: var(--brand-green-dark); }
+.cko-toast.warning { background: var(--brand-red); }
+.cko-toast svg { width: 16px; height: 16px; stroke-width: 2.5; flex-shrink: 0; }
+@keyframes ckoToastIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes ckoToastOut {
+  to { opacity: 0; transform: translateY(8px); }
+}
+@media (max-width: 980px) {
+  .cko-toast-container { bottom: 92px; /* clear the mobile sticky CTA */ }
+}
+</style>
+</head>
+<body data-site="marketing">
+
+<!-- Header injected from shared/marketing-header.html by site-shell.js -->
+<div data-shell="header"></div>
+
+<main class="checkout-wrap">
+
+  <!-- ════════ Navy header bar with cutoff countdown ════════ -->
+  <div class="checkout-header-bar">
+    <h1 class="checkout-header-title">Checkout</h1>
+    <div class="checkout-header-right">
+      <div class="checkout-header-cutoff-label">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+        Cut-off <span class="checkout-header-cutoff-date" id="checkoutCutoffDate">Thu, Apr 9</span>
+      </div>
+      <div class="checkout-header-countdown" id="checkoutCountdown">
+        <div class="checkout-cutoff-cell"><div class="checkout-cutoff-cell-num" id="ckoCdDays">02</div><div class="checkout-cutoff-cell-lbl">Days</div></div>
+        <div class="checkout-cutoff-cell"><div class="checkout-cutoff-cell-num" id="ckoCdHrs">08</div><div class="checkout-cutoff-cell-lbl">Hrs</div></div>
+        <div class="checkout-cutoff-cell"><div class="checkout-cutoff-cell-num" id="ckoCdMin">30</div><div class="checkout-cutoff-cell-lbl">Min</div></div>
+        <div class="checkout-cutoff-cell"><div class="checkout-cutoff-cell-num" id="ckoCdSec">56</div><div class="checkout-cutoff-cell-lbl">Sec</div></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Step indicator -->
+  <div class="checkout-step-indicator">
+    Step <strong id="checkoutStepNumDisplay">1</strong> of <strong>4</strong>
+  </div>
+
+  <!-- One-time → Subscribe upsell (only for one-time carts) -->
+  <div class="checkout-upsell" id="checkoutUpsell" style="display:none">
+    <div class="checkout-upsell-icon">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+    </div>
+    <div class="checkout-upsell-body">
+      <div class="checkout-upsell-title">Save <span id="checkoutUpsellAmount">$0.00</span> by switching to a subscription</div>
+      <div class="checkout-upsell-sub"><span id="checkoutUpsellPct">14%</span> off every order &middot; free delivery on 8+ meals &middot; skip or cancel anytime</div>
+    </div>
+    <button class="checkout-upsell-cta" onclick="upsellSwitchToSub()">
+      Switch &amp; Save
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+    </button>
+    <button class="checkout-upsell-dismiss" onclick="dismissCheckoutUpsell()" aria-label="Dismiss">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+    </button>
+  </div>
+
+  <!-- ════════ Main 2-column grid ════════ -->
+  <div class="checkout-grid" id="checkoutGrid">
+
+    <!-- ═════ LEFT: Express row + 4-step stepper ═════ -->
+    <div class="checkout-left">
+
+      <!-- Express checkout (mocked Apple / Google Pay) -->
+      <div class="checkout-express">
+        <div class="checkout-express-head">
+          <div class="checkout-express-label">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><polyline points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+            Express Checkout
+          </div>
+          <div class="checkout-express-badge">Fastest way to pay</div>
+        </div>
+        <div class="checkout-express-grid">
+          <button type="button" class="checkout-express-btn apple-pay" onclick="handleExpressCheckout('apple')" aria-label="Pay with Apple Pay">
+            <svg viewBox="0 0 24 24" fill="currentColor"><path d="M17.72 12.36c-.02-2.25 1.83-3.33 1.91-3.39-1.04-1.52-2.66-1.73-3.24-1.76-1.38-.14-2.69.81-3.39.81-.7 0-1.78-.79-2.92-.77-1.5.02-2.89.87-3.66 2.22-1.56 2.71-.4 6.72 1.12 8.92.74 1.08 1.62 2.29 2.77 2.25 1.11-.04 1.53-.72 2.88-.72 1.34 0 1.72.72 2.9.7 1.2-.02 1.96-1.1 2.69-2.18.85-1.25 1.2-2.46 1.22-2.52-.03-.01-2.34-.9-2.36-3.56zM15.53 5.71c.61-.74 1.03-1.77.91-2.8-.88.04-1.95.59-2.59 1.33-.57.65-1.07 1.7-.94 2.7.98.08 1.99-.49 2.62-1.23z"/></svg>
+            <span class="checkout-express-btn-label">Pay</span>
+          </button>
+          <button type="button" class="checkout-express-btn google-pay" onclick="handleExpressCheckout('google')" aria-label="Pay with Google Pay">
+            <svg viewBox="0 0 24 24" fill="none"><path d="M12.24 10.29v3.59h4.97c-.2 1.05-.8 1.94-1.71 2.54v2.11h2.77c1.62-1.49 2.56-3.69 2.56-6.3 0-.6-.05-1.18-.16-1.74H12.24z" fill="#4285F4"/><path d="M12.24 20c2.31 0 4.25-.77 5.67-2.08l-2.77-2.15c-.77.52-1.75.82-2.9.82-2.23 0-4.12-1.5-4.8-3.52H4.58v2.21C5.99 17.98 8.89 20 12.24 20z" fill="#34A853"/><path d="M7.44 13.07c-.18-.52-.27-1.08-.27-1.67 0-.58.1-1.14.27-1.67V7.52H4.58C3.99 8.65 3.65 9.93 3.65 11.4s.34 2.75.93 3.88l2.86-2.21z" fill="#FBBC05"/><path d="M12.24 6.21c1.26 0 2.39.43 3.28 1.28l2.46-2.46C16.48 3.59 14.55 2.8 12.24 2.8 8.89 2.8 5.99 4.82 4.58 7.52l2.86 2.21c.68-2.02 2.57-3.52 4.8-3.52z" fill="#EA4335"/></svg>
+            <span class="checkout-express-btn-label">Pay</span>
+          </button>
+        </div>
+        <div class="checkout-express-divider">Or pay with card below</div>
+      </div>
+
+      <!-- Stepper -->
+      <div class="checkout-stepper" id="checkoutStepper">
+
+        <!-- ═══════════ STEP 1 — CONTACT ═══════════ -->
+        <div class="checkout-step active" id="checkoutStep1" data-step="1">
+          <div class="checkout-step-num">1</div>
+          <div class="checkout-step-head">
+            <h2 class="checkout-step-title">Contact</h2>
+            <button type="button" class="checkout-step-edit" onclick="editCheckoutStep(1)" style="display:none">Edit</button>
+          </div>
+          <div class="checkout-step-recap" id="checkoutStep1Recap" style="display:none"></div>
+          <div class="checkout-step-body">
+            <p class="checkout-step-required">Required field</p>
+            <div class="checkout-form">
+              <div class="checkout-form-row">
+                <div>
+                  <label class="checkout-field-label req">First Name</label>
+                  <input class="checkout-field-input" id="checkoutFirst" placeholder="First name" autocomplete="given-name">
+                  <div class="checkout-field-error">Required</div>
+                </div>
+                <div>
+                  <label class="checkout-field-label req">Last Name</label>
+                  <input class="checkout-field-input" id="checkoutLast" placeholder="Last name" autocomplete="family-name">
+                  <div class="checkout-field-error">Required</div>
+                </div>
+              </div>
+              <div>
+                <label class="checkout-field-label req">Email</label>
+                <input class="checkout-field-input" id="checkoutEmail" type="email" placeholder="you@example.com" autocomplete="email">
+                <div class="checkout-field-error">Enter a valid email</div>
+              </div>
+              <div>
+                <label class="checkout-field-label req">Phone</label>
+                <input class="checkout-field-input" id="checkoutPhone" type="tel" placeholder="(xxx) xxx-xxxx" inputmode="tel" autocomplete="tel" maxlength="14">
+                <div class="checkout-field-error">Enter a valid phone number</div>
+              </div>
+              <label class="checkout-checkbox-row">
+                <input type="checkbox" id="checkoutNewsOptIn" checked>
+                <span>Keep me updated with news and offers from BetterDay</span>
+              </label>
+            </div>
+            <div class="checkout-step-cta-row">
+              <button class="checkout-step-cta" onclick="continueCheckoutStep(1)">
+                Continue to Delivery
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- ═══════════ STEP 2 — DELIVERY ═══════════ -->
+        <div class="checkout-step pending" id="checkoutStep2" data-step="2">
+          <div class="checkout-step-num">2</div>
+          <div class="checkout-step-head">
+            <h2 class="checkout-step-title">Delivery</h2>
+            <button type="button" class="checkout-step-edit" onclick="editCheckoutStep(2)" style="display:none">Edit</button>
+          </div>
+          <div class="checkout-step-recap" id="checkoutStep2Recap" style="display:none"></div>
+          <div class="checkout-step-body">
+            <p class="checkout-step-required">Required field</p>
+            <div class="checkout-form">
+
+              <!-- Gift toggle — Me vs send as gift -->
+              <div>
+                <label class="checkout-field-label">Who's this order for?</label>
+                <div class="checkout-gift-toggle">
+                  <button type="button" class="active" id="checkoutGiftMeBtn" onclick="setCheckoutGiftMode(false)">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+                    Me
+                  </button>
+                  <button type="button" id="checkoutGiftOtherBtn" onclick="setCheckoutGiftMode(true)">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 12 20 22 4 22 4 12"/><rect x="2" y="7" width="20" height="5"/><line x1="12" y1="22" x2="12" y2="7"/><path d="M12 7H7.5a2.5 2.5 0 010-5C11 2 12 7 12 7z"/><path d="M12 7h4.5a2.5 2.5 0 000-5C13 2 12 7 12 7z"/></svg>
+                    Send as a gift
+                  </button>
+                </div>
+              </div>
+
+              <!-- Gift recipient fields — hidden when isGift is false -->
+              <div id="checkoutGiftFields" style="display:none">
+                <div class="checkout-gift-notice">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+                  <div>
+                    <strong>Gift orders are one-time only.</strong> Your regular subscription isn't affected.
+                    Order confirmation goes to you &mdash; delivery updates go to your recipient.
+                  </div>
+                </div>
+                <div class="checkout-form-row" style="margin-top:14px">
+                  <div>
+                    <label class="checkout-field-label req">Recipient First Name</label>
+                    <input class="checkout-field-input" id="checkoutGiftFirst" placeholder="First name">
+                  </div>
+                  <div>
+                    <label class="checkout-field-label req">Recipient Last Name</label>
+                    <input class="checkout-field-input" id="checkoutGiftLast" placeholder="Last name">
+                  </div>
+                </div>
+                <div style="margin-top:14px">
+                  <label class="checkout-field-label req">Recipient Phone <span style="font-weight:500;text-transform:none;color:var(--cko-text-warm)">(for delivery SMS)</span></label>
+                  <input class="checkout-field-input" id="checkoutGiftPhone" type="tel" placeholder="(xxx) xxx-xxxx" inputmode="tel" maxlength="14">
+                </div>
+                <div style="margin-top:14px">
+                  <label class="checkout-field-label">Gift Message <span style="font-weight:500;text-transform:none;color:var(--cko-text-warm)">(optional)</span></label>
+                  <textarea class="checkout-field-input" id="checkoutGiftMessage" rows="2" placeholder="Add a personal note for your recipient" style="resize:vertical;min-height:52px;font-family:inherit"></textarea>
+                </div>
+              </div>
+
+              <!-- Delivery vs pickup -->
+              <div>
+                <label class="checkout-field-label">How would you like to receive your meals?</label>
+                <div class="checkout-method-toggle">
+                  <button type="button" class="active" id="checkoutMethodDeliveryBtn" onclick="setCheckoutMethod('delivery')">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="1" y="3" width="15" height="13"/><polygon points="16 8 20 8 23 11 23 16 16 16 16 8"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/></svg>
+                    Delivery
+                  </button>
+                  <button type="button" id="checkoutMethodPickupBtn" onclick="setCheckoutMethod('pickup')">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+                    Pickup
+                  </button>
+                </div>
+              </div>
+
+              <!-- Delivery address — saved list OR inline form -->
+              <div id="checkoutDeliveryPanel">
+                <label class="checkout-field-label req" id="checkoutAddressLabel">Deliver to</label>
+                <div class="checkout-radio-list" id="checkoutAddressList" style="display:none"></div>
+                <div class="checkout-inline-form" id="checkoutAddressForm">
+                  <div class="checkout-inline-form-title">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z"/><circle cx="12" cy="10" r="3"/></svg>
+                    Delivery address
+                  </div>
+                  <div>
+                    <label class="checkout-field-label req">Street address</label>
+                    <input class="checkout-field-input" id="checkoutAddrStreet" placeholder="1234 Main St SW" autocomplete="address-line1">
+                  </div>
+                  <div>
+                    <label class="checkout-field-label">Apt / unit / buzzer <span style="font-weight:500;text-transform:none;color:var(--cko-text-warm)">(optional)</span></label>
+                    <input class="checkout-field-input" id="checkoutAddrUnit" placeholder="Apt 402 · Buzz 4202" autocomplete="address-line2">
+                  </div>
+                  <div class="checkout-form-row">
+                    <div>
+                      <label class="checkout-field-label req">City</label>
+                      <input class="checkout-field-input" id="checkoutAddrCity" placeholder="Calgary" autocomplete="address-level2">
+                    </div>
+                    <div>
+                      <label class="checkout-field-label req">Province</label>
+                      <input class="checkout-field-input" id="checkoutAddrProv" placeholder="AB" maxlength="2" autocomplete="address-level1" style="text-transform:uppercase">
+                    </div>
+                  </div>
+                  <div class="checkout-form-row">
+                    <div>
+                      <label class="checkout-field-label req">Postal code</label>
+                      <input class="checkout-field-input" id="checkoutAddrPostal" placeholder="T2T 1S5" maxlength="7" autocomplete="postal-code" style="text-transform:uppercase">
+                    </div>
+                    <div>
+                      <label class="checkout-field-label">Country</label>
+                      <input class="checkout-field-input" id="checkoutAddrCountry" value="Canada" disabled autocomplete="country">
+                    </div>
+                  </div>
+                  <div>
+                    <label class="checkout-field-label">Delivery instructions <span style="font-weight:500;text-transform:none;color:var(--cko-text-warm)">(optional)</span></label>
+                    <textarea class="checkout-field-input" id="checkoutAddrNotes" rows="2" placeholder="Leave at side door · Beware of dog" style="resize:vertical;min-height:52px;font-family:inherit"></textarea>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Pickup location + date -->
+              <div id="checkoutPickupPanel" style="display:none">
+                <label class="checkout-field-label req">Pick up at</label>
+                <div class="checkout-radio-list" id="checkoutPickupList"></div>
+                <div style="margin-top:14px">
+                  <label class="checkout-field-label req">Pickup Date</label>
+                  <input class="checkout-field-input" type="date" id="checkoutPickupDate">
+                </div>
+              </div>
+
+              <!-- Estimated arrival -->
+              <div class="checkout-arrival-banner">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+                <div>Your order arrives <strong id="checkoutArrivalDate">Wednesday, April 15</strong>. We deliver between 4&ndash;8 PM &mdash; you'll get a text when your driver is on the way.</div>
+              </div>
+            </div>
+            <div class="checkout-step-cta-row">
+              <button class="checkout-step-cta" onclick="continueCheckoutStep(2)">
+                Continue to Payment
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- ═══════════ STEP 3 — PAYMENT ═══════════ -->
+        <div class="checkout-step pending" id="checkoutStep3" data-step="3">
+          <div class="checkout-step-num">3</div>
+          <div class="checkout-step-head">
+            <h2 class="checkout-step-title">Payment</h2>
+            <button type="button" class="checkout-step-edit" onclick="editCheckoutStep(3)" style="display:none">Edit</button>
+          </div>
+          <div class="checkout-step-recap" id="checkoutStep3Recap" style="display:none"></div>
+          <div class="checkout-step-body">
+            <div class="checkout-form">
+              <div>
+                <label class="checkout-field-label req">Payment method</label>
+                <div id="checkoutPayList" class="checkout-pay-list" style="display:none"></div>
+                <div class="checkout-inline-form" id="checkoutPayForm">
+                  <div class="checkout-inline-form-title">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/></svg>
+                    Card details
+                  </div>
+                  <div>
+                    <label class="checkout-field-label req">Cardholder name</label>
+                    <input class="checkout-field-input" id="checkoutCardName" placeholder="Name on card" autocomplete="cc-name">
+                  </div>
+                  <div>
+                    <label class="checkout-field-label req">Card number</label>
+                    <input class="checkout-field-input" id="checkoutCardNum" placeholder="1234 5678 9012 3456" inputmode="numeric" autocomplete="cc-number" maxlength="19">
+                  </div>
+                  <div class="checkout-form-row">
+                    <div>
+                      <label class="checkout-field-label req">Expiry</label>
+                      <input class="checkout-field-input" id="checkoutCardExp" placeholder="MM/YY" inputmode="numeric" autocomplete="cc-exp" maxlength="5">
+                    </div>
+                    <div>
+                      <label class="checkout-field-label req">CVC</label>
+                      <input class="checkout-field-input" id="checkoutCardCvc" placeholder="123" inputmode="numeric" autocomplete="cc-csc" maxlength="4">
+                    </div>
+                  </div>
+                  <label class="checkout-checkbox-row">
+                    <input type="checkbox" id="checkoutCardSave">
+                    <span>Save this card for next time (requires account)</span>
+                  </label>
+                </div>
+              </div>
+              <div class="checkout-pay-secure-row">
+                <div>
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>
+                  Encrypted &amp; PCI compliant
+                </div>
+                <div class="checkout-pay-brands">
+                  <span class="checkout-pay-brand visa">VISA</span>
+                  <span class="checkout-pay-brand mc">MC</span>
+                  <span class="checkout-pay-brand amex">AMEX</span>
+                  <span class="checkout-pay-brand disc">DISC</span>
+                </div>
+              </div>
+            </div>
+            <div class="checkout-step-cta-row">
+              <button class="checkout-step-cta" onclick="continueCheckoutStep(3)">
+                Continue to Review
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- ═══════════ STEP 4 — REVIEW & PLACE ORDER ═══════════ -->
+        <div class="checkout-step pending" id="checkoutStep4" data-step="4">
+          <div class="checkout-step-num">4</div>
+          <div class="checkout-step-head">
+            <h2 class="checkout-step-title">Review &amp; Place Order</h2>
+          </div>
+          <div class="checkout-step-body">
+            <div class="checkout-form">
+              <div class="checkout-review-list" id="checkoutReviewList">
+                <!-- populated by renderCheckoutReview() -->
+              </div>
+              <label class="checkout-checkbox-row">
+                <input type="checkbox" id="checkoutConsentTx" checked>
+                <span>I consent to receive order updates and delivery notifications via text message.</span>
+              </label>
+              <label class="checkout-checkbox-row">
+                <input type="checkbox" id="checkoutConsentMkt">
+                <span>I consent to receive exclusive offers and promotions via text message.</span>
+              </label>
+            </div>
+            <div class="checkout-step-cta-row" style="justify-content:stretch">
+              <button class="checkout-step-cta large" id="checkoutPayBtn" onclick="submitCheckout()">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>
+                Place Order &mdash; <span id="checkoutPayBtnTotal">$0.00</span>
+              </button>
+            </div>
+            <div class="checkout-cta-microcopy">
+              By placing this order you agree to BetterDay's <a href="#">Terms &amp; Conditions</a> and <a href="#">Privacy Policy</a>.
+            </div>
+          </div>
+        </div>
+
+      </div><!-- /.checkout-stepper -->
+
+      <!-- Success panel — swapped in for the stepper on submit -->
+      <div class="cko-success" id="ckoSuccess">
+        <div class="cko-success-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+        </div>
+        <h2 class="cko-success-title">Order placed!</h2>
+        <p class="cko-success-sub">
+          Thanks, <strong id="ckoSuccessName">friend</strong>. Your BetterDay box is on the way.
+          A confirmation email is headed to <strong id="ckoSuccessEmail">your inbox</strong>.
+        </p>
+        <div class="cko-success-meta">
+          <div class="cko-success-meta-cell">
+            <div class="cko-success-meta-label">Order number</div>
+            <div class="cko-success-meta-val" id="ckoSuccessOrderId">BD-000000</div>
+          </div>
+          <div class="cko-success-meta-cell">
+            <div class="cko-success-meta-label">Delivery</div>
+            <div class="cko-success-meta-val" id="ckoSuccessDelivery">Wed, Apr 15</div>
+          </div>
+          <div class="cko-success-meta-cell">
+            <div class="cko-success-meta-label">Total paid</div>
+            <div class="cko-success-meta-val" id="ckoSuccessTotal">$0.00</div>
+          </div>
+          <div class="cko-success-meta-cell">
+            <div class="cko-success-meta-label">Items</div>
+            <div class="cko-success-meta-val" id="ckoSuccessItems">0 meals</div>
+          </div>
+        </div>
+        <div class="cko-success-ctas">
+          <a class="cko-success-btn" href="menu/index.html">Order more meals</a>
+          <a class="cko-success-btn secondary" href="index.html">Back home</a>
+        </div>
+      </div>
+
+    </div><!-- /.checkout-left -->
+
+    <!-- ═════ RIGHT: Sticky order summary + perks + help ═════ -->
+    <aside class="checkout-right">
+      <div class="checkout-summary">
+        <div class="checkout-summary-inner" id="checkoutSummaryInner">
+          <!-- populated by renderCheckoutSummary() -->
+        </div>
+        <!-- Perks of every BetterDay box -->
+        <div class="checkout-summary-perks">
+          <div class="checkout-perks-title">The perks of every BetterDay box</div>
+          <div class="checkout-perks-row">
+            <div class="checkout-perk">
+              <div class="checkout-perk-icon">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 4 15 12 5 20 5 4"/><line x1="19" y1="5" x2="19" y2="19"/></svg>
+              </div>
+              <div class="checkout-perk-label">Skip a week<br>anytime</div>
+            </div>
+            <div class="checkout-perk">
+              <div class="checkout-perk-icon">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="3" width="15" height="13"/><polygon points="16 8 20 8 23 11 23 16 16 16 16 8"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/></svg>
+              </div>
+              <div class="checkout-perk-label">Free delivery<br>on 8+ meals</div>
+            </div>
+            <div class="checkout-perk">
+              <div class="checkout-perk-icon">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>
+              </div>
+              <div class="checkout-perk-label">No contracts<br>cancel anytime</div>
+            </div>
+          </div>
+        </div>
+        <!-- Need help footer — {{contact.*}} tokens interpolated by site-shell.js -->
+        <div class="checkout-summary-help">
+          <div class="checkout-summary-help-title">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 015.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+            Need help?
+          </div>
+          <div class="checkout-summary-help-line">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07 19.5 19.5 0 01-6-6 19.79 19.79 0 01-3.07-8.67A2 2 0 014.11 2h3a2 2 0 012 1.72c.127.96.362 1.903.7 2.81a2 2 0 01-.45 2.11L8.09 9.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45c.907.338 1.85.573 2.81.7A2 2 0 0122 16.92z"/></svg>
+            <a href="tel:{{contact.phone}}">{{contact.phone}}</a>
+          </div>
+          <div class="checkout-summary-help-line">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
+            <a href="mailto:{{contact.email}}">{{contact.email}}</a>
+          </div>
+        </div>
+      </div>
+    </aside>
+
+  </div><!-- /.checkout-grid -->
+
+  <!-- Mobile sticky Pay-Now bar (hidden above 980px via @media) -->
+  <div class="checkout-mobile-cta" id="checkoutMobileCta">
+    <div class="checkout-mobile-cta-info">
+      <div class="checkout-mobile-cta-label">Total</div>
+      <div class="checkout-mobile-cta-total" id="checkoutMobileTotal">$0.00</div>
+    </div>
+    <button class="checkout-mobile-cta-btn" onclick="submitCheckout()">
+      Place Order
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+    </button>
+  </div>
+
+</main>
+
+<!-- Express checkout processing overlay -->
+<div class="cko-express-overlay" id="ckoExpressOverlay">
+  <div class="cko-express-sheet">
+    <div class="cko-express-brand" id="ckoExpressBrand">Apple Pay</div>
+    <div class="cko-express-spinner"></div>
+    <div class="cko-express-status" id="ckoExpressStatus">Authenticating…</div>
+    <div class="cko-express-total" id="ckoExpressTotal">$0.00</div>
+  </div>
+</div>
+
+<!-- Toast container -->
+<div class="cko-toast-container" id="ckoToastContainer"></div>
+
+<!-- Footer injected from shared/marketing-footer.html by site-shell.js -->
+<div data-shell="footer"></div>
+
+<!-- Subscription pricing config — single source of truth shared with
+     conner/client-website/menu/index.html. Defines PERK_TIERS,
+     FREE_DELIVERY_MEALS, DELIVERY_FEE, GST_RATE, POINTS_PER_DOLLAR,
+     and lookupSubscriberDiscountPct(). Must load BEFORE the main script
+     so the consts exist when computeCheckoutTotals() runs. -->
+<script src="shared/subscription-config.js"></script>
+
+<script>
+/* ══════════════════════════════════════════════════════════════════════
+   CHECKOUT PAGE — behavior
+   Adapted from conner/app/subscriber-hub-2.0.html (checkout module).
+   Guest-first: saved addresses / payment methods default to empty, so
+   Step 2 and Step 3 render inline forms. Logged-in support preserved via
+   the same radio-list code path — populate acctAddresses / paymentMethods
+   before initCheckout() to activate it.
+   Payment + express checkout are MOCKED — see handleExpressCheckout()
+   and submitCheckout() for the mock success-panel swap.
+   ══════════════════════════════════════════════════════════════════════ */
+
+/* ─── Constants ─── */
+// PERK_TIERS, FREE_DELIVERY_MEALS, DELIVERY_FEE, GST_RATE, POINTS_PER_DOLLAR,
+// and lookupSubscriberDiscountPct() come from shared/subscription-config.js
+// (script-tagged in the HTML head/body BEFORE this script). They are the
+// single source of truth shared with the menu page.
+const CHECKOUT_TOTAL_STEPS = 4;
+const CART_STORAGE_KEY     = 'betterday.cart.v1';   // localStorage key — value is v2 schema
+const CART_SCHEMA_VERSION  = 2;                     // bump when payload shape changes
+const GUEST_CONTACT_KEY    = 'betterday.guest_contact.v1';
+
+/* ─── Sample fallback cart (used when localStorage is empty or stale) ───
+   Prices match the canonical menu seed: every entree is $16.99. There is
+   only ONE price column — the regular full retail price. The subscriber
+   discount is computed at the order level by computeCheckoutTotals()
+   based on PERK_TIERS, NOT baked into a per-item subscriber price. */
+const SAMPLE_CART = {
+  version: CART_SCHEMA_VERSION,
+  mode: 'subscribe',
+  items: [
+    { id:'sample_1', name:'Herb-Crusted Chicken w/ Roasted Veg', qty:2, price:16.99, img:'' },
+    { id:'sample_2', name:'Korean Bulgogi Bowl',                 qty:1, price:16.99, img:'' },
+    { id:'sample_3', name:'Chickpea Tikka Masala',               qty:2, price:16.99, img:'' },
+    { id:'sample_4', name:'Steelhead Trout w/ Lemon Rice',       qty:1, price:16.99, img:'' }
+  ],
+  updatedAt: new Date().toISOString()
+};
+
+/* ─── Cart (loaded on boot) ─── */
+let cart = null;
+function loadCart(){
+  try {
+    const raw = localStorage.getItem(CART_STORAGE_KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      // Version check: v1 carts had a synthesized retail_price field that
+      // doesn't exist in v2 and a different per-item price meaning. A v1
+      // cart read by v2 code would produce wrong totals, so invalidate
+      // anything that doesn't match the current schema version.
+      if (parsed && parsed.version === CART_SCHEMA_VERSION && Array.isArray(parsed.items) && parsed.items.length) {
+        return parsed;
+      }
+      if (parsed && parsed.version !== CART_SCHEMA_VERSION) {
+        console.info('[checkout] cart schema mismatch (got v' + parsed.version + ', expected v' + CART_SCHEMA_VERSION + ') — falling back to sample');
+      }
+    }
+  } catch (e) { console.warn('[checkout] cart load failed', e); }
+  return SAMPLE_CART;
+}
+function getCartMeals(){
+  return (cart && cart.items) ? cart.items : [];
+}
+function getCheckoutOrderType(){
+  if (checkoutState.isGift) return 'onetime';
+  return (cart && cart.mode === 'onetime') ? 'onetime' : 'subscription';
+}
+
+/* ─── Mock user / account data (guest defaults — all empty) ─── */
+let userData = { firstName:'', lastName:'', email:'', phone:'' };
+let acctAddresses = [];            // populate this to enable saved-address radio list
+let paymentMethods = [];           // populate this to enable saved-card radio list
+let checkoutPickupLocations = [
+  { id:1, name:'BetterDay HQ',     addr:'1234 17 Ave SW, Calgary, AB T2T 1S5',      days:'Pickup days: Wed · Thu' },
+  { id:2, name:'Canmore Depot',    addr:'102 Boulder Crescent, Canmore, AB T1W 1L2',days:'Pickup days: Thu' }
+];
+
+/* ─── Checkout state ─── */
+let checkoutState = {
+  currentStep: 1,
+  completedSteps: {},
+  method: 'delivery',         // 'delivery' | 'pickup'
+  addressId: null,
+  pickupLocId: null,
+  pickupDate: '',
+  paymentId: null,
+  discountCode: '',
+  giftCard: '',
+  pointsApplied: false,
+  upsellDismissed: false,
+  isGift: false,
+  giftRecipient: { firstName:'', lastName:'', phone:'', message:'' },
+  // Guest-mode inline form data (populated on Step 2 / Step 3 continue)
+  guestAddress: null,         // {street, unit, city, province, postal, country, notes}
+  guestCard: null,            // {name, last4, expMonth, expYear, type}
+  _initialized: false
+};
+
+/* ══════════════════════════════════════════════════════════════════════
+   Toast — minimal inline implementation
+   ══════════════════════════════════════════════════════════════════════ */
+function showToast(msg, type='info'){
+  const c = document.getElementById('ckoToastContainer');
+  if (!c) return;
+  const icons = {
+    success: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M20 6L9 17l-5-5"/></svg>',
+    info:    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>',
+    warning: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>'
+  };
+  const t = document.createElement('div');
+  t.className = 'cko-toast ' + type;
+  t.innerHTML = (icons[type] || icons.info) + '<span>' + msg + '</span>';
+  c.appendChild(t);
+  setTimeout(() => {
+    t.style.animation = 'ckoToastOut 0.25s ease forwards';
+    setTimeout(() => t.remove(), 250);
+  }, 3000);
+}
+
+/* ══════════════════════════════════════════════════════════════════════
+   Phone formatter — standardized (xxx) xxx-xxxx
+   ══════════════════════════════════════════════════════════════════════ */
+function formatPhoneNumber(value){
+  if (value == null) return '';
+  const digits = String(value).replace(/\D/g, '').slice(0, 10);
+  if (digits.length === 0) return '';
+  if (digits.length < 4)   return '(' + digits;
+  if (digits.length < 7)   return '(' + digits.slice(0,3) + ') ' + digits.slice(3);
+  return '(' + digits.slice(0,3) + ') ' + digits.slice(3,6) + '-' + digits.slice(6);
+}
+function attachPhoneFormatter(input){
+  if (!input || input.dataset.phoneFormatted === '1') return;
+  input.dataset.phoneFormatted = '1';
+  input.setAttribute('inputmode', 'tel');
+  input.setAttribute('maxlength', '14');
+  input.setAttribute('autocomplete', 'tel');
+  if (input.value) input.value = formatPhoneNumber(input.value);
+  input.addEventListener('input', e => {
+    const cursorAtEnd = e.target.selectionStart === e.target.value.length;
+    e.target.value = formatPhoneNumber(e.target.value);
+    if (cursorAtEnd) {
+      const len = e.target.value.length;
+      e.target.setSelectionRange(len, len);
+    }
+  });
+  input.addEventListener('blur', e => {
+    const digits = e.target.value.replace(/\D/g, '');
+    if (digits.length > 0 && digits.length < 10) e.target.classList.add('error');
+    else e.target.classList.remove('error');
+  });
+}
+
+/* ══════════════════════════════════════════════════════════════════════
+   Card input helpers — spaces every 4 digits, MM/YY expiry
+   ══════════════════════════════════════════════════════════════════════ */
+function formatCardNumber(v){
+  return String(v || '').replace(/\D/g, '').slice(0, 16).replace(/(.{4})/g, '$1 ').trim();
+}
+function formatCardExp(v){
+  const d = String(v || '').replace(/\D/g, '').slice(0, 4);
+  if (d.length <= 2) return d;
+  return d.slice(0,2) + '/' + d.slice(2);
+}
+function detectCardType(num){
+  const n = String(num || '').replace(/\D/g, '');
+  if (/^4/.test(n))          return 'visa';
+  if (/^(5[1-5]|2[2-7])/.test(n)) return 'mc';
+  if (/^3[47]/.test(n))      return 'amex';
+  if (/^6(011|5)/.test(n))   return 'disc';
+  return 'card';
+}
+
+/* ══════════════════════════════════════════════════════════════════════
+   ENTRY POINT
+   ══════════════════════════════════════════════════════════════════════ */
+function initCheckout(){
+  // Load saved guest contact from prior checkout, if any
+  try {
+    const raw = localStorage.getItem(GUEST_CONTACT_KEY);
+    if (raw) {
+      const saved = JSON.parse(raw);
+      if (saved && typeof saved === 'object') {
+        userData = Object.assign(userData, saved);
+      }
+    }
+  } catch (e) { /* ignore */ }
+
+  // Pre-fill contact form from userData
+  const f = document.getElementById('checkoutFirst');
+  const l = document.getElementById('checkoutLast');
+  const e = document.getElementById('checkoutEmail');
+  const p = document.getElementById('checkoutPhone');
+  if (f && !f.value) f.value = userData.firstName || '';
+  if (l && !l.value) l.value = userData.lastName  || '';
+  if (e && !e.value) e.value = userData.email     || '';
+  if (p && !p.value) p.value = formatPhoneNumber(userData.phone || '');
+  if (p) attachPhoneFormatter(p);
+
+  // Phone formatter on gift recipient phone
+  const gp = document.getElementById('checkoutGiftPhone');
+  if (gp) attachPhoneFormatter(gp);
+
+  // Card formatters
+  const cNum = document.getElementById('checkoutCardNum');
+  const cExp = document.getElementById('checkoutCardExp');
+  const cCvc = document.getElementById('checkoutCardCvc');
+  if (cNum) cNum.addEventListener('input', ev => { ev.target.value = formatCardNumber(ev.target.value); });
+  if (cExp) cExp.addEventListener('input', ev => { ev.target.value = formatCardExp(ev.target.value); });
+  if (cCvc) cCvc.addEventListener('input', ev => { ev.target.value = String(ev.target.value).replace(/\D/g, '').slice(0, 4); });
+
+  // Postal code auto-uppercase + spacing
+  const pc = document.getElementById('checkoutAddrPostal');
+  if (pc) pc.addEventListener('input', ev => {
+    const cleaned = String(ev.target.value).toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 6);
+    ev.target.value = cleaned.length > 3 ? cleaned.slice(0, 3) + ' ' + cleaned.slice(3) : cleaned;
+  });
+
+  // First-load defaults
+  if (!checkoutState._initialized) {
+    // Default pickup loc + date (6 days from today)
+    if (checkoutPickupLocations.length) checkoutState.pickupLocId = checkoutPickupLocations[0].id;
+    const d = new Date();
+    d.setDate(d.getDate() + 6);
+    checkoutState.pickupDate = d.toISOString().slice(0, 10);
+
+    // Default saved address / card if any
+    const defAddr = acctAddresses.find(a => a.isDefault) || acctAddresses[0];
+    if (defAddr) checkoutState.addressId = defAddr.id;
+    const defPay = paymentMethods.find(pm => pm.isDefault) || paymentMethods[0];
+    if (defPay) checkoutState.paymentId = defPay.id;
+
+    checkoutState._initialized = true;
+  }
+
+  const pdInp = document.getElementById('checkoutPickupDate');
+  if (pdInp) {
+    pdInp.value = checkoutState.pickupDate;
+    pdInp.min = new Date().toISOString().slice(0, 10);
+    pdInp.onchange = ev => { checkoutState.pickupDate = ev.target.value; };
+  }
+
+  // Apply method UI
+  setCheckoutMethod(checkoutState.method, true);
+
+  // Render lists + summary + stepper + upsell
+  renderCheckoutAddressList();
+  renderCheckoutPickupList();
+  renderCheckoutPayList();
+  renderCheckoutSummary();
+  renderCheckoutStepper();
+  renderCheckoutUpsell();
+  updateCutoffCountdown();
+
+  // Kick off countdown ticker
+  setInterval(updateCutoffCountdown, 1000);
+}
+
+/* ══════════════════════════════════════════════════════════════════════
+   Cutoff countdown — mocked to "2 days from now, midnight"
+   ══════════════════════════════════════════════════════════════════════ */
+function getCutoffDate(){
+  const d = new Date();
+  d.setDate(d.getDate() + 2);
+  d.setHours(23, 59, 59, 0);
+  return d;
+}
+function updateCutoffCountdown(){
+  const cutoff = getCutoffDate();
+  const diff = Math.max(0, cutoff - new Date());
+  const days  = Math.floor(diff / 86400000);
+  const hours = Math.floor((diff % 86400000) / 3600000);
+  const mins  = Math.floor((diff % 3600000) / 60000);
+  const secs  = Math.floor((diff % 60000) / 1000);
+  const pad = n => String(n).padStart(2, '0');
+  const set = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v; };
+  set('ckoCdDays', pad(days));
+  set('ckoCdHrs',  pad(hours));
+  set('ckoCdMin',  pad(mins));
+  set('ckoCdSec',  pad(secs));
+  const dateEl = document.getElementById('checkoutCutoffDate');
+  if (dateEl) dateEl.textContent = cutoff.toLocaleDateString('en', { weekday:'short', month:'short', day:'numeric' });
+}
+
+/* ══════════════════════════════════════════════════════════════════════
+   STEPPER — state renderer
+   ══════════════════════════════════════════════════════════════════════ */
+function renderCheckoutStepper(){
+  for (let i = 1; i <= CHECKOUT_TOTAL_STEPS; i++) {
+    const stepEl = document.getElementById('checkoutStep' + i);
+    if (!stepEl) continue;
+    stepEl.classList.remove('active', 'complete', 'pending');
+    const numEl  = stepEl.querySelector('.checkout-step-num');
+    const editEl = stepEl.querySelector('.checkout-step-edit');
+    const recapEl = stepEl.querySelector('.checkout-step-recap');
+
+    if (checkoutState.completedSteps[i] && i !== checkoutState.currentStep) {
+      stepEl.classList.add('complete');
+      if (numEl) numEl.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>';
+      if (editEl) { editEl.style.display = ''; editEl.textContent = 'Edit'; }
+      if (recapEl) { recapEl.style.display = ''; recapEl.innerHTML = getCheckoutStepRecap(i); }
+      stepEl.onclick = ((n) => function(ev){
+        if (ev.target.closest('a,button,input,select,textarea') && !ev.target.closest('.checkout-step-edit')) return;
+        editCheckoutStep(n);
+      })(i);
+    } else if (i === checkoutState.currentStep) {
+      stepEl.classList.add('active');
+      if (numEl) numEl.textContent = i;
+      if (editEl) editEl.style.display = 'none';
+      if (recapEl) recapEl.style.display = 'none';
+      stepEl.onclick = null;
+    } else {
+      stepEl.classList.add('pending');
+      if (numEl) numEl.textContent = i;
+      if (editEl) editEl.style.display = 'none';
+      if (recapEl) recapEl.style.display = 'none';
+      stepEl.onclick = null;
+    }
+  }
+  const nd = document.getElementById('checkoutStepNumDisplay');
+  if (nd) nd.textContent = checkoutState.currentStep;
+  if (checkoutState.currentStep === 4) renderCheckoutReview();
+}
+
+function getCheckoutStepRecap(stepNum){
+  if (stepNum === 1) {
+    const f = (document.getElementById('checkoutFirst') || {}).value || '';
+    const l = (document.getElementById('checkoutLast')  || {}).value || '';
+    const e = (document.getElementById('checkoutEmail') || {}).value || '';
+    const p = (document.getElementById('checkoutPhone') || {}).value || '';
+    return '<strong>' + f + ' ' + l + '</strong> &middot; ' + e + ' &middot; ' + p;
+  }
+  if (stepNum === 2) {
+    let prefix = '';
+    if (checkoutState.isGift) {
+      const gr = checkoutState.giftRecipient || {};
+      const name = ((gr.firstName || '') + ' ' + (gr.lastName || '')).trim() || 'Recipient';
+      prefix = '🎁 <strong>Gift to ' + name + '</strong> &middot; ';
+    }
+    if (checkoutState.method === 'delivery') {
+      if (checkoutState.addressId) {
+        const a = acctAddresses.find(x => x.id === checkoutState.addressId);
+        if (a) return prefix + '🚚 ' + a.label + ' &middot; ' + a.street + ', ' + a.city;
+      }
+      if (checkoutState.guestAddress) {
+        const g = checkoutState.guestAddress;
+        return prefix + '🚚 <strong>' + g.street + '</strong> &middot; ' + g.city + ', ' + g.province + ' ' + g.postal;
+      }
+      return 'No address entered';
+    } else {
+      const loc = checkoutPickupLocations.find(x => x.id === checkoutState.pickupLocId);
+      if (!loc) return 'No pickup location selected';
+      const dStr = checkoutState.pickupDate ? new Date(checkoutState.pickupDate + 'T12:00:00').toLocaleDateString('en', {weekday:'short',month:'short',day:'numeric'}) : '';
+      return prefix + '📍 <strong>Pickup at ' + loc.name + '</strong> &middot; ' + dStr;
+    }
+  }
+  if (stepNum === 3) {
+    if (checkoutState.paymentId) {
+      const pm = paymentMethods.find(x => x.id === checkoutState.paymentId);
+      if (pm) {
+        const t = pm.type === 'visa' ? 'Visa' : pm.type === 'mc' ? 'Mastercard' : pm.type === 'amex' ? 'Amex' : pm.type;
+        return '💳 <strong>' + t + ' •••• ' + pm.last4 + '</strong> &middot; Exp ' + String(pm.expMonth).padStart(2,'0') + '/' + pm.expYear;
+      }
+    }
+    if (checkoutState.guestCard) {
+      const c = checkoutState.guestCard;
+      const t = c.type === 'visa' ? 'Visa' : c.type === 'mc' ? 'Mastercard' : c.type === 'amex' ? 'Amex' : c.type === 'disc' ? 'Discover' : 'Card';
+      return '💳 <strong>' + t + ' •••• ' + c.last4 + '</strong> &middot; Exp ' + c.expMonth + '/' + c.expYear;
+    }
+    return 'No payment method entered';
+  }
+  return '';
+}
+
+/* ══════════════════════════════════════════════════════════════════════
+   STEP NAVIGATION — continue + edit
+   ══════════════════════════════════════════════════════════════════════ */
+function continueCheckoutStep(stepNum){
+  if (stepNum === 1) {
+    const f = document.getElementById('checkoutFirst');
+    const l = document.getElementById('checkoutLast');
+    const e = document.getElementById('checkoutEmail');
+    const p = document.getElementById('checkoutPhone');
+    let ok = true;
+    [f, l, e, p].forEach(inp => {
+      if (!inp.value.trim()) { inp.classList.add('error'); ok = false; }
+      else inp.classList.remove('error');
+    });
+    if (!ok) { showToast('Please fill in all contact fields', 'warning'); return; }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e.value.trim())) {
+      e.classList.add('error');
+      showToast('Enter a valid email address', 'warning');
+      return;
+    }
+    // Persist contact for next time
+    userData = { firstName: f.value.trim(), lastName: l.value.trim(), email: e.value.trim(), phone: p.value.trim() };
+    try { localStorage.setItem(GUEST_CONTACT_KEY, JSON.stringify(userData)); } catch (err) { /* ignore */ }
+  }
+  if (stepNum === 2) {
+    // Validate gift recipient if gift mode
+    if (checkoutState.isGift) {
+      const gf = document.getElementById('checkoutGiftFirst');
+      const gl = document.getElementById('checkoutGiftLast');
+      const gp = document.getElementById('checkoutGiftPhone');
+      let ok = true;
+      [gf, gl, gp].forEach(inp => {
+        if (!inp || !inp.value.trim()) { if (inp) inp.classList.add('error'); ok = false; }
+        else inp.classList.remove('error');
+      });
+      if (!ok) { showToast('Please fill in recipient info', 'warning'); return; }
+      if (gp.value.replace(/\D/g, '').length < 10) {
+        gp.classList.add('error');
+        showToast('Enter a valid recipient phone number', 'warning');
+        return;
+      }
+      checkoutState.giftRecipient = {
+        firstName: gf.value.trim(),
+        lastName:  gl.value.trim(),
+        phone:     gp.value.trim(),
+        message:   (document.getElementById('checkoutGiftMessage') || {}).value || ''
+      };
+    }
+    if (checkoutState.method === 'delivery') {
+      // Radio-list path: need a selected addressId
+      if (acctAddresses.length > 0) {
+        if (!checkoutState.addressId) { showToast('Pick a delivery address', 'warning'); return; }
+      } else {
+        // Guest inline form path
+        const street  = document.getElementById('checkoutAddrStreet');
+        const city    = document.getElementById('checkoutAddrCity');
+        const prov    = document.getElementById('checkoutAddrProv');
+        const postal  = document.getElementById('checkoutAddrPostal');
+        let ok = true;
+        [street, city, prov, postal].forEach(inp => {
+          if (!inp.value.trim()) { inp.classList.add('error'); ok = false; }
+          else inp.classList.remove('error');
+        });
+        if (!ok) { showToast('Please fill in your delivery address', 'warning'); return; }
+        checkoutState.guestAddress = {
+          street:   street.value.trim(),
+          unit:     (document.getElementById('checkoutAddrUnit')    || {}).value || '',
+          city:     city.value.trim(),
+          province: prov.value.trim().toUpperCase(),
+          postal:   postal.value.trim().toUpperCase(),
+          country:  'Canada',
+          notes:    (document.getElementById('checkoutAddrNotes')   || {}).value || ''
+        };
+      }
+    } else {
+      // Pickup path
+      if (!checkoutState.pickupLocId || !checkoutState.pickupDate) {
+        showToast('Pick a location and date', 'warning');
+        return;
+      }
+    }
+  }
+  if (stepNum === 3) {
+    if (paymentMethods.length > 0) {
+      if (!checkoutState.paymentId) { showToast('Choose a payment method', 'warning'); return; }
+    } else {
+      // Guest inline card form
+      const name = document.getElementById('checkoutCardName');
+      const num  = document.getElementById('checkoutCardNum');
+      const exp  = document.getElementById('checkoutCardExp');
+      const cvc  = document.getElementById('checkoutCardCvc');
+      let ok = true;
+      [name, num, exp, cvc].forEach(inp => {
+        if (!inp.value.trim()) { inp.classList.add('error'); ok = false; }
+        else inp.classList.remove('error');
+      });
+      if (!ok) { showToast('Please fill in your card details', 'warning'); return; }
+      const digits = num.value.replace(/\D/g, '');
+      if (digits.length < 13) { num.classList.add('error'); showToast('Enter a valid card number', 'warning'); return; }
+      const expMatch = /^(\d{2})\/(\d{2})$/.exec(exp.value.trim());
+      if (!expMatch) { exp.classList.add('error'); showToast('Enter expiry as MM/YY', 'warning'); return; }
+      const mo = parseInt(expMatch[1], 10);
+      if (mo < 1 || mo > 12) { exp.classList.add('error'); showToast('Invalid expiry month', 'warning'); return; }
+      checkoutState.guestCard = {
+        name: name.value.trim(),
+        last4: digits.slice(-4),
+        expMonth: expMatch[1],
+        expYear: expMatch[2],
+        type: detectCardType(digits)
+      };
+    }
+  }
+  checkoutState.completedSteps[stepNum] = true;
+  if (stepNum < CHECKOUT_TOTAL_STEPS) {
+    checkoutState.currentStep = stepNum + 1;
+  }
+  renderCheckoutStepper();
+  setTimeout(() => {
+    const target = document.getElementById('checkoutStep' + checkoutState.currentStep);
+    if (target) target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }, 50);
+}
+
+function editCheckoutStep(stepNum){
+  checkoutState.currentStep = stepNum;
+  renderCheckoutStepper();
+  setTimeout(() => {
+    const target = document.getElementById('checkoutStep' + stepNum);
+    if (target) target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }, 50);
+}
+
+/* ══════════════════════════════════════════════════════════════════════
+   STEP 2 — delivery method, gift, address list, pickup list
+   ══════════════════════════════════════════════════════════════════════ */
+function setCheckoutMethod(m, silent){
+  checkoutState.method = m;
+  const dBtn = document.getElementById('checkoutMethodDeliveryBtn');
+  const pBtn = document.getElementById('checkoutMethodPickupBtn');
+  const dPanel = document.getElementById('checkoutDeliveryPanel');
+  const pPanel = document.getElementById('checkoutPickupPanel');
+  if (!dBtn) return;
+  if (m === 'delivery') {
+    dBtn.classList.add('active');
+    pBtn.classList.remove('active');
+    dPanel.style.display = '';
+    pPanel.style.display = 'none';
+  } else {
+    pBtn.classList.add('active');
+    dBtn.classList.remove('active');
+    pPanel.style.display = '';
+    dPanel.style.display = 'none';
+  }
+  renderCheckoutSummary();
+  if (!silent) showToast(m === 'delivery' ? 'Delivery selected' : 'Pickup selected', 'info');
+}
+
+function setCheckoutGiftMode(on){
+  checkoutState.isGift = !!on;
+  const meBtn = document.getElementById('checkoutGiftMeBtn');
+  const otBtn = document.getElementById('checkoutGiftOtherBtn');
+  const fields = document.getElementById('checkoutGiftFields');
+  const addrLabel = document.getElementById('checkoutAddressLabel');
+  if (!meBtn || !otBtn || !fields) return;
+  if (on) {
+    otBtn.classList.add('active');
+    meBtn.classList.remove('active');
+    fields.style.display = '';
+    if (addrLabel) addrLabel.textContent = "Recipient's delivery address";
+  } else {
+    meBtn.classList.add('active');
+    otBtn.classList.remove('active');
+    fields.style.display = 'none';
+    if (addrLabel) addrLabel.textContent = 'Deliver to';
+  }
+  renderCheckoutSummary();
+  renderCheckoutUpsell();
+}
+
+function renderCheckoutAddressList(){
+  const listEl = document.getElementById('checkoutAddressList');
+  const formEl = document.getElementById('checkoutAddressForm');
+  if (!listEl || !formEl) return;
+  const list = acctAddresses.filter(a => a.type === 'delivery' || !a.type);
+  if (list.length === 0) {
+    // Guest path — show inline form
+    listEl.style.display = 'none';
+    formEl.style.display = '';
+    return;
+  }
+  // Saved-address radio list
+  listEl.style.display = '';
+  formEl.style.display = 'none';
+  listEl.innerHTML = list.map(a => {
+    const active = a.id === checkoutState.addressId ? ' active' : '';
+    const isDef = a.isDefault ? ' &middot; <span style="color:var(--brand-green-dark);font-size:11px;font-weight:700">Default</span>' : '';
+    const line2 = a.street2 ? (', ' + a.street2) : '';
+    return '<button type="button" class="checkout-radio-card' + active + '" onclick="setCheckoutAddress(' + JSON.stringify(a.id) + ')">'
+      + '<div class="checkout-radio-dot"></div>'
+      + '<div class="checkout-radio-info">'
+      + '<div class="checkout-radio-title">' + (a.label || 'Address') + isDef + '</div>'
+      + '<div class="checkout-radio-sub">' + a.street + line2 + ', ' + a.city + ', ' + a.state + ' ' + a.zip + '</div>'
+      + '</div>'
+      + '</button>';
+  }).join('');
+}
+
+function renderCheckoutPickupList(){
+  const el = document.getElementById('checkoutPickupList');
+  if (!el) return;
+  el.innerHTML = checkoutPickupLocations.map(loc => {
+    const active = loc.id === checkoutState.pickupLocId ? ' active' : '';
+    return '<button type="button" class="checkout-radio-card' + active + '" onclick="setCheckoutPickupLoc(' + loc.id + ')">'
+      + '<div class="checkout-radio-dot"></div>'
+      + '<div class="checkout-radio-info">'
+      + '<div class="checkout-radio-title">' + loc.name + '</div>'
+      + '<div class="checkout-radio-sub">' + loc.addr + '</div>'
+      + '<div class="checkout-radio-meta">' + loc.days + '</div>'
+      + '</div>'
+      + '</button>';
+  }).join('');
+}
+
+function setCheckoutAddress(id){
+  checkoutState.addressId = id;
+  renderCheckoutAddressList();
+  renderCheckoutSummary();
+}
+function setCheckoutPickupLoc(id){
+  checkoutState.pickupLocId = id;
+  renderCheckoutPickupList();
+}
+
+/* ══════════════════════════════════════════════════════════════════════
+   STEP 3 — payment list (saved cards) OR inline form (guest)
+   ══════════════════════════════════════════════════════════════════════ */
+function renderCheckoutPayList(){
+  const listEl = document.getElementById('checkoutPayList');
+  const formEl = document.getElementById('checkoutPayForm');
+  if (!listEl || !formEl) return;
+  if (paymentMethods.length === 0) {
+    listEl.style.display = 'none';
+    formEl.style.display = '';
+    return;
+  }
+  listEl.style.display = '';
+  formEl.style.display = 'none';
+  listEl.innerHTML = paymentMethods.map(p => {
+    const active = p.id === checkoutState.paymentId ? ' active' : '';
+    const typeLabel = p.type === 'visa' ? 'VISA' : p.type === 'mc' ? 'MC' : p.type === 'amex' ? 'AMEX' : String(p.type).toUpperCase();
+    const def = p.isDefault ? '<span class="checkout-pay-row-default">Default</span>' : '';
+    return '<div class="checkout-pay-row' + active + '" onclick="setCheckoutPayment(' + JSON.stringify(p.id) + ')">'
+      + '<div class="checkout-radio-dot"></div>'
+      + '<div class="checkout-pay-row-icon">' + typeLabel + '</div>'
+      + '<div class="checkout-pay-row-info">'
+      + '<div class="checkout-pay-row-num">&bull;&bull;&bull;&bull; ' + p.last4 + '</div>'
+      + '<div class="checkout-pay-row-exp">Exp ' + String(p.expMonth).padStart(2,'0') + '/' + p.expYear + '</div>'
+      + '</div>'
+      + def
+      + '</div>';
+  }).join('');
+}
+function setCheckoutPayment(id){
+  checkoutState.paymentId = id;
+  renderCheckoutPayList();
+}
+
+/* ══════════════════════════════════════════════════════════════════════
+   UPSELL — one-time → subscribe banner
+   ══════════════════════════════════════════════════════════════════════ */
+function renderCheckoutUpsell(){
+  const el = document.getElementById('checkoutUpsell');
+  if (!el) return;
+  if (getCheckoutOrderType() !== 'onetime' || checkoutState.upsellDismissed) {
+    el.style.display = 'none';
+    return;
+  }
+  // Upsell banner is shown to ONE-TIME customers: "switch to subscription
+  // and you'd save $X = N% off your order." The customer is currently
+  // paying the full regular subtotal; if they switched to subscription,
+  // PERK_TIERS would kick in based on their cart quantity and they'd pay
+  // (regularSubtotal × (1 − tierPct/100)). The savings dollar number and
+  // the percentage are now computed from the SAME source as the live
+  // totals math — no more "label says 8%, math says 7%" mismatch.
+  const meals = getCartMeals();
+  const totalMeals = meals.reduce((s, m) => s + (m.qty || 0), 0);
+  const regularSubtotal = meals.reduce((s, m) => s + (m.price || 0) * (m.qty || 0), 0);
+  const projectedPct = lookupSubscriberDiscountPct(totalMeals);
+  const projectedSavings = +(regularSubtotal * projectedPct / 100).toFixed(2);
+  const a = document.getElementById('checkoutUpsellAmount');
+  const p = document.getElementById('checkoutUpsellPct');
+  if (a) a.textContent = '$' + projectedSavings.toFixed(2);
+  // Display the projected percentage if the cart already qualifies for a
+  // tier; otherwise show the lowest tier's percentage as the on-ramp ("you
+  // could save 5% — just add a few more meals").
+  if (p) p.textContent = (projectedPct || PERK_TIERS[0].pct) + '%';
+  el.style.display = '';
+}
+function dismissCheckoutUpsell(){
+  checkoutState.upsellDismissed = true;
+  renderCheckoutUpsell();
+}
+function upsellSwitchToSub(){
+  if (cart) cart.mode = 'subscribe';
+  checkoutState.upsellDismissed = true;
+  renderCheckoutUpsell();
+  renderCheckoutSummary();
+  showToast('Switched to subscription — savings applied', 'success');
+}
+
+/* ══════════════════════════════════════════════════════════════════════
+   DISCOUNT / GIFT / POINTS
+   ══════════════════════════════════════════════════════════════════════ */
+function toggleCheckoutPromo(){
+  const btn = document.getElementById('checkoutPromoToggle');
+  const fields = document.getElementById('checkoutPromoFields');
+  if (!btn || !fields) return;
+  btn.classList.toggle('open');
+  fields.classList.toggle('open');
+}
+function applyCheckoutDiscount(){
+  const inp = document.getElementById('checkoutDiscountInput');
+  if (!inp) return;
+  const code = (inp.value || '').trim();
+  if (!code) { showToast('Enter a discount code first', 'warning'); return; }
+  checkoutState.discountCode = code;
+  showToast('Code "' + code + '" applied', 'success');
+  renderCheckoutSummary();
+}
+function applyCheckoutGiftCard(){
+  const inp = document.getElementById('checkoutGiftInput');
+  if (!inp) return;
+  const code = (inp.value || '').trim();
+  if (!code) { showToast('Enter a gift card number first', 'warning'); return; }
+  checkoutState.giftCard = code;
+  showToast('Gift card applied', 'success');
+  renderCheckoutSummary();
+}
+function toggleCheckoutPoints(){
+  checkoutState.pointsApplied = !checkoutState.pointsApplied;
+  renderCheckoutSummary();
+  showToast(checkoutState.pointsApplied ? 'Points applied' : 'Points removed', 'info');
+}
+
+/* ══════════════════════════════════════════════════════════════════════
+   TOTALS — compute + render (sidebar)
+   ──────────────────────────────────────────────────────────────────────
+   Pricing model (single source of truth — see shared/subscription-config.js):
+     - Each meal has ONE price (`m.price`) — the regular / full retail price.
+     - One-time customers pay `m.price` exactly. No discount.
+     - Subscribers pay `m.price × (1 − tierPct/100)`, where tierPct is
+       looked up from PERK_TIERS based on total cart quantity. The discount
+       is order-level: every meal in the same cart gets the same percentage.
+     - Tiers: 4 meals → 5%, 5 → 8%, 7 → 11%, 9 → 14%, 11 → 17%, 13+ → 20%.
+
+   Returned shape (consumed by renderCheckoutSummary + renderCheckoutReview):
+     - regularSubtotal:   sum of m.price * m.qty (the "before discount" total)
+     - subscriberPct:     tier % applied (0 if onetime or below 4-meal threshold)
+     - mealSavings:       regularSubtotal × subscriberPct/100 (the dollar value
+                          of the subscriber discount)
+     - baseSubtotal:      regularSubtotal − mealSavings (what the customer actually
+                          pays for meals, before tax/delivery/coupons)
+     - codeDiscount:      mock 10% off any coupon code (real validation lives in
+                          the helcim-integration backend)
+     - giftAmount:        flat $10 if a gift card is "applied" (mock)
+     - pointsAmount:      $X redeemed from rewards points (mocked balance: 1239 pts)
+     - gst:               5% of baseSubtotal (post-subscriber-discount, pre-coupon)
+     - deliveryCost:      0 if pickup, 0 if subscriber + 8+ meals + delivery,
+                          else DELIVERY_FEE
+     - total:             baseSubtotal + gst + deliveryCost − codeDiscount
+                          − giftAmount − pointsAmount, floored at 0
+     - earned:            reward points earned on this order (~0.7 pts/$1)
+     - totalSavings:      headline "you saved $X" — sum of mealSavings,
+                          free-delivery value, codeDiscount, giftAmount,
+                          pointsAmount. Used by the badge below the totals.
+   ══════════════════════════════════════════════════════════════════════ */
+function computeCheckoutTotals(){
+  const meals = getCartMeals();
+  const totalMeals = meals.reduce((s, m) => s + (m.qty || 0), 0);
+  // Sum of regular prices — this is the "before any discount" subtotal,
+  // sourced from the SINGLE price column on each item. No retail_price
+  // anywhere; the discount is applied at the order level below.
+  const regularSubtotal = meals.reduce((s, m) => s + (m.price || 0) * (m.qty || 0), 0);
+
+  const isSub = getCheckoutOrderType() === 'subscription';
+  // Tier discount lookup — comes from shared/subscription-config.js so the
+  // menu page and this page can never disagree about the percentage.
+  const subscriberPct = isSub ? lookupSubscriberDiscountPct(totalMeals) : 0;
+  const mealSavings = +(regularSubtotal * subscriberPct / 100).toFixed(2);
+  const baseSubtotal = +(regularSubtotal - mealSavings).toFixed(2);
+
+  const isDelivery = checkoutState.method === 'delivery';
+  const freeDelivery = isSub && isDelivery && totalMeals >= FREE_DELIVERY_MEALS;
+  const deliveryCost = isDelivery ? (freeDelivery ? 0 : DELIVERY_FEE) : 0;
+  const gst = +(baseSubtotal * GST_RATE).toFixed(2);
+  const codeDiscount = checkoutState.discountCode ? +(baseSubtotal * 0.10).toFixed(2) : 0;
+  const giftAmount   = checkoutState.giftCard     ? 10                                 : 0;
+  const pointsAmount = checkoutState.pointsApplied ? +(Math.min(baseSubtotal, 1239 * POINTS_PER_DOLLAR)).toFixed(2) : 0;
+  const total = Math.max(0, +(baseSubtotal + gst + deliveryCost - codeDiscount - giftAmount - pointsAmount).toFixed(2));
+  const earned = Math.floor(baseSubtotal * 0.7);
+  const totalSavings = +(mealSavings + (freeDelivery ? DELIVERY_FEE : 0) + codeDiscount + giftAmount + pointsAmount).toFixed(2);
+
+  return {
+    cart: meals, meals: totalMeals,
+    regularSubtotal, subscriberPct, mealSavings, baseSubtotal,
+    isSub, isDelivery, freeDelivery, deliveryCost,
+    gst, codeDiscount, giftAmount, pointsAmount,
+    total, earned, totalSavings
+  };
+}
+
+function renderCheckoutSummary(){
+  const el = document.getElementById('checkoutSummaryInner');
+  if (!el) return;
+  const t = computeCheckoutTotals();
+
+  // Items list — each line shows the meal at its REGULAR price (the only
+  // price). The subscriber discount is order-level (one consolidated row
+  // in the totals breakdown below) so individual items don't show a
+  // strikethrough or per-meal "OFF" pill — that would imply the discount
+  // is per-item, which it isn't. The savings story is told in two places
+  // instead: the "Subscriber discount (X%)" totals row, and the
+  // "You saved $X.XX" badge underneath the grand total.
+  const itemsHtml = t.cart.length ? t.cart.map(m => {
+    const lineP = (m.price || 0) * (m.qty || 0);
+    const imgSrc = m.img || '';
+    return '<div class="checkout-item">'
+      + '<img class="checkout-item-img" src="' + imgSrc + '" alt="' + m.name + '" onerror="this.removeAttribute(\'src\')">'
+      + '<div class="checkout-item-info">'
+      + '<div class="checkout-item-name">' + m.name + '</div>'
+      + '<div class="checkout-item-meta">'
+      + '<span class="checkout-item-qty">Qty ' + m.qty + ' &middot; $' + (m.price || 0).toFixed(2) + ' each</span>'
+      + '</div>'
+      + '</div>'
+      + '<div class="checkout-item-right">'
+      + '<div class="checkout-item-price">$' + lineP.toFixed(2) + '</div>'
+      + '</div>'
+      + '</div>';
+  }).join('') : '<div class="css-empty">No items in your cart yet.</div>';
+
+  const savedBadgeHtml = t.totalSavings > 0
+    ? '<div class="checkout-saved-badge">'
+      + '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>'
+      + 'You saved $' + t.totalSavings.toFixed(2)
+      + '</div>'
+    : '';
+
+  el.innerHTML = ''
+    + '<div class="checkout-summary-head">'
+    +   '<div class="checkout-summary-head-title">Order Summary</div>'
+    +   '<div class="checkout-summary-head-count">' + t.meals + ' item' + (t.meals === 1 ? '' : 's') + '</div>'
+    + '</div>'
+    + '<div class="checkout-items">' + itemsHtml + '</div>'
+    + '<hr class="css-divider"/>'
+    + '<button type="button" class="checkout-promo-toggle" id="checkoutPromoToggle" onclick="toggleCheckoutPromo()">'
+    +   'Have a code or gift card?'
+    +   '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>'
+    + '</button>'
+    + '<div class="checkout-promo-fields" id="checkoutPromoFields">'
+    +   '<div class="checkout-promo-row">'
+    +     '<input type="text" id="checkoutDiscountInput" placeholder="Discount code" value="' + (checkoutState.discountCode || '') + '">'
+    +     '<button class="checkout-promo-apply" onclick="applyCheckoutDiscount()">Apply</button>'
+    +   '</div>'
+    +   '<div class="checkout-promo-row">'
+    +     '<input type="text" id="checkoutGiftInput" placeholder="Gift card" value="' + (checkoutState.giftCard || '') + '">'
+    +     '<button class="checkout-promo-apply" onclick="applyCheckoutGiftCard()">Apply</button>'
+    +   '</div>'
+    + '</div>'
+    + '<div class="checkout-points-row">'
+    +   '<div class="checkout-points-info">'
+    +     '<div class="checkout-points-title">1,239 Reward Points</div>'
+    +     '<div class="checkout-points-sub">Worth $' + (1239 * POINTS_PER_DOLLAR).toFixed(2) + '</div>'
+    +   '</div>'
+    +   '<button class="checkout-points-toggle-btn' + (checkoutState.pointsApplied ? ' applied' : '') + '" onclick="toggleCheckoutPoints()">' + (checkoutState.pointsApplied ? 'Applied' : 'Apply') + '</button>'
+    + '</div>'
+    + '<hr class="css-divider"/>'
+    // Subtotal row shows the REGULAR price (sum of m.price * qty) — this
+    // ties out to what the per-item lines above add up to. The Subscriber
+    // discount row that follows then deducts to the post-discount amount,
+    // and GST is calculated on that post-discount baseSubtotal. Reading the
+    // breakdown top-to-bottom: regularSubtotal − mealSavings − codeDiscount
+    // − giftAmount − pointsAmount + gst + deliveryCost = total. ✓
+    + '<div class="checkout-totals">'
+    +   '<div class="checkout-total-row"><span class="lbl">Subtotal</span><span class="val">$' + t.regularSubtotal.toFixed(2) + '</span></div>'
+    +   (t.mealSavings > 0 ? '<div class="checkout-total-row savings"><span class="lbl">Subscriber discount (' + t.subscriberPct + '%)</span><span class="val">−$' + t.mealSavings.toFixed(2) + '</span></div>' : '')
+    +   (t.codeDiscount > 0 ? '<div class="checkout-total-row savings"><span class="lbl">Code "' + checkoutState.discountCode + '"</span><span class="val">−$' + t.codeDiscount.toFixed(2) + '</span></div>' : '')
+    +   (t.giftAmount > 0 ? '<div class="checkout-total-row savings"><span class="lbl">Gift card</span><span class="val">−$' + t.giftAmount.toFixed(2) + '</span></div>' : '')
+    +   (t.pointsAmount > 0 ? '<div class="checkout-total-row savings"><span class="lbl">Reward points</span><span class="val">−$' + t.pointsAmount.toFixed(2) + '</span></div>' : '')
+    +   '<div class="checkout-total-row"><span class="lbl">GST (5%)</span><span class="val">$' + t.gst.toFixed(2) + '</span></div>'
+    +   (t.isDelivery
+        ? (t.freeDelivery
+            ? '<div class="checkout-total-row free"><span class="lbl">Delivery</span><span class="val">Free</span></div>'
+            : '<div class="checkout-total-row"><span class="lbl">Delivery</span><span class="val">$' + t.deliveryCost.toFixed(2) + '</span></div>')
+        : '<div class="checkout-total-row"><span class="lbl">Fulfillment</span><span class="val">Pickup</span></div>')
+    + '</div>'
+    + '<div class="checkout-grand-total">'
+    +   '<span class="checkout-grand-total-label">Total</span>'
+    +   '<span class="checkout-grand-total-val">$' + t.total.toFixed(2) + '</span>'
+    + '</div>'
+    + savedBadgeHtml
+    + '<div style="font-size:11px;color:var(--cko-text-warm);text-align:center;font-weight:600">You\'ll earn <strong style="color:var(--brand-green-dark);font-weight:800">' + t.earned + ' pts</strong> on this order</div>';
+
+  // Update Pay Now button + mobile total
+  const payTotalEl = document.getElementById('checkoutPayBtnTotal');
+  if (payTotalEl) payTotalEl.textContent = '$' + t.total.toFixed(2);
+  const mobTotal = document.getElementById('checkoutMobileTotal');
+  if (mobTotal) mobTotal.textContent = '$' + t.total.toFixed(2);
+}
+
+/* ══════════════════════════════════════════════════════════════════════
+   STEP 4 — review list
+   ══════════════════════════════════════════════════════════════════════ */
+function renderCheckoutReview(){
+  const el = document.getElementById('checkoutReviewList');
+  if (!el) return;
+  const t = computeCheckoutTotals();
+  const f = (document.getElementById('checkoutFirst') || {}).value || '';
+  const l = (document.getElementById('checkoutLast')  || {}).value || '';
+  const e = (document.getElementById('checkoutEmail') || {}).value || '';
+  const p = (document.getElementById('checkoutPhone') || {}).value || '';
+
+  // Payment: saved or guest
+  let pmStr = 'No card selected';
+  if (checkoutState.paymentId) {
+    const pm = paymentMethods.find(x => x.id === checkoutState.paymentId);
+    if (pm) pmStr = String(pm.type).toUpperCase() + ' •••• ' + pm.last4;
+  } else if (checkoutState.guestCard) {
+    const c = checkoutState.guestCard;
+    pmStr = (c.type === 'visa' ? 'Visa' : c.type === 'mc' ? 'Mastercard' : c.type === 'amex' ? 'Amex' : c.type === 'disc' ? 'Discover' : 'Card')
+      + ' •••• ' + c.last4 + ' · Exp ' + c.expMonth + '/' + c.expYear;
+  }
+
+  // Fulfillment: delivery or pickup, saved or guest
+  let fulfStr = '';
+  if (checkoutState.method === 'delivery') {
+    if (checkoutState.addressId) {
+      const a = acctAddresses.find(x => x.id === checkoutState.addressId);
+      fulfStr = a ? '🚚 Delivery to ' + a.label + ' — ' + a.street + ', ' + a.city : 'No address selected';
+    } else if (checkoutState.guestAddress) {
+      const g = checkoutState.guestAddress;
+      fulfStr = '🚚 Delivery to ' + g.street + (g.unit ? ' ' + g.unit : '') + ', ' + g.city + ', ' + g.province + ' ' + g.postal;
+    } else {
+      fulfStr = 'No address entered';
+    }
+  } else {
+    const loc = checkoutPickupLocations.find(x => x.id === checkoutState.pickupLocId);
+    fulfStr = loc ? '📍 Pickup at ' + loc.name : 'No pickup location';
+  }
+
+  let giftHtml = '';
+  if (checkoutState.isGift) {
+    const gr = checkoutState.giftRecipient || {};
+    const gname = ((gr.firstName || '') + ' ' + (gr.lastName || '')).trim() || '—';
+    giftHtml = ''
+      + '<hr class="checkout-review-divider"/>'
+      + '<div class="checkout-review-row label">🎁 Gift Recipient</div>'
+      + '<div class="checkout-review-row"><span>' + gname + '</span></div>'
+      + '<div class="checkout-review-row"><span style="color:var(--cko-text-warm);font-size:12px">' + (gr.phone || '—') + ' · delivery SMS goes here</span></div>'
+      + (gr.message ? '<div class="checkout-review-row"><span style="color:var(--brand-green-dark);font-size:12px;font-style:italic">"' + gr.message + '"</span></div>' : '');
+  }
+
+  el.innerHTML = ''
+    + '<div class="checkout-review-row label">' + (checkoutState.isGift ? 'Order placed by' : 'Contact') + '</div>'
+    + '<div class="checkout-review-row"><span>' + f + ' ' + l + '</span></div>'
+    + '<div class="checkout-review-row"><span style="color:var(--cko-text-warm);font-size:12px">' + e + ' · ' + p + (checkoutState.isGift ? ' · receipt goes here' : '') + '</span></div>'
+    + giftHtml
+    + '<hr class="checkout-review-divider"/>'
+    + '<div class="checkout-review-row label">Fulfillment</div>'
+    + '<div class="checkout-review-row"><span>' + fulfStr + '</span></div>'
+    + '<hr class="checkout-review-divider"/>'
+    + '<div class="checkout-review-row label">Payment</div>'
+    + '<div class="checkout-review-row"><span>' + pmStr + '</span></div>'
+    + '<hr class="checkout-review-divider"/>'
+    + '<div class="checkout-review-row"><span>Subtotal · ' + t.meals + ' items</span><strong>$' + t.regularSubtotal.toFixed(2) + '</strong></div>'
+    + (t.mealSavings > 0 ? '<div class="checkout-review-row" style="color:var(--brand-green-dark)"><span>Subscriber discount (' + t.subscriberPct + '%)</span><strong>−$' + t.mealSavings.toFixed(2) + '</strong></div>' : '')
+    + (t.codeDiscount > 0 ? '<div class="checkout-review-row" style="color:var(--brand-green-dark)"><span>Code "' + checkoutState.discountCode + '"</span><strong>−$' + t.codeDiscount.toFixed(2) + '</strong></div>' : '')
+    + (t.giftAmount > 0 ? '<div class="checkout-review-row" style="color:var(--brand-green-dark)"><span>Gift card</span><strong>−$' + t.giftAmount.toFixed(2) + '</strong></div>' : '')
+    + (t.pointsAmount > 0 ? '<div class="checkout-review-row" style="color:var(--brand-green-dark)"><span>Reward points</span><strong>−$' + t.pointsAmount.toFixed(2) + '</strong></div>' : '')
+    + '<div class="checkout-review-row"><span>GST (5%)</span><strong>$' + t.gst.toFixed(2) + '</strong></div>'
+    + '<div class="checkout-review-row"><span>' + (t.isDelivery ? 'Delivery' : 'Pickup') + '</span><strong>' + (t.isDelivery ? (t.freeDelivery ? 'Free' : '$' + t.deliveryCost.toFixed(2)) : 'Free') + '</strong></div>'
+    + '<hr class="checkout-review-divider"/>'
+    + '<div class="checkout-review-row" style="font-size:15px"><strong>Total</strong><strong style="font-size:17px">$' + t.total.toFixed(2) + '</strong></div>'
+    + (checkoutState.isGift ? '<div class="checkout-review-row" style="color:var(--brand-green-dark);font-size:11px;margin-top:6px;justify-content:center"><span>🎁 This is a one-time gift order</span></div>' : '');
+}
+
+/* ══════════════════════════════════════════════════════════════════════
+   EXPRESS CHECKOUT — mocked 2-second overlay → success panel
+   ══════════════════════════════════════════════════════════════════════ */
+function handleExpressCheckout(provider){
+  const overlay = document.getElementById('ckoExpressOverlay');
+  const brand   = document.getElementById('ckoExpressBrand');
+  const status  = document.getElementById('ckoExpressStatus');
+  const total   = document.getElementById('ckoExpressTotal');
+  if (!overlay) return;
+  const t = computeCheckoutTotals();
+  overlay.classList.remove('google');
+  if (provider === 'apple') {
+    brand.textContent  = '\uF8FF Pay';  // Apple logo + Pay
+    status.textContent = 'Authenticating with Face ID…';
+  } else {
+    overlay.classList.add('google');
+    brand.textContent  = 'G Pay';
+    status.textContent = 'Verifying…';
+  }
+  total.textContent = '$' + t.total.toFixed(2);
+  overlay.classList.add('open');
+  document.body.style.overflow = 'hidden';
+  setTimeout(() => {
+    status.textContent = 'Payment approved';
+    setTimeout(() => {
+      overlay.classList.remove('open');
+      document.body.style.overflow = '';
+      // Mark all steps as completed for the success panel payload
+      checkoutState.completedSteps = {1:true, 2:true, 3:true};
+      // Synthesize a fake card from the provider
+      checkoutState.guestCard = { name: (provider === 'apple' ? 'Apple Pay' : 'Google Pay'), last4: '0000', expMonth: '--', expYear: '--', type: 'card' };
+      showSuccessPanel({ skipValidation: true, via: provider === 'apple' ? 'Apple Pay' : 'Google Pay' });
+    }, 600);
+  }, 1400);
+}
+
+/* ══════════════════════════════════════════════════════════════════════
+   SUBMIT — mocked success panel, clears cart
+   ══════════════════════════════════════════════════════════════════════ */
+function submitCheckout(){
+  if (!checkoutState.completedSteps[1] || !checkoutState.completedSteps[2] || !checkoutState.completedSteps[3]) {
+    showToast('Please complete all checkout steps first', 'warning');
+    return;
+  }
+  showSuccessPanel({ via: 'Card' });
+}
+
+function showSuccessPanel(opts){
+  const t = computeCheckoutTotals();
+  const f = (document.getElementById('checkoutFirst') || {}).value || '';
+  const e = (document.getElementById('checkoutEmail') || {}).value || '';
+  const orderId = 'BD-' + String(Date.now()).slice(-6);
+  const deliveryDate = (document.getElementById('checkoutArrivalDate') || {}).textContent || '';
+
+  // Populate success panel fields
+  const set = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v; };
+  set('ckoSuccessName',     f || 'friend');
+  set('ckoSuccessEmail',    e || 'your inbox');
+  set('ckoSuccessOrderId',  orderId);
+  set('ckoSuccessDelivery', deliveryDate);
+  set('ckoSuccessTotal',    '$' + t.total.toFixed(2));
+  set('ckoSuccessItems',    t.meals + ' meal' + (t.meals === 1 ? '' : 's'));
+
+  // Swap stepper for success panel
+  const stepper = document.getElementById('checkoutStepper');
+  const success = document.getElementById('ckoSuccess');
+  if (stepper) stepper.style.display = 'none';
+  if (success) success.classList.add('open');
+
+  // Hide the mobile sticky CTA — success is the end state
+  const mob = document.getElementById('checkoutMobileCta');
+  if (mob) mob.style.display = 'none';
+
+  // Clear the cart so bouncing back to menu shows an empty cart
+  try { localStorage.removeItem(CART_STORAGE_KEY); } catch (err) { /* ignore */ }
+
+  // Log the full payload for debugging / future backend handoff
+  console.log('[checkout] order placed', {
+    orderId,
+    via: (opts && opts.via) || 'Card',
+    contact: {
+      firstName: (document.getElementById('checkoutFirst') || {}).value,
+      lastName:  (document.getElementById('checkoutLast')  || {}).value,
+      email:     (document.getElementById('checkoutEmail') || {}).value,
+      phone:     (document.getElementById('checkoutPhone') || {}).value,
+      newsletterOptIn: (document.getElementById('checkoutNewsOptIn') || {}).checked
+    },
+    delivery: {
+      method: checkoutState.method,
+      address: checkoutState.guestAddress || (acctAddresses.find(a => a.id === checkoutState.addressId) || null),
+      pickupLocId: checkoutState.pickupLocId,
+      pickupDate: checkoutState.pickupDate
+    },
+    gift: checkoutState.isGift ? checkoutState.giftRecipient : null,
+    payment: checkoutState.guestCard || (paymentMethods.find(p => p.id === checkoutState.paymentId) || null),
+    cart: getCartMeals(),
+    mode: (cart && cart.mode) || 'subscribe',
+    totals: t,
+    consents: {
+      tx:  (document.getElementById('checkoutConsentTx')  || {}).checked,
+      mkt: (document.getElementById('checkoutConsentMkt') || {}).checked
+    }
+  });
+
+  // Scroll to top of the success panel
+  setTimeout(() => {
+    if (success) success.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }, 50);
+}
+
+/* ─── Boot ─── */
+document.addEventListener('DOMContentLoaded', () => {
+  cart = loadCart();
+  initCheckout();
+});
+</script>
+
+<script src="shared/site-shell.js" defer></script>
+</body>
+</html>

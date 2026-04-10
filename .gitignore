@@ -26,7 +26,11 @@ yarn-debug.log*
 yarn-error.log*
 
 # Prisma
-prisma/migrations/
+# Note: we now track prisma/migrations/ in git.
+# The culinary schema historically used `prisma db push` (no migration files),
+# but the commerce schema (schema.commerce.prisma) uses the standard
+# `prisma migrate` workflow because real payment data needs a replayable
+# migration history. Commerce migrations live in backend/prisma/migrations/.
 
 # IDE
 .vscode/

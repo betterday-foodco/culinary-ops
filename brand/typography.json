@@ -1,0 +1,73 @@
+{
+  "_comment": "BetterDay typography system. Source of truth for fonts, weights, and type scale. Font files live in brand/fonts/. When adding a new face, drop the .otf/.woff2 in brand/fonts/ and register it here.",
+
+  "families": {
+    "display": {
+      "name": "BDSupper",
+      "role": "Display face — used for meal names on cards, logo wordmark, visual accents",
+      "stack": "'BDSupper', Georgia, serif",
+      "files": {
+        "700": "fonts/BDSupperBold.otf"
+      },
+      "default_weight": 700
+    },
+
+    "heading": {
+      "name": "Gaya",
+      "role": "Heading face — used for section headers, cart title, nav logo, page titles",
+      "stack": "'Gaya', Georgia, serif",
+      "files": {
+        "400": "fonts/Gaya.otf"
+      },
+      "default_weight": 400
+    },
+
+    "body": {
+      "name": "Sofia Pro Soft",
+      "role": "Body / UI face — used for all body text, buttons, labels, UI copy",
+      "stack": "'Sofia Pro Soft', 'Sofia Pro', system-ui, -apple-system, sans-serif",
+      "files": {
+        "400": "fonts/SofiaProSoftRegular.otf",
+        "700": "fonts/SofiaProSoftBold.otf"
+      },
+      "default_weight": 400
+    },
+
+    "accent": {
+      "name": "Fastpen",
+      "role": "Accent / signature face — used sparingly for founder signatures, hand-written flourishes, or conversational accents. NOT for body copy.",
+      "stack": "'Fastpen', 'Caveat', cursive",
+      "files": {
+        "400": "fonts/Fastpen.otf"
+      },
+      "default_weight": 400
+    }
+  },
+
+  "scale": {
+    "_comment": "Named sizes from design-tokens.md. Use by name, not by raw pixel value. If you need a size that isn't here, first consider whether one of these would work — if not, propose adding a new named size in a PR.",
+    "display-lg":    "48px",
+    "display":       "36px",
+    "heading-xl":    "28px",
+    "heading-lg":    "24px",
+    "heading":       "22px",
+    "heading-sm":    "18px",
+    "body-lg":       "16px",
+    "body":          "14px",
+    "body-sm":       "13px",
+    "meal-name":     "15px",
+    "price":         "15px",
+    "button":        "14px",
+    "macro-value":   "12px",
+    "macro-label":   "8.5px",
+    "caption":       "11px"
+  },
+
+  "weights": {
+    "regular":   400,
+    "medium":    500,
+    "semibold":  600,
+    "bold":      700,
+    "extrabold": 800
+  }
+}

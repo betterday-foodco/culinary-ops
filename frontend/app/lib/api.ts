@@ -789,6 +789,7 @@ export interface MealPricing {
 export interface CreateMealData {
   name: string;
   display_name: string;
+  diet_plan_id?: string | null; // FK to SystemTag(type='diets'). See ADR 2026-04-08.
   final_yield_weight: number;
   pricing_override?: number;
   components?: { ingredient_id?: string; sub_recipe_id?: string; quantity: number; unit: string }[];
