@@ -269,12 +269,20 @@ export class CorpPortalService {
     });
     if (!order) throw new NotFoundException('Order not found');
 
+    // Only allow swaps on pending orders (QA-EMP-011)
+    if (order.status !== 'pending') {
+      throw new BadRequestException(`Cannot modify a ${order.status} order — only pending orders can be changed.`);
+    }
+
+    const item = order.items.find(i => i.id === itemId);
+    if (!item) throw new NotFoundException('Order item not found');
+
     const newMeal = await this.prisma.mealRecipe.findUnique({ where: { id: newMealId } });
     if (!newMeal) throw new NotFoundException('Meal not found');
 
     await this.prisma.corporateOrderItem.update({
       where: { id: itemId },
-      data: { meal_recipe_id: newMealId, meal_name: newMeal.display_name },
+      data: { meal_recipe_id: newMealId, meal_name: newMeal.display_name ?? newMeal.name },
     });
     return { ok: true };
   }

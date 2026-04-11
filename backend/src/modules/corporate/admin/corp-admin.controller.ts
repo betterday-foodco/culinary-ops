@@ -103,7 +103,7 @@ export class CorpManagerController {
 
   @Post('employees/:id/resend-link')
   resendMagicLink(@Request() req: { user: CorporateUser }, @Param('id') id: string) {
-    return { ok: true, message: 'Login link would be sent (SMTP not configured yet)' };
+    return this.svc.resendMagicLink(id, req.user.company_id);
   }
 
   @Post('employees/:id/deactivate')

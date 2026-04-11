@@ -144,6 +144,10 @@ export default function CorporateManagerPage() {
   const [pinModalEmp, setPinModalEmp] = useState<{ id: string; name: string } | null>(null);
   const [pinInput, setPinInput] = useState('');
   const [selectedOrder, setSelectedOrder] = useState<CorpOrder | null>(null);
+  const [bulkLevel, setBulkLevel] = useState('General');
+  const [monthlyReport, setMonthlyReport] = useState<any>(null);
+  const [reportMonth, setReportMonth] = useState(() => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`; });
+  const [reportLoading, setReportLoading] = useState(false);
 
   function showToast(msg: string) { setToast(msg); setTimeout(() => setToast(''), 3200); }
 
@@ -199,12 +203,18 @@ export default function CorporateManagerPage() {
     try { const r = await corpManager.getCompany(); setCompany(r.company); setCompEdit(r.company ?? {}); } catch {}
   }, []);
 
+  const loadMonthlyReport = useCallback(async (month: string) => {
+    setReportLoading(true);
+    try { const r = await corpManager.getMonthlyReport(month); setMonthlyReport(r); } catch {} finally { setReportLoading(false); }
+  }, []);
+
   useEffect(() => {
     if (tab === 'mealplan') loadBenefits();
     if (tab === 'par') { loadParLevels(); }
     if (tab === 'account') loadCompany();
     if (tab === 'employees' && !benefitLevels.length) loadBenefits();
-  }, [tab, loadBenefits, loadParLevels, loadCompany]);
+    if (tab === 'monthly') loadMonthlyReport(reportMonth);
+  }, [tab, loadBenefits, loadParLevels, loadCompany, loadMonthlyReport, reportMonth]);
 
   /* ── Employee actions ── */
   async function changeEmployeeLevel(empId: string, level: string) {
@@ -650,11 +660,94 @@ export default function CorporateManagerPage() {
           {tab === 'monthly' && (
             <>
               <Sl>MONTHLY REPORT</Sl>
-              <Card style={{ padding:'60px 40px', textAlign:'center' }}>
-                <div style={{ fontSize:'2.5rem', marginBottom:'16px' }}>📊</div>
-                <div style={{ fontWeight:800, color:dk, fontSize:'1rem', marginBottom:'6px' }}>Monthly reports coming soon</div>
-                <div style={{ fontSize:'.85rem', color:sec, lineHeight:1.6 }}>Detailed monthly summaries with PDF export will be available in the next update.</div>
-              </Card>
+
+              {/* Month selector */}
+              <div style={{ display:'flex', alignItems:'center', gap:'10px', marginBottom:'16px' }}>
+                <label style={{ fontSize:'.78rem', fontWeight:700, color:dk }}>Month</label>
+                <input
+                  type="month"
+                  value={reportMonth}
+                  onChange={e => setReportMonth(e.target.value)}
+                  style={{ padding:'7px 12px', borderRadius:'8px', border:`1px solid ${bdr}`, fontSize:'.82rem', fontWeight:600, color:dk, fontFamily:"'DM Sans', sans-serif", background:'#fff' }}
+                />
+              </div>
+
+              {reportLoading ? (
+                <Card style={{ padding:'48px 40px', textAlign:'center' }}>
+                  <div style={{ fontSize:'.85rem', color:sec }}>Loading report...</div>
+                </Card>
+              ) : !monthlyReport ? (
+                <Card style={{ padding:'48px 40px', textAlign:'center' }}>
+                  <div style={{ fontSize:'.85rem', color:sec }}>No report data available for this month.</div>
+                </Card>
+              ) : (
+                <>
+                  {/* Summary stat cards */}
+                  <div style={{ display:'grid', gridTemplateColumns:'repeat(4, 1fr)', gap:'14px', marginBottom:'16px' }}>
+                    {[
+                      { label:'TOTAL ORDERS', value: monthlyReport.total_orders ?? 0, color: dk },
+                      { label:'TOTAL MEALS',  value: monthlyReport.totals?.meals ?? 0, color: dk },
+                      { label:'STAFF PAID',   value: fmt$(monthlyReport.totals?.staff_paid ?? 0), color: amb },
+                      { label:'COMPANY COVERED', value: fmt$(monthlyReport.totals?.company_covered ?? 0), color: grn },
+                    ].map((stat, i) => (
+                      <Card key={i} style={{ padding:'18px 22px', textAlign:'center' }}>
+                        <div style={{ fontSize:'1.4rem', fontWeight:900, color:stat.color, lineHeight:1.2 }}>{stat.value}</div>
+                        <div style={{ fontSize:'.6rem', fontWeight:700, textTransform:'uppercase', letterSpacing:'.6px', color:sec, marginTop:'6px' }}>{stat.label}</div>
+                      </Card>
+                    ))}
+                  </div>
+
+                  {/* Tier breakdown table */}
+                  <Sl>TIER BREAKDOWN</Sl>
+                  <Card>
+                    <table style={tblSt}>
+                      <thead>
+                        <tr>
+                          {['Tier','Meals','Staff Paid','Company Covered','BD Contributed','Total Value'].map(h => (
+                            <th key={h} style={thSt}>{h}</th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {(monthlyReport.tier_breakdown ?? []).map((row: any, i: number) => (
+                          <tr key={i}>
+                            <td style={{ ...tdSt, fontWeight:700, textTransform:'capitalize' }}>{row.tier}</td>
+                            <td style={tdSt}>{row.meals}</td>
+                            <td style={tdSt}>{fmt$(row.staff_paid ?? 0)}</td>
+                            <td style={{ ...tdSt, color:grn, fontWeight:700 }}>{fmt$(row.company_covered ?? 0)}</td>
+                            <td style={{ ...tdSt, color:sky, fontWeight:700 }}>{fmt$(row.bd_contributed ?? 0)}</td>
+                            <td style={{ ...tdSt, fontWeight:800 }}>{fmt$(row.total_value ?? 0)}</td>
+                          </tr>
+                        ))}
+                        {!(monthlyReport.tier_breakdown ?? []).length && (
+                          <tr><td colSpan={6} style={{ ...tdSt, textAlign:'center', color:sec, padding:'32px' }}>No tier data for this month.</td></tr>
+                        )}
+                      </tbody>
+                    </table>
+                  </Card>
+
+                  {/* Download CSV button */}
+                  <div style={{ marginTop:'16px', display:'flex', justifyContent:'flex-end' }}>
+                    <button
+                      onClick={() => {
+                        const rows = monthlyReport.tier_breakdown ?? [];
+                        const header = 'Tier,Meals,Staff Paid,Company Covered,BD Contributed,Total Value';
+                        const csv = [header, ...rows.map((r: any) =>
+                          `${r.tier},${r.meals},${(r.staff_paid ?? 0).toFixed(2)},${(r.company_covered ?? 0).toFixed(2)},${(r.bd_contributed ?? 0).toFixed(2)},${(r.total_value ?? 0).toFixed(2)}`
+                        )].join('\n');
+                        const blob = new Blob([csv], { type:'text/csv' });
+                        const url = URL.createObjectURL(blob);
+                        const a = document.createElement('a');
+                        a.href = url; a.download = `monthly-report-${reportMonth}.csv`; a.click();
+                        URL.revokeObjectURL(url);
+                      }}
+                      style={{ padding:'9px 20px', background:dk, color:'#fff', border:'none', borderRadius:'8px', fontSize:'.78rem', fontWeight:700, cursor:'pointer', fontFamily:"'DM Sans', sans-serif" }}
+                    >
+                      Download CSV
+                    </button>
+                  </div>
+                </>
+              )}
             </>
           )}
 
@@ -666,6 +759,20 @@ export default function CorporateManagerPage() {
                 <div style={{ display:'flex', gap:'8px', alignItems:'center', padding:'10px 16px', marginBottom:'12px', background:'rgba(0,49,65,.06)', borderRadius:'10px', flexWrap:'wrap' }}>
                   <span style={{ fontSize:'.78rem', fontWeight:700, color:dk }}>{selectedEmps.size} selected</span>
                   <button onClick={async () => { for (const id of selectedEmps) await resendLink(id); setSelectedEmps(new Set()); }} style={{ padding:'5px 12px', background:'#E8F3FF', border:'none', borderRadius:'6px', fontSize:'.72rem', fontWeight:700, color:sky, cursor:'pointer', fontFamily:"'DM Sans', sans-serif" }}>Resend Links</button>
+                  <div style={{ display:'flex', gap:'4px', alignItems:'center' }}>
+                    <select value={bulkLevel} onChange={e => setBulkLevel(e.target.value)} style={{ padding:'5px 8px', border:`1px solid ${bdr}`, borderRadius:'6px', fontSize:'.72rem', fontFamily:"'DM Sans', sans-serif", color:dk, background:'#fff' }}>
+                      <option value="General">General</option>
+                      {benefitLevels.map((bl: any) => <option key={bl.level_id} value={bl.level_name}>{bl.level_name}</option>)}
+                    </select>
+                    <button onClick={async () => {
+                      try {
+                        await corpManager.bulkEmployeeAction('apply_level', [...selectedEmps], { level: bulkLevel });
+                        setEmployees(p => p.map(e => selectedEmps.has(e.id) ? { ...e, benefit_level: bulkLevel } : e));
+                        showToast(`Applied ${bulkLevel} to ${selectedEmps.size} employees`);
+                        setSelectedEmps(new Set());
+                      } catch (e: any) { showToast(e.message ?? 'Failed'); }
+                    }} style={{ padding:'5px 12px', background:'rgba(26,122,70,.1)', border:'none', borderRadius:'6px', fontSize:'.72rem', fontWeight:700, color:grn, cursor:'pointer', fontFamily:"'DM Sans', sans-serif" }}>Apply Level</button>
+                  </div>
                   <button onClick={() => { if (confirm(`Deactivate ${selectedEmps.size} employees?`)) { selectedEmps.forEach(id => { const e = employees.find((x: any) => x.id === id); if (e) removeEmployee(id, e.name); }); setSelectedEmps(new Set()); } }} style={{ padding:'5px 12px', background:'#FEF2F2', border:'none', borderRadius:'6px', fontSize:'.72rem', fontWeight:700, color:red, cursor:'pointer', fontFamily:"'DM Sans', sans-serif" }}>Remove Selected</button>
                   <button onClick={() => setSelectedEmps(new Set())} style={{ marginLeft:'auto', padding:'5px 12px', background:'none', border:'none', fontSize:'.72rem', fontWeight:700, color:sec, cursor:'pointer', fontFamily:"'DM Sans', sans-serif" }}>Clear</button>
                 </div>

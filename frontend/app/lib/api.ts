@@ -1478,6 +1478,15 @@ export interface BdOverview {
   outstanding_amount: number;
   avg_order_value: number;
   total_invoices: number;
+  // Weekly stats
+  week_revenue?: number;
+  week_orders?: number;
+  week_meals?: number;
+  week_employees?: number;
+  week_companies?: number;
+  // Top performer
+  top_meal?: string | null;
+  top_meal_count?: number;
 }
 
 export interface BdCompanyFull {
