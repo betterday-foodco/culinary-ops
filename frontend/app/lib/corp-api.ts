@@ -190,11 +190,11 @@ export const corpPortal = {
     request<{ ok: boolean; count: number }>(`/corp-portal/week-order-count${delivery_date ? `?delivery_date=${delivery_date}` : ''}`),
 
   updateMyEmail: (email: string) =>
-    request<any>('/corp-portal/update-email', { method: 'PATCH', body: JSON.stringify({ email }) }),
+    request<any>('/corp-portal/profile/email', { method: 'PATCH', body: JSON.stringify({ email }) }),
 
   swapOrderItem: (orderId: string, itemId: string, newMealId: string) =>
-    request<any>(`/corp-portal/orders/${orderId}/swap`, {
-      method: 'POST', body: JSON.stringify({ item_id: itemId, new_meal_id: newMealId }),
+    request<any>(`/corp-portal/orders/${orderId}/items/${itemId}`, {
+      method: 'PATCH', body: JSON.stringify({ meal_id: newMealId }),
     }),
 };
 

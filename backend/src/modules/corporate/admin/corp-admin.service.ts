@@ -213,7 +213,12 @@ export class CorpAdminService {
 
   /** Overview stats across ALL companies */
   async getGlobalOverview() {
-    const [companies, employees, orders, invoices] = await Promise.all([
+    // This week bounds
+    const now = new Date();
+    const sun = new Date(now); sun.setDate(now.getDate() - now.getDay()); sun.setHours(0, 0, 0, 0);
+    const sat = new Date(sun); sat.setDate(sun.getDate() + 7);
+
+    const [companies, employees, orders, invoices, weekOrders, topMealRows] = await Promise.all([
       this.prisma.corporateCompany.findMany({ select: { id: true, is_active: true } }),
       this.prisma.corporateEmployee.count(),
       this.prisma.corporateOrder.aggregate({
@@ -223,6 +228,18 @@ export class CorpAdminService {
       this.prisma.companyInvoice.findMany({
         select: { status: true, amount_total: true, amount_paid: true },
       }),
+      // This week's orders
+      this.prisma.corporateOrder.findMany({
+        where: { created_at: { gte: sun, lt: sat }, status: { not: 'cancelled' } },
+        select: { total_amount: true, employee_id: true, company_id: true, items: { select: { id: true } } },
+      }),
+      // Top meal (most ordered all time)
+      this.prisma.corporateOrderItem.groupBy({
+        by: ['meal_name'],
+        _count: { id: true },
+        orderBy: { _count: { id: 'desc' } },
+        take: 1,
+      }),
     ]);
 
     const totalRevenue = orders._sum.total_amount ?? 0;
@@ -231,6 +248,16 @@ export class CorpAdminService {
       .filter(i => ['draft', 'sent', 'overdue'].includes(i.status))
       .reduce((s, i) => s + ((i.amount_total ?? 0) - (i.amount_paid ?? 0)), 0);
     const avgOrder = orders._count > 0 ? totalRevenue / orders._count : 0;
+
+    // Weekly aggregates
+    const weekRevenue = weekOrders.reduce((s, o) => s + (o.total_amount ?? 0), 0);
+    const weekMeals = weekOrders.reduce((s, o) => s + o.items.length, 0);
+    const weekEmployees = new Set(weekOrders.map(o => o.employee_id)).size;
+    const weekCompanies = new Set(weekOrders.map(o => o.company_id)).size;
+
+    // Top meal
+    const topMeal = topMealRows.length > 0 ? topMealRows[0].meal_name : null;
+    const topMealCount = topMealRows.length > 0 ? topMealRows[0]._count.id : 0;
 
     return {
       ok: true,
@@ -246,6 +273,15 @@ export class CorpAdminService {
       outstanding_amount: outstanding,
       avg_order_value: avgOrder,
       total_invoices: invoices.length,
+      // Weekly stats
+      week_revenue: weekRevenue,
+      week_orders: weekOrders.length,
+      week_meals: weekMeals,
+      week_employees: weekEmployees,
+      week_companies: weekCompanies,
+      // Top performer
+      top_meal: topMeal,
+      top_meal_count: topMealCount,
     };
   }
 
@@ -284,7 +320,21 @@ export class CorpAdminService {
       else buckets.current += owed;
       if (inv.status === 'overdue') overdue_count++;
     }
-    return { ok: true, total_outstanding, overdue_count, ...buckets };
+    return {
+      ok: true,
+      total_outstanding,
+      total_ar: total_outstanding, // alias for frontend
+      overdue_count,
+      // Flat fields (legacy)
+      ...buckets,
+      // Nested buckets (frontend uses this shape)
+      buckets: {
+        current: buckets.current,
+        days_15_30: buckets.days_15,
+        days_30_60: buckets.days_30,
+        days_60_90: buckets.days_60,
+      },
+    };
   }
 
   /** Mark invoice status (send/paid/void) */
@@ -713,6 +763,72 @@ export class CorpAdminService {
       data:  { published_to_corporate: published },
     });
     return { ok: true, plan_id: plan.id, published_to_corporate: plan.published_to_corporate };
+  }
+
+  /** Resend magic login link for a specific employee */
+  async resendMagicLink(employee_id: string, company_id: string) {
+    const emp = await this.prisma.corporateEmployee.findFirst({
+      where: { id: employee_id, company_id },
+    });
+    if (!emp) throw new NotFoundException('Employee not found');
+    if (!emp.email) return { ok: false, message: 'Employee has no email address' };
+
+    // Generate token
+    const crypto = require('crypto');
+    const token = crypto.randomBytes(32).toString('hex');
+    const expires = new Date(Date.now() + 15 * 60 * 1000); // 15 min
+
+    await this.prisma.corporateMagicToken.create({
+      data: {
+        token,
+        employee_id: emp.id,
+        email: emp.email,
+        company_id,
+        expires_at: expires,
+      },
+    });
+
+    const baseUrl = this.config.get<string>('FRONTEND_URL') ?? 'http://localhost:3000';
+    const link = `${baseUrl}/corporate/verify?token=${token}`;
+
+    // Send email
+    const smtpEmail = this.config.get<string>('SMTP_EMAIL');
+    const smtpPassword = this.config.get<string>('SMTP_PASSWORD');
+    if (!smtpEmail || !smtpPassword) {
+      this.logger.warn(`[MAGIC LINK] SMTP not configured — link for ${emp.email}: ${link}`);
+      return { ok: true, message: 'Magic link generated (SMTP not configured — check server logs)', dev_link: link };
+    }
+
+    const transporter = nodemailer.createTransport({
+      host: 'smtp.gmail.com', port: 587, secure: false,
+      auth: { user: smtpEmail, pass: smtpPassword },
+    });
+
+    const company = await this.prisma.corporateCompany.findUnique({ where: { id: company_id } });
+    await transporter.sendMail({
+      from: `BetterDay Meals <${smtpEmail}>`,
+      to: emp.email,
+      subject: `Your login link — ${company?.name ?? 'BetterDay'}`,
+      html: `<div style="font-family:Arial,sans-serif;max-width:500px;margin:0 auto;padding:20px">
+        <div style="background:#00465e;padding:24px 30px;border-radius:12px 12px 0 0">
+          <p style="margin:0;color:#fff;font-size:20px;font-weight:700">BetterDay Meals</p>
+          <p style="margin:4px 0 0;color:#a3c8d8;font-size:13px">${company?.name ?? ''} Employee Portal</p>
+        </div>
+        <div style="background:#fff;padding:30px;border:1px solid #e5e7eb;border-top:none;border-radius:0 0 12px 12px">
+          <p style="margin:0 0 12px;color:#222;font-size:15px">Hi ${emp.name},</p>
+          <p style="margin:0 0 20px;color:#555;font-size:14px;line-height:1.6">
+            Click the button below to sign in to your meal portal. This link expires in 15 minutes.
+          </p>
+          <a href="${link}" style="display:inline-block;background:#00465e;color:#fff;text-decoration:none;font-size:14px;font-weight:600;padding:12px 28px;border-radius:8px">
+            Sign In →
+          </a>
+          <p style="margin:20px 0 0;color:#999;font-size:12px">If you didn't request this, you can safely ignore this email.</p>
+        </div>
+      </div>`,
+    });
+
+    this.logger.log(`[MAGIC LINK] Sent login link to ${emp.email}`);
+    return { ok: true, message: `Login link sent to ${emp.email}` };
   }
 
   /** Send order reminder emails to all active employees who haven't ordered this week */
